@@ -14,4 +14,4 @@ module load boost
 
 # Print this sub-job's task ID
 echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
-srun ./split_by_family ../../vcf/v3.4/v34.$SLURM_ARRAY_TASK_ID.vcf.gz ../../vcf/v3.4/vcf.noLCL.ped ../../vcf/by_family 
+srun ./split_by_family ../../vcf/v3.4/v34.$SLURM_ARRAY_TASK_ID.vcf.gz ../../vcf/v3.4/vcf.noLCL.ped /scratch/PI/dpwall/DATA/iHART/kpaskov/PhasingFamilies/by_family 
