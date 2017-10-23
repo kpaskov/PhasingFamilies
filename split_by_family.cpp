@@ -93,6 +93,7 @@ void split_by_family(std::string vcf_filename, std::string ped_filename, std::st
     std::vector<std::vector<std::string>> family_genotypes (family_ids.size());
 
     std::stringstream vcf_header;
+    int l = 0;
     while(std::getline(in_vcf, line)) {
         if(boost::starts_with(line, "##")) {
             // Add header to each file
@@ -108,6 +109,7 @@ void split_by_family(std::string vcf_filename, std::string ped_filename, std::st
             pieces.resize(9);
 
             // Generate family indices
+            int n = 0;
             for(int i=0; i < family_ids.size(); ++i) {
                 std::vector<std::string> fm = family_members[i];
                 std::sort(fm.begin(), fm.end());
@@ -123,6 +125,7 @@ void split_by_family(std::string vcf_filename, std::string ped_filename, std::st
 
                 // If at least one family member is in this vcf, set up output file
                 if(include_family[i]) {
+                    ++n;
                     out_files[i].open(out_directory + "/" + family_ids[i] + "." + vcf_filename);
                     out_vcfs[i].push(boost::iostreams::gzip_compressor());
                     out_vcfs[i].push(out_files[i]);
@@ -131,6 +134,8 @@ void split_by_family(std::string vcf_filename, std::string ped_filename, std::st
                     out_vcfs[i] << boost::algorithm::join(fm_with_indices, "\t") << std::endl;
                 }
             }
+            std::cout << "Families indexed. " << std::endl;
+            std::cout << "Remaining families: " << n << std::endl;
         }
         else {
             boost::split(pieces, line, boost::is_any_of("\t"));
@@ -152,6 +157,11 @@ void split_by_family(std::string vcf_filename, std::string ped_filename, std::st
                         out_vcfs[i] << header_str << new_line.rdbuf() << std::endl;
                     }
                 }
+            }
+
+            ++l;
+            if(l % 1000000 == 0) {
+                std::cout << "Lines complete: " << l << std::endl;
             }
         }
     }
