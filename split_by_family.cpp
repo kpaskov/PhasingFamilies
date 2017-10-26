@@ -37,6 +37,10 @@ void split_by_family(std::string vcf_filename, std::string ped_filename, std::st
     in_vcf.push(boost::iostreams::gzip_decompressor());
     in_vcf.push(vcf_file);
 
+    int beginIdx = vcf_filename.rfind('/');
+    std::string vcfname = vcf_filename.substr(beginIdx + 1);
+    std::cout << "VCF name " << vcfname << std::endl;
+    
     // Pull individuals from ped
     std::string line;
     std::vector<std::string> pieces;
@@ -125,8 +129,9 @@ void split_by_family(std::string vcf_filename, std::string ped_filename, std::st
 
                 // If at least one family member is in this vcf, set up output file
                 if(include_family[i]) {
-                    ++n;
-                    out_files[i].open(out_directory + "/" + family_ids[i] + "." + vcf_filename);
+		  std::cout << out_directory + "/" + family_ids[i] + "." + vcfname << std::endl;
+		    ++n;
+                    out_files[i].open(out_directory + "/" + family_ids[i] + "." + vcfname);
                     out_vcfs[i].push(boost::iostreams::gzip_compressor());
                     out_vcfs[i].push(out_files[i]);
                     out_vcfs[i] << vcf_header.rdbuf();
