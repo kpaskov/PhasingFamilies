@@ -86,9 +86,35 @@ phase_map = {
     (2, 2, 2): (1, 1, 1, 1),
 }
 
+# Custom IO for our large vcf files
+# We assume that we've iterated past the header of the vcf file
+def variants_in_vcf(filename):
+    n = 0
+    with gzip.open(vcf_file, 'rt') as f:
+        line = next(f)
+        while line.startswith('#'):
+            line = next(f)
+
+        for line in f:
+            n += 1
+    return n
+
+
+def read_vcf(f, m, n):
+    # something like
+    # data = np.loadtxt(f, dtype=np.int8, converters=dict(zip(vcf_indices, [converter]*n)), delimiter='\t', usecols=vcf_indices).T
+    
+    gen_mapping = {'./.': -1, '0/0': 0, '0/1': 1, '1/0': 1, '1/1': 2}
+
+    # Pre-allocate memory
+    data = np.zeros((m, n), dtype=np.int8)
+
+    for i, line in enumerate(f):
+        data[:, i] = [gen_mapping[gen[:3]] for gen in line.split('\t')[9:]]
+
+    return data
+
 # Algorithm
-
-
 def rough_phase(data, child_index=2):
     return np.apply_along_axis(lambda x: phase_map[(x[0], x[1], x[child_index])], 0, data)
 
@@ -181,6 +207,7 @@ with open(ped_file, 'r') as f:
 print('Num families:', len(families))
 
 # Pull data from vcf
+n = variants_in_vcf(vcf_file)
 with gzip.open(vcf_file, 'rt') as f:
     line = next(f)
     while line.startswith('##'):
@@ -202,11 +229,8 @@ with gzip.open(vcf_file, 'rt') as f:
     print('Num individuals missing genomic data', sum([len(x.members) for i, x in families.items()])-have_genomic)
     
     # Load genotypes into numpy arrays
-    n = len(pieces)-9
-    gen_mapping = {b'./.': -1, b'0/0': 0, b'0/1': 1, b'1/0': 1, b'1/1': 2}
-    converter = lambda gen:gen_mapping[gen[:3]]
-    vcf_indices = range(9, n+9)
-    data = np.loadtxt(f, dtype=np.int8, converters=dict(zip(vcf_indices, [converter]*n)), delimiter='\t', usecols=vcf_indices).T
+    m = len(pieces)-9
+    data = read_vcf(f, m, n)
 
 print('Full dataset', data.shape)
 
