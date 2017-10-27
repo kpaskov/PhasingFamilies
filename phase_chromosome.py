@@ -110,7 +110,8 @@ def read_vcf(f, m, n):
     data = np.zeros((m, n), dtype=np.int8)
 
     for i, line in enumerate(f):
-        data[:, i] = [gen_mapping[gen[:3]] for gen in line.split('\t')[9:]]
+        pieces = line.split('\t')[9:]
+        data[:, i] = [gen_mapping[gen[:3]] for gen in pieces]
 
     return data
 
@@ -234,20 +235,17 @@ with gzip.open(vcf_file, 'rt') as f:
 
 print('Full dataset', data.shape)
 
-print(len([x for x, f in families.items() if len(f.parents_to_children) > 1]), 'families discarded due to complex family structure')
+print(len([x for x, f in families.items() if len(f.parents_to_children) > 1 or len(list(f.parents_to_children.items())[0][1]) <= 1]), 'families discarded due to complex family structure')
 for family_id, family in families.items():
-    if len(family.parents_to_children) == 1:
+    if len(family.parents_to_children) == 1 and len(list(family.parents_to_children.items())[0][1]) > 1:
         print(family_id)
 
-        family_data = data[family.get_vcf_indices(), :]
+        family_rows = family.get_vcf_indices()
+        family_data = data[family_rows, :]
 
-        # Remove completely homozygous ref entries
-        family_data = family_data[:, ~(family_data==0).all(axis=0)]
-        #print('Remove homozygous ref entries', family_data.shape)
-
-        # Remove rows with missing entries
-        family_data = family_data[:, (family_data!=-1).all(axis=0)]
-        #print('Remove missing entries', family_data.shape)
+        family_cols = np.logical_and(~(family_data==0).all(axis=0), # Remove completely homozygous ref entries
+                                    (family_data!=-1).all(axis=0)) # Remove rows with missing entries
+        family_data = family_data[:, family_cols]
 
         Y0 = rough_phase(family_data)
         X1 = detect_recombination(family_data, Y0, switch_cost=50)
@@ -257,7 +255,11 @@ for family_id, family in families.items():
         #X3 = detect_recombination(family_data, Y2, switch_cost=50)
         #Y3 = phase(family_data, X3)
 
-        np.savez_compressed(out_directory + '/' + family_id + '.' + vcf_file.split('/')[-1][:-7], X=X2, Y=Y2)
+        family_rows = np.array(family_rows)
+        family_cols = np.where(family_cols)[0]
+        np.savez_compressed(out_directory + '/' + family_id + '.' + vcf_file.split('/')[-1][:-7], 
+            X=X2, Y=Y2, data=family_data, row_indices=family_rows, col_indices=family_cols)
 
+        print(X2.shape, Y2.shape, family_data.shape, family_rows.shape, family_cols.shape)
 print('Completed in ', time.time()-t0, 'sec')
 
