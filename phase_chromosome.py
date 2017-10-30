@@ -116,69 +116,67 @@ def read_vcf(f, m, n):
     return data
 
 # Algorithm
-def rough_phase(data, child_index=2):
+def rough_phase(data, child_index=2, phase_map=phase_map):
     return np.apply_along_axis(lambda x: phase_map[(x[0], x[1], x[child_index])], 0, data)
 
-def phase(data, X):
+
+def phase(data, X, Y):
     m, _, n = X.shape
     all_combinations = np.array(list(product([0, 1], repeat=4))).T
-    Y = np.zeros((4, n))
     for i in range(n):
-        diff = np.outer(data[:, i], np.ones(all_combinations.shape[1])) - X[:, :, i].dot(all_combinations)
+        diff = np.repeat(data[:, i].reshape((m, 1)), 16, axis=1) - X[:, :, i].dot(all_combinations)
         index = np.argmin(np.sum(np.abs(diff), axis=0))
         Y[:, i] = all_combinations[:, index]
 
-    return Y
 
-def detect_recombination(data, Y, switch_cost=50):
+def detect_recombination(data, X, Y, switch_cost=50):
     m, n = data.shape
-    X = np.zeros((m, 4, n))
+
     X[0, 0, :] = X[0, 1, :] = 1 # Mom always has m1, m2
     X[1, 2, :] = X[1, 3, :] = 1 # Dad always has p1, p2
     X[2, 0, :] = X[2, 2, :] = 1 # Child1 always has m1, p1
-    
+
     # genotype possibilities for children
     # m1p1, m1p2, m2p1, m2p2
-    Z = np.array([[1, 0, 1, 0], 
-                  [1, 0, 0, 1], 
-                  [0, 1, 1, 0], 
-                  [0, 1, 0, 1]]).dot(Y)
-    transition_costs = np.array([[0, 1, 1, 2],
-                                 [1, 0, 2, 1],
-                                 [1, 2, 0, 1],
-                                 [2, 1, 1, 0]])*switch_cost
+    Z = np.array([1, 0, 1, 0, 
+                  1, 0, 0, 1, 
+                  0, 1, 1, 0, 
+                  0, 1, 0, 1]).reshape(4, 4).dot(Y)
+    transition_costs = np.array([0, 1, 1, 2,
+                                 1, 0, 2, 1,
+                                 1, 2, 0, 1,
+                                 2, 1, 1, 0]).reshape(4, 4)*switch_cost
     index_to_indices = [(0, 2), (0, 3), (1, 2), (1, 3)]
     
     for i in range(3, m):
         # for each child
         
         # Forward sweep
-        dp = [[(0, None)]*4]
-        for j in range(n):
-            gen = data[i, j]
-            # consider cost of all 16 combinations
-            possible_transitions = list(product(range(4), repeat=2))
-            costs = [(dp[-1][k][0]+transition_costs[k, l]+abs(gen-Z[l, j]), k) for l, k in possible_transitions]
-            dp.append([min(costs[:4]), min(costs[4:8]), min(costs[8:12]), min(costs[12:16])])
-                
-        #print(dp[:5])
-        #print(dp[-5:])
+        dp_cost = np.zeros((4, n+1), dtype=np.int)
+        dp_arrow = np.zeros((4, n+1), dtype=np.int8)
+        dp_arrow[:, 0] = -1
+
         
-        # Backward sweep
-        index = n-1
-        cost, prev = min(dp[index])
-        X[i, index_to_indices[prev], index] = 1
-        while prev is not None:
-            X[i, index_to_indices[prev], index-1] = 1
-            index -= 1
-            _, prev = min(dp[index])
+        for j in range(n):  
+            # costs is a 4x4 matrix representing the cost of transitioning from i -> j         
+            costs = np.repeat(dp_cost[:, j].reshape((4, 1)), 4, axis=1) # cost of i
+            costs += transition_costs # transition cost
+            costs += np.abs(data[i, j] - np.repeat(Z[:, j].reshape((1, 4)), 4, axis=0)) # cost of j
+
+            dp_arrow[:, j+1] = np.argmin(costs, axis=0)
+            dp_cost[:, j+1] = np.min(costs, axis=0)
             
-        #print(X[i, :, :])
-    return X
+        # Backward sweep
+        index = n
+        k = np.argmin(dp_cost[:, index])
+        while index > 0:
+            X[i, index_to_indices[k], index-1] = 1
+            k = dp_arrow[k, index]
+            index -= 1
 
 def to_genotype(X, Y):
     m, _, n = X.shape
-    genotype = np.zeros((m, n))
+    genotype = np.zeros((m, n), dtype=np.int8)
     for i in range(m):
         genotype[i, :] = np.sum(X[i, :, :]*Y, axis=0)
     return genotype
@@ -247,19 +245,24 @@ for family_id, family in families.items():
                                     (family_data!=-1).all(axis=0)) # Remove rows with missing entries
         family_data = family_data[:, family_cols]
 
-        Y0 = rough_phase(family_data)
-        X1 = detect_recombination(family_data, Y0, switch_cost=50)
-        Y1 = phase(family_data, X1)
-        X2 = detect_recombination(family_data, Y1, switch_cost=50)
-        Y2 = phase(family_data, X2)
-        #X3 = detect_recombination(family_data, Y2, switch_cost=50)
-        #Y3 = phase(family_data, X3)
+        prev_time = time.time()
+        Y = rough_phase(family_data)
+        print('Rough Phase', time.time()-prev_time, 'sec')
+
+        m, n = family_data.shape
+        X = np.zeros((m, 4, n))
+
+        prev_time = time.time()
+        detect_recombination(family_data, X, Y, switch_cost=50)
+        print('Detect Recomb', time.time()-prev_time, 'sec')
+
+        prev_time = time.time()
+        phase(family_data, X, Y)
+        print('Phase', time.time()-prev_time, 'sec')
 
         family_rows = np.array(family_rows)
         family_cols = np.where(family_cols)[0]
         np.savez_compressed(out_directory + '/' + family_id + '.' + vcf_file.split('/')[-1][:-7], 
-            X=X2, Y=Y2, data=family_data, row_indices=family_rows, col_indices=family_cols)
-
-        print(X2.shape, Y2.shape, family_data.shape, family_rows.shape, family_cols.shape)
+            X=X, Y=Y, data=family_data, row_indices=family_rows, col_indices=family_cols)
 print('Completed in ', time.time()-t0, 'sec')
 
