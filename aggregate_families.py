@@ -7,9 +7,9 @@ chromosome = sys.argv[1]
 
 # Load data
 family_ids, Xs, Ys, row_indices, col_indices = [], [], [], [], []
-for filename in os.listdir('data'):
+for filename in os.listdir('raw_data'):
     if filename.endswith('%s.npz' % chromosome):
-        data = np.load('data/%s' % filename)
+        data = np.load('raw_data/%s' % filename)
         if 'X' in data and 'Y' in data and 'row_indices' in data and 'col_indices' in data:
             family_ids.append(filename.split('.')[0])
             Xs.append(data['X'])
@@ -50,7 +50,7 @@ print('Num maternal:', len(maternal_recombinations), 'Num paternal', len(paterna
 
 
 # Aggregate Ys
-fullY = np.zeros((4*len(families), len(variants)), np.int8)
+fullY = np.zeros((4*len(family_ids), len(variants)), np.int8)
 
 for i, Y in enumerate(Ys):
     fullY[(4*i):(4*(i+1)), col_indices[i]] = Y
