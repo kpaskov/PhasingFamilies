@@ -15,9 +15,10 @@ for filename in os.listdir('raw_data'):
             X = data['X']
             col_indices = data['col_indices']
             m, _, n = X.shape
-            for j in range(3, m):
-                maternal_recombinations.extend([col_indices[i] for i in range(n-1) if X[j, 0, i] != X[j, 0, i+1]])
-                paternal_recombinations.extend([col_indices[i] for i in range(n-1) if X[j, 2, i] != X[j, 2, i+1]])
+            diff = X[:, :, :-1] - X[:, :, 1:]
+
+            maternal_recombinations.extend([col_indices[i] for i in np.where(diff[:, 0, :]!=0)[1]])
+            paternal_recombinations.extend([col_indices[i] for i in np.where(diff[:, 2, :]!=0)[1]])
 
 maternal_recombinations.sort()
 paternal_recombinations.sort()

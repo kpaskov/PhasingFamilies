@@ -37,7 +37,7 @@ for i, family_id in enumerate(family_ids):
     data = np.load('raw_data/%s.v34.%s.npz' % (family_id, chromosome))
     fullY[(4*i):(4*(i+1)), data['col_indices']] = data['Y']
 
-np.savez_compressed('data/Y%s.txt' % chromosome, 
+np.savez_compressed('data/Y%s' % chromosome, 
             Y=fullY, family_ids=family_ids, variant_positions=variants)
 
 print('Aggregated Ys.', fullY.shape)
