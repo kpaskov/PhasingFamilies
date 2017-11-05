@@ -6,35 +6,19 @@ import numpy as np
 chromosome = sys.argv[1]
 
 # Load data
-family_ids, Xs, col_indices = [], [], []
+maternal_recombinations = []
+paternal_recombinations = []
 for filename in os.listdir('raw_data'):
     if filename.endswith('%s.npz' % chromosome):
         data = np.load('raw_data/%s' % filename)
         if 'X' in data and 'Y' in data and 'row_indices' in data and 'col_indices' in data:
-            family_ids.append(filename.split('.')[0])
-            Xs.append(data['X'])
-            #Ys.append(data['Y'])
-            #row_indices.append(data['row_indices'])
-            col_indices.append(data['col_indices'])
+            X = data['X']
+            col_indices = data['col_indices']
+            m, _, n = X.shape
+            for j in range(3, m):
+                maternal_recombinations.extend([col_indices[i] for i in range(n-1) if X[j, 0, i] != X[j, 0, i+1]])
+                paternal_recombinations.extend([col_indices[i] for i in range(n-1) if X[j, 2, i] != X[j, 2, i+1]])
 
-print('Num families with data:', len(family_ids))
-
-# Load variants
-variants = []
-with open('data/v34.%s.txt' % chromosome, 'r') as f:
-    for line in f:
-        variants.append(int(line.strip()))
-
-# Aggregate recombinations
-maternal_recombinations = []
-paternal_recombinations = []
-for k, X in enumerate(Xs):
-    if X is not None:
-        m, _, n = X.shape
-        for j in range(3, m):
-            maternal_recombinations.extend([col_indices[k][i] for i in range(n-1) if X[j, 0, i] != X[j, 0, i+1]])
-            paternal_recombinations.extend([col_indices[k][i] for i in range(n-1) if X[j, 2, i] != X[j, 2, i+1]])
-   
 maternal_recombinations.sort()
 paternal_recombinations.sort()
 print(len(maternal_recombinations), len(paternal_recombinations))
