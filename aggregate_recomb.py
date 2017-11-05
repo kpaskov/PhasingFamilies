@@ -9,7 +9,7 @@ chromosome = sys.argv[1]
 maternal_recombinations = []
 paternal_recombinations = []
 for filename in os.listdir('raw_data'):
-    if filename.endswith('%s.npz' % chromosome):
+    if filename.endswith('v34.%s.npz' % chromosome):
         data = np.load('raw_data/%s' % filename)
         if 'X' in data and 'Y' in data and 'row_indices' in data and 'col_indices' in data:
             X = data['X']
