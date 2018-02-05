@@ -6,7 +6,8 @@ from itertools import product
 import sys
 
 class Individual:
-    def __init__(self, vcf_index):
+    def __init__(self, ind_id, vcf_index):
+        self.id = ind_id
         self.vcf_index = vcf_index
 
 
@@ -24,6 +25,9 @@ class Family:
 
     def get_vcf_indices(self):
         return [self.mother.vcf_index, self.father.vcf_index] + [child.vcf_index for child in self.children]
+
+    def get_sample_ids(self):
+        return [self.mother.id, self.father.id] + [child.id for child in self.children]
 
 # Custom IO for our large vcf files
 # We assume that we've iterated past the header of the vcf file
@@ -86,7 +90,7 @@ with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
 
     # Pull header and create individuals
     pieces = line.strip().split('\t')[9:]
-    individuals = dict([(ind_id, Individual(i)) for i, ind_id in enumerate(pieces)])
+    individuals = dict([(ind_id, Individual(ind_id, i)) for i, ind_id in enumerate(pieces)])
 
     # Create families
     for line in pedf:
@@ -111,6 +115,6 @@ for family_id, family in families.items():
     np.savez_compressed('%s/%s_%s_%s.%s.gen.ad' % (out_directory, family_id[0], family_id[1], family_id[2], chrom),
             gen=family_gen, ad=family_ad, 
             row_indices=family_rows, col_indices=family_cols, 
-            m=m, n=n)
+            m=m, n=n, sample_ids=family.get_sample_ids())
 print('Completed in ', time.time()-t0, 'sec')
 
