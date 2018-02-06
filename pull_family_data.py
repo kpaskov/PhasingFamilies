@@ -51,7 +51,7 @@ def read_vcf(f, m, n):
 
     # Pre-allocate memory
     gen = np.zeros((m, n), dtype=np.int8)
-    ad = np.zeros((m, n, 2), dtype=int)
+    ad = np.zeros((m, n, 2), dtype=np.uint8)
 
     for i, line in enumerate(f):
         pieces = line.split('\t')
@@ -61,11 +61,10 @@ def read_vcf(f, m, n):
         for j, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=ad_index+1)
 
-            gen[j, i] = gen_mapping[segment[gen_index]]
-
             ad_segment = segment[ad_index].split(',')
             if len(ad_segment) == 2:
-                ad[j, i, :] = [int(a) for a in segment[ad_index].split(',')]  
+                gen[j, i] = gen_mapping[segment[gen_index]]
+                ad[j, i, :] = [min(int(a), 255) for a in ad_segment]  
 
     return gen, ad
 
