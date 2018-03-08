@@ -120,19 +120,21 @@ with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
     gen, ad1, ad2 = read_vcf(f, m, n)
     print('Full dataset', gen.shape)
 
-    np.savez_compressed('%s/chr.%s.gen.ad' % (out_directory, chrom),
-        gen=gen, ad1=ad1, ad2=ad2, sample_ids=pieces, m=m, n=n)
+    np.savez_compressed('%s/chr.%s.gen' % (out_directory, chrom),
+        gen=gen, sample_ids=pieces, m=m, n=n)
+    np.savez_compressed('%s/chr.%s.ad' % (out_directory, chrom),
+        ad1=ad1, ad2=ad2, sample_ids=pieces, m=m, n=n)
 
-    for family_id, family in families.items():
-        family_rows = np.array(family.get_vcf_indices())
-        if family_rows.shape[0] > 3:
-            family_cols = np.where(np.logical_and(np.sum(ad1[family_rows, :], axis=0) > 0, np.sum(ad2[family_rows, :], axis=0) > 0))[0] # Remove completely homozygous entries
-            family_gen, family_ad1, family_ad2 = gen[np.ix_(family_rows, family_cols)], ad1[np.ix_(family_rows, family_cols)], ad2[np.ix_(family_rows, family_cols)]
+    # for family_id, family in families.items():
+    #     family_rows = np.array(family.get_vcf_indices())
+    #     if family_rows.shape[0] > 3:
+    #         family_cols = np.where(np.logical_and(np.sum(ad1[family_rows, :], axis=0) > 0, np.sum(ad2[family_rows, :], axis=0) > 0))[0] # Remove completely homozygous entries
+    #         family_gen, family_ad1, family_ad2 = gen[np.ix_(family_rows, family_cols)], ad1[np.ix_(family_rows, family_cols)], ad2[np.ix_(family_rows, family_cols)]
 
-            np.savez_compressed('%s/%s_%s_%s.%s.gen.ad' % (out_directory, family_id[0], family_id[1], family_id[2], chrom),
-                    gen=family_gen, ad1=family_ad1, ad2=family_ad2,
-                    row_indices=family_rows, col_indices=family_cols, 
-                    m=m, n=n, sample_ids=family.get_sample_ids())
+    #         np.savez_compressed('%s/%s_%s_%s.%s.gen.ad' % (out_directory, family_id[0], family_id[1], family_id[2], chrom),
+    #                 gen=family_gen, ad1=family_ad1, ad2=family_ad2,
+    #                 row_indices=family_rows, col_indices=family_cols, 
+    #                 m=m, n=n, sample_ids=family.get_sample_ids())
 
 
 print('Completed in ', time.time()-t0, 'sec')
