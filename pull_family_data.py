@@ -124,8 +124,8 @@ with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
         gen=gen, ad1=ad1, ad2=ad2, sample_ids=pieces, m=m, n=n)
 
     for family_id, family in families.items():
-        if len(family.get_vcf_indices) > 3:
-            family_rows = np.array(family.get_vcf_indices())
+        family_rows = np.array(family.get_vcf_indices())
+        if family_rows.shape[0] > 3:
             family_cols = np.where(np.logical_and(np.sum(ad1[family_rows, :], axis=0) > 0, np.sum(ad2[family_rows, :], axis=0) > 0))[0] # Remove completely homozygous entries
             family_gen, family_ad1, family_ad2 = gen[np.ix_(family_rows, family_cols)], ad1[np.ix_(family_rows, family_cols)], ad2[np.ix_(family_rows, family_cols)]
 
