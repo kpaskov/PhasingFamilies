@@ -1,6 +1,6 @@
 from collections import defaultdict
 import numpy as np
-import scipy
+from scipy.sparse import csc_matrix
 import time
 import gzip
 from itertools import product
@@ -73,9 +73,9 @@ def read_vcf(f, m, n):
                 ad1_v.append(min(int(ad_segment[0]), 255))
                 ad2_v.append(min(int(ad_segment[1]), 255)) 
 
-    gen = scipy.sparse.csc_matrix(gen_v, (i_s, j_s), shape=(m, n))
-    ad1 = scipy.sparse.csc_matrix(ad1_v, (i_s, j_s), shape=(m, n))
-    ad2 = scipy.sparse.csc_matrix(ad2_v, (i_s, j_s), shape=(m, n))
+    gen = csc_matrix(gen_v, (i_s, j_s), shape=(m, n))
+    ad1 = csc_matrix(ad1_v, (i_s, j_s), shape=(m, n))
+    ad2 = csc_matrix(ad2_v, (i_s, j_s), shape=(m, n))
     return gen, ad1, ad2
 
 t0 = time.time()
