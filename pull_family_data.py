@@ -73,9 +73,9 @@ def read_vcf(f, m, n):
                 ad1_v.append(min(int(ad_segment[0]), 255))
                 ad2_v.append(min(int(ad_segment[1]), 255)) 
 
-    gen = csc_matrix(np.array(gen_v), (np.array(i_s), np.array(j_s)), shape=(m, n))
-    ad1 = csc_matrix(np.array(ad1_v), (np.array(i_s), np.array(j_s)), shape=(m, n))
-    ad2 = csc_matrix(np.array(ad2_v), (np.array(i_s), np.array(j_s)), shape=(m, n))
+    gen = csc_matrix((gen_v, (i_s, j_s)), shape=(m, n))
+    ad1 = csc_matrix((ad1_v, (i_s, j_s)), shape=(m, n))
+    ad2 = csc_matrix((ad2_v, (i_s, j_s)), shape=(m, n))
     return gen, ad1, ad2
 
 t0 = time.time()
