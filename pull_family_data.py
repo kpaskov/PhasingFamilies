@@ -1,6 +1,6 @@
 from collections import defaultdict
 import numpy as np
-from scipy.sparse import csc_matrix
+from scipy.sparse import csc_matrix, save_npz
 import time
 import gzip
 from itertools import product
@@ -46,50 +46,6 @@ def variants_in_vcf(filename):
             n += 1
     return n
 
-
-def read_vcf(f, m, n):
-    # something like
-    # data = np.loadtxt(f, dtype=np.int8, converters=dict(zip(vcf_indices, [converter]*n)), delimiter='\t', usecols=vcf_indices).T
-    
-    gen_mapping = {'./.': -1, '0/0': 0, '0/1': 1, '1/0': 1, '1/1': 2}
-
-    # Pre-allocate memory
-    i_s, j_s = [], []
-    gen_v = []
-    #gen_v, ad1_v, ad2_v = [], [], []
-
-    for j, line in enumerate(f):
-        pieces = line.split('\t')
-        format = pieces[8].strip().split(':')
-        gen_index = format.index('GT')
-        ad_index = format.index('AD')
-        for i, piece in enumerate(pieces[9:]):
-            segment = piece.split(':', maxsplit=ad_index+1)
-
-            if segment[gen_index] in gen_mapping:
-                gt = gen_mapping[segment[gen_index]]
-            else:
-                # For now we mark multi-base loci as unknown
-                gt = -1
-
-            if gt != 0:
-                i_s.append(i)
-                j_s.append(j)
-                gen_v.append(gt)
-
-            #ad_segment = segment[ad_index].split(',')
-            #if len(ad_segment) == 2:
-            #    i_s.append(i)
-            #    j_s.append(j)
-            #    gen_v.append(gen_mapping[segment[gen_index]])
-            #    ad1_v.append(min(int(ad_segment[0]), 255))
-            #    ad2_v.append(min(int(ad_segment[1]), 255)) 
-
-    gen = csc_matrix((np.array(gen_v, dtype=np.int8), (i_s, j_s)), shape=(m, n))
-    #ad1 = csc_matrix((ad1_v, (i_s, j_s)), shape=(m, n), dtype=np.uint8)
-    #ad2 = csc_matrix((ad2_v, (i_s, j_s)), shape=(m, n), dtype=np.uint8)
-    return gen#, ad1, ad2
-
 t0 = time.time()
 
 # Pull arguments
@@ -129,13 +85,36 @@ with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
     # Load genotypes into numpy arrays
     m = len(pieces)
     line = next(f)
-    gen = read_vcf(f, m, n)
+    
+
+    # Pull genotypes from vcf
+    i_s, j_s, gen_v = [], [], []
+    gen_v = []
+
+    for j, line in enumerate(f):
+        pieces = line.split('\t')
+        format = pieces[8].strip().split(':')
+        gen_index = format.index('GT')
+        for i, piece in enumerate(pieces[9:]):
+            segment = piece.split(':', maxsplit=gen_index+1)
+
+            if segment[gen_index] in gen_mapping:
+                gt = gen_mapping[segment[gen_index]]
+            else:
+                # For now we mark multi-base loci as unknown
+                gt = -1
+
+            if gt != 0:
+                i_s.append(i)
+                j_s.append(j)
+                gen_v.append(gt)
+
+    gen = csc_matrix((gen_v, (i_s, j_s)), shape=(m, n), dtype=np.int8)
     print('Full dataset', gen.shape)
 
-    np.savez_compressed('%s/chr.%s.gen' % (out_directory, chrom),
-        gen=gen, sample_ids=pieces, m=m, n=n)
-    #np.savez_compressed('%s/chr.%s.ad' % (out_directory, chrom),
-    #    ad1=ad1, ad2=ad2, sample_ids=pieces, m=m, n=n)
+    # Save to file
+    save_npz('%s/chr.%s.gen' % (out_directory, chrom), gen)
+    np.savez_compressed('%s/chr.%s.gen.anno' % (out_directory, chrom), sample_ids=pieces, m=m, n=n)
 
     # for family_id, family in families.items():
     #     family_rows = np.array(family.get_vcf_indices())
