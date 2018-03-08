@@ -66,7 +66,12 @@ def read_vcf(f, m, n):
         for i, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=ad_index+1)
 
-            gt = gen_mapping[segment[gen_index]]
+            if segment[gen_index] in gen_mapping:
+                gt = gen_mapping[segment[gen_index]]
+            else:
+                # For now we mark multi-base loci as unknown
+                gt = -1
+
             if gt != 0:
                 i_s.append(i)
                 j_s.append(j)
