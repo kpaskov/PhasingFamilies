@@ -55,7 +55,8 @@ def read_vcf(f, m, n):
 
     # Pre-allocate memory
     i_s, j_s = [], []
-    gen_v, ad1_v, ad2_v = [], [], []
+    gen_v = []
+    #gen_v, ad1_v, ad2_v = [], [], []
 
     for j, line in enumerate(f):
         pieces = line.split('\t')
@@ -65,18 +66,24 @@ def read_vcf(f, m, n):
         for i, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=ad_index+1)
 
-            ad_segment = segment[ad_index].split(',')
-            if len(ad_segment) == 2:
+            gt = gen_mapping[segment[gen_index]]
+            if gt != 0:
                 i_s.append(i)
                 j_s.append(j)
-                gen_v.append(gen_mapping[segment[gen_index]])
-                ad1_v.append(min(int(ad_segment[0]), 255))
-                ad2_v.append(min(int(ad_segment[1]), 255)) 
+                gen_v.append(gt)
+
+            #ad_segment = segment[ad_index].split(',')
+            #if len(ad_segment) == 2:
+            #    i_s.append(i)
+            #    j_s.append(j)
+            #    gen_v.append(gen_mapping[segment[gen_index]])
+            #    ad1_v.append(min(int(ad_segment[0]), 255))
+            #    ad2_v.append(min(int(ad_segment[1]), 255)) 
 
     gen = csc_matrix((gen_v, (i_s, j_s)), shape=(m, n), dtype=np.uint8)
-    ad1 = csc_matrix((ad1_v, (i_s, j_s)), shape=(m, n), dtype=np.uint8)
-    ad2 = csc_matrix((ad2_v, (i_s, j_s)), shape=(m, n), dtype=np.uint8)
-    return gen, ad1, ad2
+    #ad1 = csc_matrix((ad1_v, (i_s, j_s)), shape=(m, n), dtype=np.uint8)
+    #ad2 = csc_matrix((ad2_v, (i_s, j_s)), shape=(m, n), dtype=np.uint8)
+    return gen#, ad1, ad2
 
 t0 = time.time()
 
@@ -117,13 +124,13 @@ with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
     # Load genotypes into numpy arrays
     m = len(pieces)
     line = next(f)
-    gen, ad1, ad2 = read_vcf(f, m, n)
+    gen = read_vcf(f, m, n)
     print('Full dataset', gen.shape)
 
     np.savez_compressed('%s/chr.%s.gen' % (out_directory, chrom),
         gen=gen, sample_ids=pieces, m=m, n=n)
-    np.savez_compressed('%s/chr.%s.ad' % (out_directory, chrom),
-        ad1=ad1, ad2=ad2, sample_ids=pieces, m=m, n=n)
+    #np.savez_compressed('%s/chr.%s.ad' % (out_directory, chrom),
+    #    ad1=ad1, ad2=ad2, sample_ids=pieces, m=m, n=n)
 
     # for family_id, family in families.items():
     #     family_rows = np.array(family.get_vcf_indices())
