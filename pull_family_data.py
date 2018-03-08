@@ -6,46 +6,6 @@ import gzip
 from itertools import product
 import sys
 
-class Individual:
-    def __init__(self, ind_id, vcf_index):
-        self.id = ind_id
-        self.vcf_index = vcf_index
-
-
-class Family:
-    def __init__(self):
-        self.id = None
-        self.mother = None
-        self.father = None
-        self.children = []
-
-    def add_trio(self, mother, father, child):
-        self.mother = mother
-        self.father = father
-        self.children.append(child)
-
-    def get_vcf_indices(self):
-        return [self.mother.vcf_index, self.father.vcf_index] + [child.vcf_index for child in self.children]
-
-    def get_sample_ids(self):
-        return [self.mother.id, self.father.id] + [child.id for child in self.children]
-
-    def size(self):
-        return len(self.children)+2
-
-# Custom IO for our large vcf files
-# We assume that we've iterated past the header of the vcf file
-def variants_in_vcf(filename):
-    n = 0
-    with gzip.open(vcf_file, 'rt') as f:
-        line = next(f)
-        while line.startswith('#'):
-            line = next(f)
-
-        for line in f:
-            n += 1
-    return n
-
 t0 = time.time()
 
 # Pull arguments
@@ -55,44 +15,33 @@ out_directory = sys.argv[3]
 chrom = sys.argv[4]
 
 # Pull data from vcf
-n = variants_in_vcf(vcf_file)
-families = defaultdict(Family)
+with gzip.open(vcf_file, 'rt') as f, \
+    open('%s/chr.%s.gen.samples.txt' % (out_directory, chrom), 'w+') as sample_f, \
+    gzip.open('%s/chr.%s.gen.variants.txt.gz' % (out_directory, chrom), 'wt') as variant_f:
 
-t1 = time.time()
-
-with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
-
-    # Pull header
+    # Skip header
     line = next(f)
     while line.startswith('##'):
         line = next(f)
 
-    # Pull header and create individuals
-    pieces = line.strip().split('\t')[9:]
-    individuals = dict([(ind_id, Individual(ind_id, i)) for i, ind_id in enumerate(pieces)])
-
-    # Create families
-    for line in pedf:
-        fam_id, child_id, father_id, mother_id, the_rest = line.split('\t', maxsplit=4)
-        if father_id in individuals and mother_id in individuals and child_id in individuals:
-             families[(fam_id, mother_id, father_id)].add_trio(individuals[mother_id], individuals[father_id], individuals[child_id])
-
-    family_ids = sorted(list(families.keys()))
-
-    print('Num families with genomic data:', len(family_ids))
-    print('Num individuals with genomic data', len(individuals))
-
-    # Load genotypes into numpy arrays
-    m = len(pieces)
-    line = next(f)
-    
+    # Pull sample_ids and write to file
+    sample_ids = line.strip().split('\t')[9:]
+    sample_f.write('\n'.join(sample_ids))
+    print('Num individuals with genomic data', len(sample_ids))
 
     # Pull genotypes from vcf
+    m = len(sample_ids)
     i_s, j_s, gen_v = [], [], []
-    gen_v = []
-
+    gen_mapping = {'./.': -1, '0/0': 0, '0|0': 0, '0/1': 1, '0|1': 1, '1/0': 1, '1|0': 1, '1/1': 2, '1|1': 2}
+    
+    line = next(f)
     for j, line in enumerate(f):
         pieces = line.split('\t')
+
+        # Write variant to file
+        variant_f.write('\t'.join(pieces[:9]) + '\n')
+
+        # Pull out genotypes
         format = pieces[8].strip().split(':')
         gen_index = format.index('GT')
         for i, piece in enumerate(pieces[9:]):
