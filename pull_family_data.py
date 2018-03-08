@@ -58,6 +58,7 @@ with gzip.open(vcf_file, 'rt') as f, \
                 j_s.append(j)
                 gen_v.append(gt)
 
+    n = j+1
     gen = csc_matrix((gen_v, (i_s, j_s)), shape=(m, n), dtype=np.int8)
     print('Full dataset', gen.shape)
 
