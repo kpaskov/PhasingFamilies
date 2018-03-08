@@ -125,7 +125,7 @@ with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
 
     for family_id, family in families.items():
         family_rows = np.array(family.get_vcf_indices())
-        family_cols = np.where(np.logical_and(np.sum(ad[family_rows, :, 0], axis=0) > 0, np.sum(ad[family_rows, :, 1], axis=0) > 0))[0] # Remove completely homozygous entries
+        family_cols = np.where(np.logical_and(np.sum(ad1[family_rows, :], axis=0) > 0, np.sum(ad2[family_rows, :], axis=0) > 0))[0] # Remove completely homozygous entries
         family_gen, family_ad1, family_ad2 = gen[np.ix_(family_rows, family_cols)], ad1[np.ix_(family_rows, family_cols)], ad2[np.ix_(family_rows, family_cols)]
 
         np.savez_compressed('%s/%s_%s_%s.%s.gen.ad' % (out_directory, family_id[0], family_id[1], family_id[2], chrom),
