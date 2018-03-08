@@ -1,5 +1,6 @@
 from collections import defaultdict
 import numpy as np
+import scipy
 import time
 import gzip
 from itertools import product
@@ -29,6 +30,9 @@ class Family:
     def get_sample_ids(self):
         return [self.mother.id, self.father.id] + [child.id for child in self.children]
 
+    def size(self):
+        return len(self.children)+2
+
 # Custom IO for our large vcf files
 # We assume that we've iterated past the header of the vcf file
 def variants_in_vcf(filename):
@@ -50,23 +54,29 @@ def read_vcf(f, m, n):
     gen_mapping = {'./.': -1, '0/0': 0, '0/1': 1, '1/0': 1, '1/1': 2}
 
     # Pre-allocate memory
-    gen = np.zeros((m, n), dtype=np.int8)
-    ad = np.zeros((m, n, 2), dtype=np.uint8)
+    i_s, j_s = [], []
+    gen_v, ad1_v, ad2_v = [], [], []
 
-    for i, line in enumerate(f):
+    for j, line in enumerate(f):
         pieces = line.split('\t')
         format = pieces[8].strip().split(':')
         gen_index = format.index('GT')
         ad_index = format.index('AD')
-        for j, piece in enumerate(pieces[9:]):
+        for i, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=ad_index+1)
 
             ad_segment = segment[ad_index].split(',')
             if len(ad_segment) == 2:
-                gen[j, i] = gen_mapping[segment[gen_index]]
-                ad[j, i, :] = [min(int(a), 255) for a in ad_segment]  
+                i_s.append(i)
+                j_s.append(j)
+                gen_v.append(gen_mapping[segment[gen_index]])
+                ad1_v.append(min(int(ad_segment[0]), 255))
+                ad2_v.append(min(int(ad_segment[1]), 255)) 
 
-    return gen, ad
+    gen = scipy.sparse.csc_matrix(gen_v, (i_s, j_s), shape=(m, n))
+    ad1 = scipy.sparse.csc_matrix(ad1_v, (i_s, j_s), shape=(m, n))
+    ad2 = scipy.sparse.csc_matrix(ad2_v, (i_s, j_s), shape=(m, n))
+    return gen, ad1, ad2
 
 t0 = time.time()
 
@@ -79,6 +89,8 @@ chrom = sys.argv[4]
 # Pull data from vcf
 n = variants_in_vcf(vcf_file)
 families = defaultdict(Family)
+
+t1 = time.time()
 
 with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
 
@@ -97,23 +109,30 @@ with gzip.open(vcf_file, 'rt') as f, open(ped_file, 'r') as pedf:
         if father_id in individuals and mother_id in individuals and child_id in individuals:
              families[(fam_id, mother_id, father_id)].add_trio(individuals[mother_id], individuals[father_id], individuals[child_id])
 
-    print('Num families with genomic data:', len(families))
+    family_ids = sorted(list(families.keys()))
+
+    print('Num families with genomic data:', len(family_ids))
     print('Num individuals with genomic data', len(individuals))
 
     # Load genotypes into numpy arrays
     m = len(pieces)
     line = next(f)
-    gen, ad = read_vcf(f, m, n)
+    gen, ad1, ad2 = read_vcf(f, m, n)
     print('Full dataset', gen.shape)
 
-for family_id, family in families.items():
-    family_rows = np.array(family.get_vcf_indices())
-    family_cols = np.where(np.logical_and(np.sum(ad[family_rows, :, 0], axis=0) > 0, np.sum(ad[family_rows, :, 1], axis=0) > 0))[0] # Remove completely homozygous entries
-    family_gen, family_ad = gen[np.ix_(family_rows, family_cols)], ad[np.ix_(family_rows, family_cols, [0, 1])]
+    np.savez_compressed('%s/%s.gen.ad' % (out_directory, chrom),
+        gen=gen, ad1=ad1, ad2=ad2, sample_ids=pieces, m=m, n=n)
 
-    np.savez_compressed('%s/%s_%s_%s.%s.gen.ad' % (out_directory, family_id[0], family_id[1], family_id[2], chrom),
-            gen=family_gen, ad=family_ad, 
-            row_indices=family_rows, col_indices=family_cols, 
-            m=m, n=n, sample_ids=family.get_sample_ids())
+    for family_id, family in families.items():
+        family_rows = np.array(family.get_vcf_indices())
+        family_cols = np.where(np.logical_and(np.sum(ad[family_rows, :, 0], axis=0) > 0, np.sum(ad[family_rows, :, 1], axis=0) > 0))[0] # Remove completely homozygous entries
+        family_gen, family_ad1, family_ad2 = gen[np.ix_(family_rows, family_cols)], ad1[np.ix_(family_rows, family_cols)], ad2[np.ix_(family_rows, family_cols)]
+
+        np.savez_compressed('%s/%s_%s_%s.%s.gen.ad' % (out_directory, family_id[0], family_id[1], family_id[2], chrom),
+                gen=family_gen, ad1=family_ad1, ad2=family_ad2,
+                row_indices=family_rows, col_indices=family_cols, 
+                m=m, n=n, sample_ids=family.get_sample_ids())
+
+
 print('Completed in ', time.time()-t0, 'sec')
 
