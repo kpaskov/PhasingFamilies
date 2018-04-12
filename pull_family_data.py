@@ -31,7 +31,7 @@ with gzip.open(vcf_file, 'rt') as f, \
 
     # Pull genotypes from vcf
     m = len(sample_ids)
-    i_s, j_s, gen_v = [], [], []
+    data, indices, indptr = [], [], [0]
     gen_mapping = {'./.': -1, '0/0': 0, '0|0': 0, '0/1': 1, '0|1': 1, '1/0': 1, '1|0': 1, '1/1': 2, '1|1': 2}
     
     line = next(f)
@@ -54,29 +54,16 @@ with gzip.open(vcf_file, 'rt') as f, \
                 gt = -1
 
             if gt != 0:
-                i_s.append(i)
-                j_s.append(j)
-                gen_v.append(gt)
+                indices.append(i)
+                data.append(gt)
+        indptr.append(len(data))
 
     n = j+1
-    gen = csc_matrix((gen_v, (i_s, j_s)), shape=(m, n), dtype=np.int8)
+    gen = csc_matrix((data, indices, indptr), shape=(m, n), dtype=np.int8)
     print('Full dataset', gen.shape)
 
     # Save to file
     save_npz('%s/chr.%s.gen' % (out_directory, chrom), gen)
-    np.savez_compressed('%s/chr.%s.gen.anno' % (out_directory, chrom), sample_ids=pieces, m=m, n=n)
-
-    # for family_id, family in families.items():
-    #     family_rows = np.array(family.get_vcf_indices())
-    #     if family_rows.shape[0] > 3:
-    #         family_cols = np.where(np.logical_and(np.sum(ad1[family_rows, :], axis=0) > 0, np.sum(ad2[family_rows, :], axis=0) > 0))[0] # Remove completely homozygous entries
-    #         family_gen, family_ad1, family_ad2 = gen[np.ix_(family_rows, family_cols)], ad1[np.ix_(family_rows, family_cols)], ad2[np.ix_(family_rows, family_cols)]
-
-    #         np.savez_compressed('%s/%s_%s_%s.%s.gen.ad' % (out_directory, family_id[0], family_id[1], family_id[2], chrom),
-    #                 gen=family_gen, ad1=family_ad1, ad2=family_ad2,
-    #                 row_indices=family_rows, col_indices=family_cols, 
-    #                 m=m, n=n, sample_ids=family.get_sample_ids())
-
 
 print('Completed in ', time.time()-t0, 'sec')
 
