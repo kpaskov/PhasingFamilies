@@ -35,6 +35,8 @@ with gzip.open(vcf_file, 'rt') as f, \
     gen_mapping = {'./.': -1, '0/0': 0, '0|0': 0, '0/1': 1, '0|1': 1, '1/0': 1, '1|0': 1, '1/1': 2, '1|1': 2}
     
     line = next(f)
+    subfile = 0
+    num_lines = 0
     for j, line in enumerate(f):
         pieces = line.split('\t')
 
@@ -57,13 +59,30 @@ with gzip.open(vcf_file, 'rt') as f, \
                 indices.append(i)
                 data.append(gt)
         indptr.append(len(data))
+        num_lines += 1
 
-    n = j+1
-    gen = csc_matrix((data, indices, indptr), shape=(m, n), dtype=np.int8)
-    print('Full dataset', gen.shape)
+        # If file has gotten really big, write subfile to disk
+        if len(data) > 500000000:
+            gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+            print('Sub dataset', gen.shape)
 
+            # Save to file
+            save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
+
+            # Start fresh
+            subfile += 1
+            num_lines = 0
+            data, indices, indptr = [], [], [0]
+
+    gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+    
     # Save to file
-    save_npz('%s/chr.%s.gen' % (out_directory, chrom), gen)
+    if subfile == 0:
+        print('Full dataset', gen.shape)
+        save_npz('%s/chr.%s.gen' % (out_directory, chrom), gen)
+    else:
+        print('Sub dataset', gen.shape)
+        save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
 
 print('Completed in ', time.time()-t0, 'sec')
 
