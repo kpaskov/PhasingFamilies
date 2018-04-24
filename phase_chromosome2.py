@@ -246,20 +246,24 @@ with open('phased/chr.%s.families.txt' % chrom, 'w+') as famf, open('phased/chr.
 			print('Backward sweep complete', time.time()-prev_time, 'sec') 
 
 			# write to file
-			famf.write('%s\t%s\t%s\n' % (fkey, str(families[fkey]), str([str(x) for x in ind_indices])))
+			famf.write('%s\t%s\t%s\n' % (fkey, str(families[fkey]), str(ind_indices)))
 			famf.flush()
 
 			current_state = -1
 			state_start = -1
+			state_loss = 0
 			for i in range(n):
 				if final_states[i] != current_state:
 					if current_state != -1:
-						statef.write('%s\t%d\t%s\t%d\t%d\t%d\t%d\n' % (fkey, current_state, str(inheritance_states[current_state, :]), 
-							family_snp_positions[state_start], family_snp_positions[i-1], losses[current_state, pos_to_genindex[state_start]], losses[current_state, pos_to_genindex[i-1]]))
+						statef.write('\t'.join([str(fkey), str(current_state), str(inheritance_states[current_state, :]), 
+							str(family_snp_positions[state_start]), str(family_snp_positions[i-1]), 
+							str(family_indices[state_start]), str(family_indices[i-1]), str(state_loss)]) + '\n')
 						statef.flush()
-					current_state, state_start = final_states[i], i
+					current_state, state_start, state_loss = final_states[i], i, 0
+				state_loss += losses[current_state, pos_to_genindex[i]]
 
 			# last state
-			statef.write('%s\t%d\t%s\t%d\t%d\t%d\t%d\n' % (fkey, current_state, str(inheritance_states[current_state, :]), 
-							family_snp_positions[state_start], family_snp_positions[i-1], losses[current_state, pos_to_genindex[state_start]], losses[current_state, pos_to_genindex[i-1]]))
+			statef.write('\t'.join([str(fkey), str(current_state), str(inheritance_states[current_state, :]), 
+							str(family_snp_positions[state_start]), str(family_snp_positions[i-1]), 
+							str(family_indices[state_start]), str(family_indices[i-1]), str(state_loss)]) + '\n')
 			statef.flush()	
