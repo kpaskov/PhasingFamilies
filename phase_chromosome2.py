@@ -4,9 +4,7 @@ from os import listdir
 import gzip
 
 from collections import Counter
-from itertools import chain
-
-from sklearn.utils.extmath import cartesian
+from itertools import chain, product
 
 import numpy as np
 from scipy import sparse
@@ -29,7 +27,7 @@ g_equivalents = {0: [0, -1],
 	            -1: [-1]}
 
 # ancestral_variants (m1, m2, p1, p2)
-anc_variants = np.array(cartesian([[0, 1]]*4))
+anc_variants = np.array(list(product(*[[0, 1]]*4)), dtype=int)
 anc_variant_to_index = dict([(tuple(x), i) for i, x in enumerate(anc_variants)])
 print('ancestral variants', anc_variants.shape)
 
@@ -49,7 +47,7 @@ with open(ped_file, 'r') as f:
         		families[(fam_id, m_id, f_id)] = [m_id, f_id]
         	families[(fam_id, m_id, f_id)].append(child_id)
 
-#families = dict(list(families.items())[:10])
+families = dict(list(families.items())[:10])
 family_to_indices = dict([(fid, [sample_id_to_index[x] for x in vs]) for fid, vs in families.items()])
 family_to_index = dict([(fid, i) for i, fid in enumerate(families.keys())])
 
@@ -98,15 +96,13 @@ for m in Counter([len(x) for x in families.values()]).keys():
 	# (1, 0) -> m2p1
 	# (1, 1) -> m2p2
 
-	cart_list = [[0, 1]]*(2*m)
-	inheritance_states = np.array(cartesian(cart_list), dtype=np.int8)
+	inheritance_states = np.array(list(product(*[[0, 1]]*(2*m))), dtype=int)
 	state_to_index = dict([(tuple(x), i) for i, x in enumerate(inheritance_states)])
 	p = inheritance_states.shape[0]
 	print('inheritance states', inheritance_states.shape)
 
 	# genotypes
-	cart_list = [[-1, 0, 1, 2]]*m
-	genotypes = np.array(cartesian(cart_list), dtype=np.int8)
+	genotypes = np.array(list(product(*[[-1, 0, 1, 2]]*m)), dtype=np.int8)
 	genotype_to_index = dict([(tuple(x), i) for i, x in enumerate(genotypes)])
 	q = genotypes.shape[0]
 	print('genotypes', genotypes.shape)
@@ -121,7 +117,7 @@ for m in Counter([len(x) for x in families.values()]).keys():
 	            new_genotype = tuple(new_entry if k == j else x for k, x in enumerate(g))
 	            neighbor_gs.append(genotype_to_index[new_genotype])
 	    genotype_to_neighbors.append(neighbor_gs)   
-	    genotype_to_equivalents.append([genotype_to_index[tuple(x)] for x in cartesian([g_equivalents[x] for x in g])]) 
+	    genotype_to_equivalents.append([genotype_to_index[tuple(x)] for x in product(*[g_equivalents[x] for x in g])]) 
 	
 	print('genotype to equivalents', Counter([len(x) for x in genotype_to_equivalents]))    
 	print('genotype to neighbors', Counter([len(x) for x in genotype_to_neighbors]))
