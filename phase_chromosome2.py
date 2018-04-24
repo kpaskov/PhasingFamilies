@@ -47,7 +47,7 @@ with open(ped_file, 'r') as f:
         		families[(fam_id, m_id, f_id)] = [m_id, f_id]
         	families[(fam_id, m_id, f_id)].append(child_id)
 
-families = dict(list(families.items())[:10])
+#families = dict(list(families.items())[:10])
 family_to_indices = dict([(fid, [sample_id_to_index[x] for x in vs]) for fid, vs in families.items()])
 family_to_index = dict([(fid, i) for i, fid in enumerate(families.keys())])
 
@@ -249,12 +249,11 @@ for m in Counter([len(x) for x in families.values()]).keys():
 		all_states[family_index, family_indices] = final_states
 		all_losses[family_index, family_indices] = losses[final_states, pos_to_genindex]
 
-	# save to file
-	with open('phased/chr.%s.families.txt' % chrom, 'w+') as f:
-		for fkey, index in sorted(family_to_index.items(), key=lambda x: x[1]):
-			f.write('%s\t%s\t%s\t%d\n' % (fkey[0], fkey[1], fkey[2], len(families[fkey])))
+# save to file
+with open('phased/chr.%s.families.txt' % chrom, 'w+') as f:
+	for fkey, index in sorted(family_to_index.items(), key=lambda x: x[1]):
+		f.write('%s\t%s\t%s\t%d\n' % (fkey[0], fkey[1], fkey[2], len(families[fkey])))
 
-	np.savez('phased/chr.%s.phased' % chrom, 
-			states=all_states, losses=all_losses)
+np.savez('phased/chr.%s.phased' % chrom, states=all_states, losses=all_losses)
 
 			
