@@ -20,9 +20,9 @@ sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, chrom)
 
 # constants
-g_neighbors = {0: [1],
-	           1: [0, 2],
-	           2: [1],
+g_neighbors = {0: [1, -1],
+	           1: [0, 2, -1],
+	           2: [1, -1],
 	          -1: [0, 1, 2]}
 
 g_equivalents = {0: [0, -1],
@@ -151,6 +151,7 @@ for m in family_sizes:
 	# loss matrix
 	losses = np.zeros((p, q), dtype=np.int8) - 1
 	for i, s in enumerate(inheritance_states):
+		is_deletion = np.sum(s[:4]) > 0
 	    
 	    # what genotypes can be validly produced from this inheritance state?          
 	    valid_genotypes = np.zeros((anc_variants.shape[0], m), dtype=np.int8)
@@ -194,7 +195,8 @@ for m in family_sizes:
 	    current_cost = 0
 	    while len(valid_genotypes) > 0:
 	        # add equivalents
-	        valid_genotypes = valid_genotypes | set(chain.from_iterable([genotype_to_equivalents[x] for x in valid_genotypes]))
+	        if not is_deletion:
+	        	valid_genotypes = valid_genotypes | set(chain.from_iterable([genotype_to_equivalents[x] for x in valid_genotypes]))
 
 	        next_gen = set()
 	        for g in valid_genotypes:
