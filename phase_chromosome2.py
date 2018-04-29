@@ -152,64 +152,64 @@ for m in family_sizes:
 	losses = np.zeros((p, q), dtype=np.int8) - 1
 	for i, s in enumerate(inheritance_states):
 		is_deletion = np.sum(s[:4]) > 0
-	    
-	    # what genotypes can be validly produced from this inheritance state?          
-	    valid_genotypes = np.zeros((anc_variants.shape[0], m), dtype=np.int8)
-	        
-	    # mom
-	    if s[0] == 0 and s[1] == 0:
-	        valid_genotypes[:, 0] = anc_variants[:, 0] + anc_variants[:, 1]
-	    elif s[0] == 0:
-	        valid_genotypes[:, 0] = 2*anc_variants[:, 0]
-	    elif s[1] == 0:
-	        valid_genotypes[:, 0] = 2*anc_variants[:, 1]
-	    else:
-	        valid_genotypes[:, 0] = -1
+
+		# what genotypes can be validly produced from this inheritance state?          
+		valid_genotypes = np.zeros((anc_variants.shape[0], m), dtype=np.int8)
+
+		# mom
+		if s[0] == 0 and s[1] == 0:
+			valid_genotypes[:, 0] = anc_variants[:, 0] + anc_variants[:, 1]
+		elif s[0] == 0:
+			valid_genotypes[:, 0] = 2*anc_variants[:, 0]
+		elif s[1] == 0:
+			valid_genotypes[:, 0] = 2*anc_variants[:, 1]
+		else:
+			valid_genotypes[:, 0] = -1
 	            
-	    # dad
-	    if s[2] == 0 and s[3] == 0:
-	        valid_genotypes[:, 1] = anc_variants[:, 2] + anc_variants[:, 3]
-	    elif s[2] == 0:
-	        valid_genotypes[:, 1] = 2*anc_variants[:, 2]
-	    elif s[3] == 0:
-	        valid_genotypes[:, 1] = 2*anc_variants[:, 3]
-	    else:
-	        valid_genotypes[:, 1] = -1
-	        
-	    # children
-	    for index in range(m-2):
-	        mat, pat = s[(4+(2*index)):(6+(2*index))]
-	        
-	        if s[mat] == 0 and s[2+pat] == 0:
-	            valid_genotypes[:, 2+index] = anc_variants[:, mat] + anc_variants[:, 2+pat]
-	        elif s[mat] == 0:
-	            valid_genotypes[:, 2+index] = 2*anc_variants[:, mat]
-	        elif s[2+pat] == 0:
-	            valid_genotypes[:, 2+index] = 2*anc_variants[:, 2+pat]
-	        else:
-	            valid_genotypes[:, 2+index] = -1
+		# dad
+		if s[2] == 0 and s[3] == 0:
+			valid_genotypes[:, 1] = anc_variants[:, 2] + anc_variants[:, 3]
+		elif s[2] == 0:
+			valid_genotypes[:, 1] = 2*anc_variants[:, 2]
+		elif s[3] == 0:
+			valid_genotypes[:, 1] = 2*anc_variants[:, 3]
+		else:
+			valid_genotypes[:, 1] = -1
+      
+		# children
+		for index in range(m-2):
+			mat, pat = s[(4+(2*index)):(6+(2*index))]
 
-	    valid_genotypes = set([genotype_to_index[tuple(x)] for x in valid_genotypes]) 
+			if s[mat] == 0 and s[2+pat] == 0:
+				valid_genotypes[:, 2+index] = anc_variants[:, mat] + anc_variants[:, 2+pat]
+			elif s[mat] == 0:
+				valid_genotypes[:, 2+index] = 2*anc_variants[:, mat]
+			elif s[2+pat] == 0:
+				valid_genotypes[:, 2+index] = 2*anc_variants[:, 2+pat]
+			else:
+				valid_genotypes[:, 2+index] = -1
 
-	    # breadth first search to fill in loss for this state
-	    current_cost = 0
-	    while len(valid_genotypes) > 0:
-	        # add equivalents
-	        if not is_deletion:
-	        	valid_genotypes = valid_genotypes | set(chain.from_iterable([genotype_to_equivalents[x] for x in valid_genotypes]))
+		valid_genotypes = set([genotype_to_index[tuple(x)] for x in valid_genotypes]) 
 
-	        next_gen = set()
-	        for g in valid_genotypes:
-	            # fill in loss matrix
-	            if losses[i, g] == -1:
-	                losses[i, g] = current_cost
+		# breadth first search to fill in loss for this state
+		current_cost = 0
+		while len(valid_genotypes) > 0:
+			# add equivalents
+			if not is_deletion:
+				valid_genotypes = valid_genotypes | set(chain.from_iterable([genotype_to_equivalents[x] for x in valid_genotypes]))
 
-	                # pull next generation
-	                next_gen.update([ng for ng in genotype_to_neighbors[g] if losses[i, ng] == -1])
+			next_gen = set()
+			for g in valid_genotypes:
+				# fill in loss matrix
+				if losses[i, g] == -1:
+					losses[i, g] = current_cost
 
-	        valid_genotypes = next_gen
-	        current_cost += 1  	    
-	                
+					# pull next generation
+					next_gen.update([ng for ng in genotype_to_neighbors[g] if losses[i, ng] == -1])
+
+			valid_genotypes = next_gen
+			current_cost += 1  	    
+
 	# Check if we've missed some
 	print('losses', losses.shape, 'missing', np.sum(losses == -1)/(losses.shape[0]*losses.shape[1]))
 
