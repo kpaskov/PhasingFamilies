@@ -9,15 +9,21 @@ from itertools import chain, product
 import numpy as np
 from scipy import sparse
 
-# Run locally with python3 phase_chromosome2.py 22 data/v34.forCompoundHet.ped split_gen
+# Run locally with python3 phase_chromosome2.py 22 all 160826.ped split_gen
 
 chrom = sys.argv[1]
 family_size_param = sys.argv[2]
 family_size = -1 if family_size_param == 'all' else int(family_size_param)
 ped_file = sys.argv[3] #'data/v34.forCompoundHet.ped'
 data_dir = sys.argv[4]
-sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
-variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, chrom)
+
+conserve_mem = False
+if len(sys.argv) == 6 and sys.argv[5] == '--conserve-mem':
+	conserve_mem = True
+
+sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
+variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
+gen_files = sorted([f for f in listdir('split_gen') if ('chr.%s' % ('X' if chrom.startswith('PAR') else chrom)) in f and 'gen.npz' in f])
 
 # constants
 g_neighbors = {0: [1, -1],
@@ -29,17 +35,15 @@ g_equivalents = {0: [0, -1],
 	             1: [1, -1],
 	             2: [2, -1],
 	            -1: [-1]}
-
-# ancestral_variants (m1, m2, p1, p2)
-anc_variants = np.array(list(product(*[[0, 1]]*4)), dtype=np.int8)
-anc_variant_to_index = dict([(tuple(x), i) for i, x in enumerate(anc_variants)])
-print('ancestral variants', anc_variants.shape)
+PAR1X = (60001, 2699520)
+PAR2X = (154931044, 155260560)
 
 # pull families with sequence data
 with open(sample_file, 'r') as f:
 	sample_ids = [line.strip() for line in f]
 sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
 
+# pull families from ped file
 families = dict()
 with open(ped_file, 'r') as f:
     for line in f:
@@ -51,12 +55,17 @@ with open(ped_file, 'r') as f:
         		families[(fam_id, m_id, f_id)] = [m_id, f_id]
         	families[(fam_id, m_id, f_id)].append(child_id)
 
-#families = dict(list(families.items())[:10])
 family_to_indices = dict([(fid, [sample_id_to_index[x] for x in vs]) for fid, vs in families.items()])
 family_to_index = dict([(fid, i) for i, fid in enumerate(families.keys())])
 
 print('families with sequence data', len(families))
 print('family sizes', Counter([len(x) for x in families.values()]))
+
+# ancestral_variants (m1, m2, p1, p2)
+anc_variants = np.array(list(product(*[[0, 1]]*4)), dtype=np.int8)
+anc_variant_to_index = dict([(tuple(x), i) for i, x in enumerate(anc_variants)])
+print('ancestral variants', anc_variants.shape)
+
 
 # pull family sizes if family size is not given
 if family_size == -1:
@@ -65,11 +74,11 @@ else:
 	family_sizes = [family_size]
 
 # pull genotype data from .npz
-gen_files = sorted([f for f in listdir('split_gen') if ('chr.%s' % chrom) in f and 'gen.npz' in f])
-whole_chrom = sparse.hstack([sparse.load_npz('split_gen/%s' % gen_file) for gen_file in gen_files]).tocsr()
-m, n = whole_chrom.shape
-print('chrom shape', m, n, type(whole_chrom))
-
+if not conserve_mem:
+	whole_chrom = sparse.hstack([sparse.load_npz('split_gen/%s' % gen_file) for gen_file in gen_files])
+	m, n = whole_chrom.shape
+	print('chrom shape', m, n, type(whole_chrom))
+	
 # discard variants that aren't SNPs
 snp_indices = []
 snp_positions = []
@@ -79,10 +88,22 @@ with gzip.open(variant_file, 'rt') as f:
         if len(pieces[3]) == 1 and len(pieces[4]) == 1 and pieces[3] != '.' and pieces[4] != '.':
             snp_indices.append(i)
             snp_positions.append(int(pieces[1]))
-whole_chrom = whole_chrom[:, snp_indices]
 snp_positions = np.array(snp_positions)
-m, n = whole_chrom.shape
-print('chrom shape only SNPs', m, n)
+
+if not conserve_mem:
+	whole_chrom = whole_chrom[:, snp_indices]
+	m, n = whole_chrom.shape
+	print('chrom shape only SNPs', m, n)
+
+	# If we're looking at one of the PAR, restrict X to appropriate region
+	if chrom == 'PAR1':
+		PAR1X_indices = np.where(np.logical_and(snp_positions >= PAR1X[0], snp_positions <= PAR1X[1]))[0]
+		whole_chrom = whole_chrom[:, PAR1X_indices]
+		snp_positions = snp_positions[PAR1X_indices]
+	elif chrom == 'PAR2':
+		PAR2X_indices = np.where(np.logical_and(snp_positions >= PAR2X[0], snp_positions <= PAR2X[1]))[0]
+		whole_chrom = whole_chrom[:, PAR2X_indices]
+		snp_positions = snp_positions[PAR2X_indices]
 
 # do one family size at a time so we can reuse preprocessed matrices
 for m in family_sizes:
@@ -229,10 +250,27 @@ for m in family_sizes:
 			family_index = family_to_index[fkey]
 			print('family', fkey, family_index)
 
-			# filter out all_hom_ref
-			family_genotypes = whole_chrom[ind_indices, :].A
-			pos_to_genindex = np.asarray([genotype_to_index[tuple(x)] for x in family_genotypes.T])
+			if conserve_mem:
+				# Redo all of the genotype filtering
+				family_genotypes = sparse.hstack([sparse.load_npz('split_gen/%s' % gen_file).tocsr()[ind_indices, :] for gen_file in gen_files]).A
+				family_genotypes = family_genotypes[:, snp_indices]
 
+				# If we're looking at one of the PAR, restrict X to appropriate region
+				if chrom == 'PAR1':
+					PAR1X_indices = np.where(np.logical_and(snp_positions >= PAR1X[0], snp_positions <= PAR1X[1]))[0]
+					family_genotypes = family_genotypes[:, PAR1X_indices]
+					snp_positions = snp_positions[PAR1X_indices]
+				elif chrom == 'PAR2':
+					PAR2X_indices = np.where(np.logical_and(snp_positions >= PAR2X[0], snp_positions <= PAR2X[1]))[0]
+					family_genotypes = family_genotypes[:, PAR2X_indices]
+					snp_positions = snp_positions[PAR2X_indices]
+				m, n = family_genotypes.shape
+				print('chrom shape only SNPs', m, n)
+			else:
+				family_genotypes = whole_chrom[ind_indices, :].A
+
+			# filter out all_hom_ref
+			pos_to_genindex = np.asarray([genotype_to_index[tuple(x)] for x in family_genotypes.T])
 			family_indices = np.where(pos_to_genindex != genotype_to_index[(0,)*m])[0]
 			pos_to_genindex = pos_to_genindex[family_indices]
 			family_snp_positions = snp_positions[family_indices]
