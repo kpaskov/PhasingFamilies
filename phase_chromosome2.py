@@ -8,6 +8,7 @@ from itertools import chain, product
 
 import numpy as np
 from scipy import sparse
+import random
 
 # Run locally with python3 phase_chromosome2.py 22 all 160826.ped split_gen
 
@@ -25,16 +26,30 @@ sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, 'X' if chrom.startswith('
 variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
 gen_files = sorted([f for f in listdir('split_gen') if ('chr.%s' % ('X' if chrom.startswith('PAR') else chrom)) in f and 'gen.npz' in f])
 
-# constants
-g_neighbors = {0: [1, -1],
-	           1: [0, 2, -1],
-	           2: [1, -1],
-	          -1: [0, 1, 2]}
+# genotype (pred, obs): cost
+g_cost = {
+	(-2, -2): 0,
+	(-2, -1): 0,
+	(-2, 0): 3,
+	(-2, 1): 3,
+	(-2, 2): 3,
+	(0, -2): 10,
+	(0, -1): 0,
+	(0, 0): 0,
+	(0, 1): 1,
+	(0, 2): 2,
+	(1, -2): 10,
+	(1, -1): 0,
+	(1, 0): 1,
+	(1, 1): 0,
+	(1, 2): 1,
+	(2, -2): 10,
+	(2, -1): 0,
+	(2, 0): 2,
+	(2, 1): 1,
+	(2, 2): 0
+}
 
-g_equivalents = {0: [0, -1],
-	             1: [1, -1],
-	             2: [2, -1],
-	            -1: [-1]}
 PAR1X = (60001, 2699520)
 PAR2X = (154931044, 155260560)
 
@@ -55,6 +70,7 @@ with open(ped_file, 'r') as f:
         		families[(fam_id, m_id, f_id)] = [m_id, f_id]
         	families[(fam_id, m_id, f_id)].append(child_id)
 
+families = dict([(k, x[:2]+random.sample(x[2:], len(x)-2)) for k, x in families.items()])
 family_to_indices = dict([(fid, [sample_id_to_index[x] for x in vs]) for fid, vs in families.items()])
 family_to_index = dict([(fid, i) for i, fid in enumerate(families.keys())])
 
@@ -105,6 +121,13 @@ if not conserve_mem:
 		whole_chrom = whole_chrom[:, PAR2X_indices]
 		snp_positions = snp_positions[PAR2X_indices]
 
+	# Change long stretches of missing values to -2 = deleted region
+	num_deleted_region = 0
+	is_neg = (whole_chrom == -1).A
+	x, y = np.where(is_neg[:, :-4] & is_neg[:, 1:-3] & is_neg[:, 2:-2] & is_neg[:, 3:-1] & is_neg[:, 4:])
+	whole_chrom[x, y+2] = -2
+	print('Changed %0.2f of missing to deleted' % (x.shape[0]/np.sum(is_neg)))
+
 # do one family size at a time so we can reuse preprocessed matrices
 for m in family_sizes:
 	print('Family size', m)
@@ -128,29 +151,14 @@ for m in family_sizes:
 	print('inheritance states', inheritance_states.shape)
 
 	# genotypes
-	genotypes = np.array(list(product(*[[-1, 0, 1, 2]]*m)), dtype=np.int8)
+	genotypes = np.array(list(product(*[[-2, -1, 0, 1, 2]]*m)), dtype=np.int8)
 	genotype_to_index = dict([(tuple(x), i) for i, x in enumerate(genotypes)])
 	q = genotypes.shape[0]
 	print('genotypes', genotypes.shape)
 
-	# map genotypes to neighbors and equivalents
-	genotype_to_neighbors = []
-	genotype_to_equivalents = []
-	for g in genotypes:
-	    neighbor_gs = []
-	    for j in range(m):
-	        for new_entry in g_neighbors[g[j]]:
-	            new_genotype = tuple(new_entry if k == j else x for k, x in enumerate(g))
-	            neighbor_gs.append(genotype_to_index[new_genotype])
-	    genotype_to_neighbors.append(neighbor_gs)   
-	    genotype_to_equivalents.append([genotype_to_index[tuple(x)] for x in product(*[g_equivalents[x] for x in g])]) 
-	
-	print('genotype to equivalents', Counter([len(x) for x in genotype_to_equivalents]))    
-	print('genotype to neighbors', Counter([len(x) for x in genotype_to_neighbors]))
-
 	# transition matrix
 	# only allow one shift at a time
-	shift_costs = [10]*4 + [200]*(2*(m-2))
+	shift_costs = [20]*4 + [500]*(2*(m-2))
 
 	transitions = [[i] for i in range(p)]
 	transition_costs = [[0] for i in range(p)]
@@ -170,69 +178,52 @@ for m in family_sizes:
 	print('transitions', transitions.shape)
 
 	# loss matrix
-	losses = np.zeros((p, q), dtype=np.int8) - 1
+	losses = np.zeros((p, q), dtype=np.int16)
 	for i, s in enumerate(inheritance_states):
-		is_deletion = np.sum(s[:4]) > 0
-
-		# what genotypes can be validly produced from this inheritance state?          
-		valid_genotypes = np.zeros((anc_variants.shape[0], m), dtype=np.int8)
+		state_losses = np.zeros((q, anc_variants.shape[0]), dtype=np.int16)
 
 		# mom
 		if s[0] == 0 and s[1] == 0:
-			valid_genotypes[:, 0] = anc_variants[:, 0] + anc_variants[:, 1]
+			pred_gens = anc_variants[:, 0] + anc_variants[:, 1]
 		elif s[0] == 0:
-			valid_genotypes[:, 0] = 2*anc_variants[:, 0]
+			pred_gens = 2*anc_variants[:, 0]
 		elif s[1] == 0:
-			valid_genotypes[:, 0] = 2*anc_variants[:, 1]
+			pred_gens = 2*anc_variants[:, 1]
 		else:
-			valid_genotypes[:, 0] = -1
-	            
+			pred_gens = -2*np.ones((anc_variants.shape[0],))
+		for obs_gen in [-2, -1, 0, 1, 2]:
+			state_losses[genotypes[:, 0]==obs_gen, :] += [g_cost[(pred_gen, obs_gen)] for pred_gen in pred_gens]
+	        
 		# dad
 		if s[2] == 0 and s[3] == 0:
-			valid_genotypes[:, 1] = anc_variants[:, 2] + anc_variants[:, 3]
+			pred_gens = anc_variants[:, 2] + anc_variants[:, 3]
 		elif s[2] == 0:
-			valid_genotypes[:, 1] = 2*anc_variants[:, 2]
+			pred_gens = 2*anc_variants[:, 2]
 		elif s[3] == 0:
-			valid_genotypes[:, 1] = 2*anc_variants[:, 3]
+			pred_gens = 2*anc_variants[:, 3]
 		else:
-			valid_genotypes[:, 1] = -1
-      
+			pred_gens = -2*np.ones((anc_variants.shape[0],))
+		for obs_gen in [-2, -1, 0, 1, 2]:
+			state_losses[genotypes[:, 1]==obs_gen, :] += [g_cost[(pred_gen, obs_gen)] for pred_gen in pred_gens]
+	      
 		# children
 		for index in range(m-2):
 			mat, pat = s[(4+(2*index)):(6+(2*index))]
 
 			if s[mat] == 0 and s[2+pat] == 0:
-				valid_genotypes[:, 2+index] = anc_variants[:, mat] + anc_variants[:, 2+pat]
+				pred_gens = anc_variants[:, mat] + anc_variants[:, 2+pat]
 			elif s[mat] == 0:
-				valid_genotypes[:, 2+index] = 2*anc_variants[:, mat]
+				pred_gens = 2*anc_variants[:, mat]
 			elif s[2+pat] == 0:
-				valid_genotypes[:, 2+index] = 2*anc_variants[:, 2+pat]
+				pred_gens = 2*anc_variants[:, 2+pat]
 			else:
-				valid_genotypes[:, 2+index] = -1
+				pred_gens = -2*np.ones((anc_variants.shape[0],))
+			for obs_gen in [-2, -1, 0, 1, 2]:
+				state_losses[genotypes[:, 2+index]==obs_gen, :] += [g_cost[(pred_gen, obs_gen)] for pred_gen in pred_gens]
 
-		valid_genotypes = set([genotype_to_index[tuple(x)] for x in valid_genotypes]) 
+		losses[i, :] = np.min(state_losses, axis=1)
 
-		# breadth first search to fill in loss for this state
-		current_cost = 0
-		while len(valid_genotypes) > 0:
-			# add equivalents
-			if not is_deletion:
-				valid_genotypes = valid_genotypes | set(chain.from_iterable([genotype_to_equivalents[x] for x in valid_genotypes]))
-
-			next_gen = set()
-			for g in valid_genotypes:
-				# fill in loss matrix
-				if losses[i, g] == -1:
-					losses[i, g] = current_cost
-
-					# pull next generation
-					next_gen.update([ng for ng in genotype_to_neighbors[g] if losses[i, ng] == -1])
-
-			valid_genotypes = next_gen
-			current_cost += 1  	    
-
-	# Check if we've missed some
-	print('losses', losses.shape, 'missing', np.sum(losses == -1)/(losses.shape[0]*losses.shape[1]))
+	print('losses', losses.shape, losses)
 
 	with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size_param), 'w+') as famf, open('phased/chr.%s.familysize.%s.phased.txt' % (chrom, family_size_param), 'w+') as statef:
 		# write headers
@@ -242,7 +233,7 @@ for m in family_sizes:
 			'\t'.join(['child%d_vcfindex' % (i+1) for i in range(0, family_size-2)])]) + '\n')
 		statef.write('\t'.join(['family_id', 'state_id', 'm1_state', 'm2_state', 'p1_state', 'p2_state',
 			'\t'.join(['child%d_%s_state' % ((i+1), c) for i, c in product(range(family_size-2), ['m', 'p'])]),
-			'start_pos', 'end_pos', 'start_vcfindex', 'end_vcfindex', 'total_loss']) + '\n')
+			'start_pos', 'end_pos', 'start_vcfindex', 'end_vcfindex', 'index length', 'position length']) + '\n')
 
 		# phase each family
 		families_of_this_size = [(fkey, ind_indices) for fkey, ind_indices in family_to_indices.items() if len(ind_indices) == m]
@@ -266,6 +257,18 @@ for m in family_sizes:
 					snp_positions = snp_positions[PAR2X_indices]
 				m, n = family_genotypes.shape
 				print('chrom shape only SNPs', m, n)
+
+				# Change long stretches of missing values to -2 = deleted region
+				num_deleted_region = 0
+				for i in range(m):
+					# by row (individual)
+					is_neg = (family_genotypes[i, :] == -1).A[0, :]
+					in_neg_region = (np.convolve(is_neg.astype(np.int8), np.ones((7,)), mode='same') >= 6)
+					deleted_region_indices = np.where(is_neg & in_neg_region)[0]
+					family_genotypes[i, deleted_region_indices] = -2
+					num_deleted_region += deleted_region_indices.shape[0]
+				print('Changed %d from missing to deleted' % num_deleted_region)
+
 			else:
 				family_genotypes = whole_chrom[ind_indices, :].A
 
@@ -306,21 +309,24 @@ for m in family_sizes:
 			famf.write('%s\t%s\t%s\n' % ('.'.join(fkey), '\t'.join(families[fkey]), '\t'.join(map(str, ind_indices))))
 			famf.flush()
 
-			current_state = -1
-			state_start = -1
-			state_loss = 0
-			for i in range(n):
-				if final_states[i] != current_state:
-					if current_state != -1:
-						statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, '\t'.join(map(str, inheritance_states[current_state, :])), 
-							family_snp_positions[state_start], family_snp_positions[i-1], 
-							family_indices[state_start], family_indices[i-1], state_loss])) + '\n')
-						statef.flush()
-					current_state, state_start, state_loss = final_states[i], i, 0
-				state_loss += losses[current_state, pos_to_genindex[i]]
+			state_change_indices = np.where(final_states[1:] != final_states[:-1])[0]
+
+			start_index = 0
+			for end_index in state_change_indices:
+				current_state = final_states[end_index]
+				statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, 
+					'\t'.join(map(str, inheritance_states[current_state, :])), 
+					family_snp_positions[start_index], family_snp_positions[end_index], 
+					family_indices[start_index], family_indices[end_index], end_index-start_index, 
+					family_snp_positions[end_index]-family_snp_positions[start_index]])) + '\n')
+				start_index = end_index+1
 
 			# last state
-			statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, '\t'.join(map(str, inheritance_states[current_state, :])),
-				family_snp_positions[state_start], family_snp_positions[i-1], 
-				family_indices[state_start], family_indices[i-1], state_loss])) + '\n')
+			end_index = n-1
+			current_state = final_states[end_index]
+			statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, 
+					'\t'.join(map(str, inheritance_states[current_state, :])), 
+					family_snp_positions[start_index], family_snp_positions[end_index], 
+					family_indices[start_index], family_indices[end_index], end_index-start_index, 
+					family_snp_positions[end_index]-family_snp_positions[start_index]])) + '\n')
 			statef.flush()	
