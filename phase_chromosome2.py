@@ -28,23 +28,19 @@ gen_files = sorted([f for f in listdir('split_gen') if ('chr.%s' % ('X' if chrom
 
 # genotype (pred, obs): cost
 g_cost = {
-	(-2, -2): 0,
-	(-2, -1): 0,
-	(-2, 0): 3,
-	(-2, 1): 3,
-	(-2, 2): 3,
-	(0, -2): 10,
-	(0, -1): 0,
+	(-1, -1): 0,
+	(-1, 0): 3,
+	(-1, 1): 3,
+	(-1, 2): 3,
+	(0, -1): 3,
 	(0, 0): 0,
 	(0, 1): 1,
 	(0, 2): 2,
-	(1, -2): 10,
-	(1, -1): 0,
+	(1, -1): 3,
 	(1, 0): 1,
 	(1, 1): 0,
 	(1, 2): 1,
-	(2, -2): 10,
-	(2, -1): 0,
+	(2, -1): 3,
 	(2, 0): 2,
 	(2, 1): 1,
 	(2, 2): 0
@@ -70,7 +66,9 @@ with open(ped_file, 'r') as f:
         		families[(fam_id, m_id, f_id)] = [m_id, f_id]
         	families[(fam_id, m_id, f_id)].append(child_id)
 
-families = dict([(k, x[:2]+random.sample(x[2:], len(x)-2)) for k, x in families.items()])
+# randomly permute parents and children (separately)
+family_to_mom_dad = dict([(k, tuple(x[:2])) for k, x in families.items()])
+families = dict([(k, random.sample(x[:2], 2)+random.sample(x[2:], len(x)-2)) for k, x in families.items()])
 family_to_indices = dict([(fid, [sample_id_to_index[x] for x in vs]) for fid, vs in families.items()])
 family_to_index = dict([(fid, i) for i, fid in enumerate(families.keys())])
 
@@ -121,13 +119,6 @@ if not conserve_mem:
 		whole_chrom = whole_chrom[:, PAR2X_indices]
 		snp_positions = snp_positions[PAR2X_indices]
 
-	# Change long stretches of missing values to -2 = deleted region
-	num_deleted_region = 0
-	is_neg = (whole_chrom == -1).A
-	x, y = np.where(is_neg[:, :-4] & is_neg[:, 1:-3] & is_neg[:, 2:-2] & is_neg[:, 3:-1] & is_neg[:, 4:])
-	whole_chrom[x, y+2] = -2
-	print('Changed %0.2f of missing to deleted' % (x.shape[0]/np.sum(is_neg)))
-
 # do one family size at a time so we can reuse preprocessed matrices
 for m in family_sizes:
 	print('Family size', m)
@@ -151,14 +142,14 @@ for m in family_sizes:
 	print('inheritance states', inheritance_states.shape)
 
 	# genotypes
-	genotypes = np.array(list(product(*[[-2, -1, 0, 1, 2]]*m)), dtype=np.int8)
+	genotypes = np.array(list(product(*[[-1, 0, 1, 2]]*m)), dtype=np.int8)
 	genotype_to_index = dict([(tuple(x), i) for i, x in enumerate(genotypes)])
 	q = genotypes.shape[0]
 	print('genotypes', genotypes.shape)
 
 	# transition matrix
 	# only allow one shift at a time
-	shift_costs = [20]*4 + [500]*(2*(m-2))
+	shift_costs = [50]*4 + [500]*(2*(m-2))
 
 	transitions = [[i] for i in range(p)]
 	transition_costs = [[0] for i in range(p)]
@@ -190,8 +181,8 @@ for m in family_sizes:
 		elif s[1] == 0:
 			pred_gens = 2*anc_variants[:, 1]
 		else:
-			pred_gens = -2*np.ones((anc_variants.shape[0],))
-		for obs_gen in [-2, -1, 0, 1, 2]:
+			pred_gens = -1*np.ones((anc_variants.shape[0],))
+		for obs_gen in [-1, 0, 1, 2]:
 			state_losses[genotypes[:, 0]==obs_gen, :] += [g_cost[(pred_gen, obs_gen)] for pred_gen in pred_gens]
 	        
 		# dad
@@ -202,8 +193,8 @@ for m in family_sizes:
 		elif s[3] == 0:
 			pred_gens = 2*anc_variants[:, 3]
 		else:
-			pred_gens = -2*np.ones((anc_variants.shape[0],))
-		for obs_gen in [-2, -1, 0, 1, 2]:
+			pred_gens = -1*np.ones((anc_variants.shape[0],))
+		for obs_gen in [-1, 0, 1, 2]:
 			state_losses[genotypes[:, 1]==obs_gen, :] += [g_cost[(pred_gen, obs_gen)] for pred_gen in pred_gens]
 	      
 		# children
@@ -217,8 +208,8 @@ for m in family_sizes:
 			elif s[2+pat] == 0:
 				pred_gens = 2*anc_variants[:, 2+pat]
 			else:
-				pred_gens = -2*np.ones((anc_variants.shape[0],))
-			for obs_gen in [-2, -1, 0, 1, 2]:
+				pred_gens = -1*np.ones((anc_variants.shape[0],))
+			for obs_gen in [-1, 0, 1, 2]:
 				state_losses[genotypes[:, 2+index]==obs_gen, :] += [g_cost[(pred_gen, obs_gen)] for pred_gen in pred_gens]
 
 		losses[i, :] = np.min(state_losses, axis=1)
@@ -258,17 +249,6 @@ for m in family_sizes:
 				m, n = family_genotypes.shape
 				print('chrom shape only SNPs', m, n)
 
-				# Change long stretches of missing values to -2 = deleted region
-				num_deleted_region = 0
-				for i in range(m):
-					# by row (individual)
-					is_neg = (family_genotypes[i, :] == -1).A[0, :]
-					in_neg_region = (np.convolve(is_neg.astype(np.int8), np.ones((7,)), mode='same') >= 6)
-					deleted_region_indices = np.where(is_neg & in_neg_region)[0]
-					family_genotypes[i, deleted_region_indices] = -2
-					num_deleted_region += deleted_region_indices.shape[0]
-				print('Changed %d from missing to deleted' % num_deleted_region)
-
 			else:
 				family_genotypes = whole_chrom[ind_indices, :].A
 
@@ -306,7 +286,15 @@ for m in family_sizes:
 			print('Backward sweep complete', time.time()-prev_time, 'sec') 
 
 			# write to file
-			famf.write('%s\t%s\t%s\n' % ('.'.join(fkey), '\t'.join(families[fkey]), '\t'.join(map(str, ind_indices))))
+			if family_to_mom_dad[fkey] == tuple(families[fkey][:2]):
+				# mom comes first already
+				new_order = list(range(len(families[fkey])))
+				new_state_order = list(range(2*len(families[fkey])))
+			else:
+				new_order = [1, 0] + list(range(2, len(families[fkey])))
+				new_state_order = [2, 3, 0, 1] + list(range(4, 2*len(families[fkey])))
+
+			famf.write('%s\t%s\t%s\n' % ('.'.join(fkey), '\t'.join([families[fkey][i] for i in new_order]), '\t'.join(map(str, [ind_indices[i] for i in new_order]))))
 			famf.flush()
 
 			state_change_indices = np.where(final_states[1:] != final_states[:-1])[0]
@@ -315,7 +303,7 @@ for m in family_sizes:
 			for end_index in state_change_indices:
 				current_state = final_states[end_index]
 				statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, 
-					'\t'.join(map(str, inheritance_states[current_state, :])), 
+					'\t'.join(map(str, inheritance_states[current_state, new_state_order])), 
 					family_snp_positions[start_index], family_snp_positions[end_index], 
 					family_indices[start_index], family_indices[end_index], end_index-start_index, 
 					family_snp_positions[end_index]-family_snp_positions[start_index]])) + '\n')
@@ -325,7 +313,7 @@ for m in family_sizes:
 			end_index = n-1
 			current_state = final_states[end_index]
 			statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, 
-					'\t'.join(map(str, inheritance_states[current_state, :])), 
+					'\t'.join(map(str, inheritance_states[current_state, new_state_order])), 
 					family_snp_positions[start_index], family_snp_positions[end_index], 
 					family_indices[start_index], family_indices[end_index], end_index-start_index, 
 					family_snp_positions[end_index]-family_snp_positions[start_index]])) + '\n')

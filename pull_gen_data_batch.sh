@@ -14,4 +14,4 @@ module load py-scipystack/1.0_py36
 
 # Print this sub-job's task ID
 echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
-srun python3 pull_family_data.py ../../vcf/v3.4/$SLURM_ARRAY_TASK_ID.reheader.vcf.gz ../../vcf/v3.4/v34.forCompoundHet.ped split_gen $SLURM_ARRAY_TASK_ID
+srun python3 pull_gen_data.py ../../vcf/v3.4/$SLURM_ARRAY_TASK_ID.reheader.vcf.gz ../../vcf/v3.4/v34.forCompoundHet.ped split_gen $SLURM_ARRAY_TASK_ID
