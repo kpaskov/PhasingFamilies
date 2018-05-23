@@ -52,7 +52,7 @@ with gzip.open(vcf_file, 'rt') as f, \
             dp = int(segment[gen_index])
             if dp <= cutoff:
                 indices.append(i)
-                data.append(dp)
+                data.append(dp+1)
         indptr.append(len(data))
         num_lines += 1
 
