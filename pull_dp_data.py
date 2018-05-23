@@ -45,14 +45,17 @@ with gzip.open(vcf_file, 'rt') as f, \
 
         # Pull out genotypes
         format = pieces[8].strip().split(':')
-        gen_index = format.index('DP')
+        dp_index = format.index('DP')
         for i, piece in enumerate(pieces[9:]):
-            segment = piece.split(':', maxsplit=gen_index+1)
+            segment = piece.split(':', maxsplit=dp_index+1)
 
-            dp = -1 if segment[gen_index] == '.' else int(segment[gen_index])
-            if dp <= cutoff:
-                indices.append(i)
-                data.append(dp+1)
+            try:
+                dp = -1 if segment[dp_index] == '.' else int(segment[dp_index])
+                if dp <= cutoff:
+                    indices.append(i)
+                    data.append(dp+1)
+            except:
+                print(format, dp_index, segment)
         indptr.append(len(data))
         num_lines += 1
 
