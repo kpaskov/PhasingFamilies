@@ -49,7 +49,7 @@ with gzip.open(vcf_file, 'rt') as f, \
         for i, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=gen_index+1)
 
-            dp = int(segment[gen_index])
+            dp = -1 if segment[gen_index] == '.' else int(segment[gen_index])
             if dp <= cutoff:
                 indices.append(i)
                 data.append(dp+1)
