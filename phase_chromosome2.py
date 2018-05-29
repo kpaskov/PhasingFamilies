@@ -29,18 +29,18 @@ gen_files = sorted([f for f in listdir('split_gen') if ('chr.%s' % ('X' if chrom
 # genotype (pred, obs): cost
 g_cost = {
 	(-1, -1): 0,
-	(-1, 0): 3,
-	(-1, 1): 3,
-	(-1, 2): 3,
-	(0, -1): 3,
+	(-1, 0): 1,
+	(-1, 1): 1,
+	(-1, 2): 1,
+	(0, -1): 1,
 	(0, 0): 0,
 	(0, 1): 1,
 	(0, 2): 2,
-	(1, -1): 3,
+	(1, -1): 1,
 	(1, 0): 1,
 	(1, 1): 0,
 	(1, 2): 1,
-	(2, -1): 3,
+	(2, -1): 1,
 	(2, 0): 2,
 	(2, 1): 1,
 	(2, 2): 0
@@ -149,7 +149,8 @@ for m in family_sizes:
 
 	# transition matrix
 	# only allow one shift at a time
-	shift_costs = [50]*4 + [500]*(2*(m-2))
+	#shift_costs = [50]*4 + [500]*(2*(m-2))
+	shift_costs = [10]*4 + [500]*(2*(m-2))
 
 	transitions = [[i] for i in range(p)]
 	transition_costs = [[0] for i in range(p)]
