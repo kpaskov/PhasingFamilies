@@ -219,7 +219,7 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 		'\t'.join(['child%d_vcfindex' % (i+1) for i in range(0, family_size-2)])]) + '\n')
 	statef.write('\t'.join(['family_id', 'state_id', 'm1_state', 'm2_state', 'p1_state', 'p2_state',
 		'\t'.join(['child%d_%s_state' % ((i+1), c) for i, c in product(range(family_size-2), ['m', 'p'])]),
-		'start_pos', 'end_pos', 'start_vcfindex', 'end_vcfindex', 'index length', 'position length']) + '\n')
+		'start_pos', 'end_pos', 'start_index', 'end_index', 'start_family_index', 'end_family_index' 'pos_length', 'index_length', 'family_index_length']) + '\n')
 
 	# phase each family
 	for fkey, ind_indices in families_of_this_size:
@@ -239,40 +239,27 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 
 		# viterbi
 		v_cost = np.zeros((p, n+1), dtype=int)
-		v_cost[1:, 0] = 1
+		v_traceback = np.zeros((p, n+1), dtype=int)
+		v_num_traceback = np.zeros((p, n+1), dtype=int)
 
+		# store traceback in column sparse format (to allow multiple pointers)
+		v_traceback_indices, v_traceback_indptr = [], [0]
+		
 		# forward sweep
 		prev_time = time.time()
+		v_traceback[:, 0] = -1
 		for j in range(n): 
 		    total_cost = v_cost[transitions, j] + transition_costs
 		    min_index = np.argmin(total_cost, axis=1)
-		    v_cost[:, j+1] = total_cost[range(p), min_index] + losses[:, pos_to_genindex[j]]
+		    min_value = total_cost[range(p), min_index]
+		    v_traceback[:, j+1] = transitions[range(p), min_index]
+		    v_cost[:, j+1] = min_value + losses[:, pos_to_genindex[j]]
+
+		    # check for multiple tracebacks
+		    v_num_traceback[range(p), j+1] = np.sum(total_cost == np.outer(min_value, np.ones((total_cost.shape[1]))), axis=1)
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
-		# backward sweep
-		prev_time = time.time()
-		final_states = np.zeros((n,), dtype=int)-1
-		index = n
-
-		# find min value
-		min_cost = np.min(v_cost[:, index])
-		current_paths = (np.where(v_cost[:, index]==min_cost)[0]).tolist()
-		while index > 0:
-			if len(current_paths) == 1:
-				final_states[index-1] = current_paths[0]
-
-			index -= 1
-			new_current_paths = set()
-			total_cost = v_cost[transitions, index] + transition_costs
-			min_costs = np.min(total_cost[current_paths, :], axis=1)
-			for current_path, min_cost in zip(current_paths, min_costs):
-				min_indices = transitions[current_path, np.where(total_cost[current_path, :] == min_cost)[0]]
-				new_current_paths.update(min_indices.tolist())
-			current_paths = list(new_current_paths)
-		print('Backward sweep complete', time.time()-prev_time, 'sec') 
-		print('Num unknown final states: %d' % np.sum(final_states == -1))
-
-		# write to file
+		# write header to file
 		if family_to_mom_dad[fkey] == tuple(families[fkey][:2]):
 			# mom comes first already
 			new_order = list(range(len(families[fkey])))
@@ -284,26 +271,68 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 		famf.write('%s\t%s\t%s\n' % ('.'.join(fkey), '\t'.join([families[fkey][i] for i in new_order]), '\t'.join(map(str, [ind_indices[i] for i in new_order]))))
 		famf.flush()
 
-		state_change_indices = np.where(final_states[1:] != final_states[:-1])[0]
+		# backward sweep
+		prev_time = time.time()
+		
+		# choose best path
+		k = np.argmin(v_cost[:, n])
+		paths = [k]
+		prev_state = tuple(inheritance_states[k, :])
+		prev_state_end = n-1
+		
+		num_forks = 0
+		index = n
+		while index > 0:
+			# traceback
+			new_states = set()
+			for k in paths:
+				if v_num_traceback[k, index] > 1:
+					# get alternate tracebacks
+					total_cost = v_cost[transitions[k, :], index-1] + transition_costs[k, :]
+					min_value = np.min(total_cost)
+					min_indices = transitions[k, np.where(total_cost == min_value)[0]]	
+					new_states.update(min_indices.tolist())
+				else:
+					new_states.add(v_traceback[k, index])
+			new_states = list(new_states)
 
-		start_index = 0
-		for end_index in state_change_indices:
-			current_state = final_states[end_index]
-			if current_state != -1:
-				statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, 
-					'\t'.join(map(str, inheritance_states[current_state, new_state_order])), 
-					family_snp_positions[start_index], family_snp_positions[end_index], 
-					family_indices[start_index], family_indices[end_index], end_index-start_index, 
-					family_snp_positions[end_index]-family_snp_positions[start_index]])) + '\n')
-				start_index = end_index+1
+			# combine into a single state (with missing values)
+			new_state = tuple(inheritance_states[new_states[0], :])
+			if len(new_states) > 1:
+				num_forks += 1
+				for k in new_states[1:]:
+					new_state = tuple(['*' if x != y else x for x, y in zip(new_state, tuple(inheritance_states[k, :]))])
+
+			# write to file
+			if prev_state != new_state:
+				s_start, s_end = index, prev_state_end
+				statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
+					'.'.join(fkey), 
+					'\t'.join([str(prev_state[i]) for i in new_state_order]), 
+					family_snp_positions[s_start], family_snp_positions[s_end], 
+					family_indices[s_start], family_indices[s_end], 
+					s_start, s_end, 
+					family_snp_positions[s_end]-family_snp_positions[s_start], 
+					family_indices[s_end]-family_indices[s_start], 
+					s_end-s_start))
+				prev_state = new_state
+				prev_state_end = index-1
+
+			index -= 1
+			paths = list(new_states)
 
 		# last state
-		end_index = n-1
-		current_state = final_states[end_index]
-		if current_state != -1:
-			statef.write('\t'.join(map(str, ['.'.join(fkey), current_state, 
-					'\t'.join(map(str, inheritance_states[current_state, new_state_order])), 
-					family_snp_positions[start_index], family_snp_positions[end_index], 
-					family_indices[start_index], family_indices[end_index], end_index-start_index, 
-					family_snp_positions[end_index]-family_snp_positions[start_index]])) + '\n')
+		s_start, s_end = 0, prev_state_end
+		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
+					'.'.join(fkey), 
+					'\t'.join([str(prev_state[i]) for i in new_state_order]), 
+					family_snp_positions[s_start], family_snp_positions[s_end], 
+					family_indices[s_start], family_indices[s_end], 
+					s_start, s_end, 
+					family_snp_positions[s_end]-family_snp_positions[s_start], 
+					family_indices[s_end]-family_indices[s_start], 
+					s_end-s_start))
 		statef.flush()	
+
+		print('Num positions in fork', num_forks)
+		print('Backward sweep complete', time.time()-prev_time, 'sec') 
