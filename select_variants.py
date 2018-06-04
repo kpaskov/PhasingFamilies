@@ -20,7 +20,6 @@ with open(sample_file, 'r') as f:
     individual_to_index = dict([(x.strip(), i) for i, x in enumerate(f)])
 
 # pull mothers and fathers
-ped_file = '160826.ped'
 mother_ids, father_ids = [], []
 with open(ped_file, 'r') as f:
     for line in f:
