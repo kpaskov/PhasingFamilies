@@ -68,7 +68,7 @@ for gen_file in gen_files:
 				print('Error', cont)
 		pvalue = miss_to_pvalue[(fmis, mmis)]
 
-		if pvalue <= pow(10, -15):
+		if pvalue <= pow(10, -7):
 			indices_with_bias.add(i+offset)
 	offset += n
 
