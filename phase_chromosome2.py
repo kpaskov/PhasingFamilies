@@ -251,6 +251,7 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 		
 		# forward sweep
 		prev_time = time.time()
+		v_cost[:, 0] = [2*s[4]+s[5] for s in inheritance_states]
 		v_traceback[:, 0] = -1
 		for j in range(n): 
 		    total_cost = v_cost[transitions, j] + transition_costs
@@ -260,7 +261,8 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 		    v_cost[:, j+1] = min_value + losses[:, pos_to_genindex[j]]
 
 		    # check for multiple tracebacks
-		    v_num_traceback[range(p), j+1] = np.sum(total_cost == np.outer(min_value, np.ones((total_cost.shape[1]))), axis=1)
+		    v_num_traceback[:, j+1] = np.sum(total_cost == np.repeat(np.reshape(min_value, (p, 1)), transitions.shape[1], axis=1), axis=1)
+		    #v_num_traceback[:, j+1] = np.sum(np.apply_along_axis(lambda x: x == min_value, 0, total_cost), axis=1)
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
 		# write header to file
@@ -280,6 +282,7 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 		
 		# choose best path
 		k = np.argmin(v_cost[:, n])
+		print('Num solutions', np.sum(v_cost[:, n]==v_cost[k, n]))
 		paths = [k]
 		prev_state = tuple(inheritance_states[k, :])
 		prev_state_end = n-1
