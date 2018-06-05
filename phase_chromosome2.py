@@ -127,7 +127,10 @@ print('Family size', m)
 # (1, 0) -> m2p1
 # (1, 1) -> m2p2
 
-inheritance_states = np.array(list(product(*[[0, 1]]*(2*m))), dtype=np.int8)
+if family_size >= 5:
+	inheritance_states = np.array(list(product(*[[0, 1]]*(2*m))), dtype=np.int8)
+else:
+	inheritance_states = np.array([x for x in product(*[[0, 1]]*(2*m)) if x[4] == 0 and x[5] == 0], dtype=np.int8)
 state_to_index = dict([(tuple(x), i) for i, x in enumerate(inheritance_states)])
 p = inheritance_states.shape[0]
 print('inheritance states', inheritance_states.shape)
@@ -155,9 +158,10 @@ for i, state in enumerate(inheritance_states):
 	# allow a single recombination event
 	for j in range(4, inheritance_states.shape[1]):
 		new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
-		new_index = state_to_index[new_state]
-		transitions[i].append(new_index)
-		transition_costs[i].append(shift_costs[j])
+		if new_state in state_to_index:
+			new_index = state_to_index[new_state]
+			transitions[i].append(new_index)
+			transition_costs[i].append(shift_costs[j])
             
 transitions = np.array(transitions)
 transition_costs = np.array(transition_costs)
