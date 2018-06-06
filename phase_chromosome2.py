@@ -243,26 +243,15 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 
 		# viterbi
 		v_cost = np.zeros((p, n+1), dtype=int)
-		v_traceback = np.zeros((p, n+1), dtype=int)
-		v_num_traceback = np.zeros((p, n+1), dtype=int)
-
-		# store traceback in column sparse format (to allow multiple pointers)
-		v_traceback_indices, v_traceback_indptr = [], [0]
+		#v_traceback = np.zeros((p, n+1), dtype=int)
 		
 		# forward sweep
 		prev_time = time.time()
 		v_cost[:, 0] = [2*s[4]+s[5] for s in inheritance_states]
-		v_traceback[:, 0] = -1
+		#v_traceback[:, 0] = -1
 		for j in range(n): 
-		    total_cost = v_cost[transitions, j] + transition_costs
-		    min_index = np.argmin(total_cost, axis=1)
-		    min_value = total_cost[range(p), min_index]
-		    v_traceback[:, j+1] = transitions[range(p), min_index]
-		    v_cost[:, j+1] = min_value + losses[:, pos_to_genindex[j]]
+		    v_cost[:, j+1] = np.min(v_cost[transitions, j] + transition_costs, axis=1) + losses[:, pos_to_genindex[j]]
 
-		    # check for multiple tracebacks
-		    v_num_traceback[:, j+1] = np.sum(total_cost == np.repeat(np.reshape(min_value, (p, 1)), transitions.shape[1], axis=1), axis=1)
-		    #v_num_traceback[:, j+1] = np.sum(np.apply_along_axis(lambda x: x == min_value, 0, total_cost), axis=1)
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
 		# write header to file
@@ -291,16 +280,13 @@ with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+
 		index = n
 		while index > 0:
 			# traceback
+			total_cost = v_cost[transitions[paths, :], index-1] + transition_costs[paths, :]
+			min_value = np.min(total_cost, axis=1)
 			new_states = set()
-			for k in paths:
-				if v_num_traceback[k, index] > 1:
-					# get alternate tracebacks
-					total_cost = v_cost[transitions[k, :], index-1] + transition_costs[k, :]
-					min_value = np.min(total_cost)
-					min_indices = transitions[k, np.where(total_cost == min_value)[0]]	
-					new_states.update(min_indices.tolist())
-				else:
-					new_states.add(v_traceback[k, index])
+			for i, k in enumerate(paths):
+				# get best tracebacks
+				min_indices = transitions[k, np.where(total_cost[i, :] == min_value[i])[0]]	
+				new_states.update(min_indices.tolist())
 			new_states = list(new_states)
 
 			# combine into a single state (with missing values)
