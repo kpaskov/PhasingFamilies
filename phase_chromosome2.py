@@ -17,6 +17,7 @@ chrom = sys.argv[1]
 family_size = int(sys.argv[2])
 ped_file = sys.argv[3] #'data/v34.forCompoundHet.ped'
 data_dir = sys.argv[4]
+out_dir = sys.argv[5]
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
 variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
@@ -215,7 +216,7 @@ for i, s in enumerate(inheritance_states):
 
 print('losses', losses.shape, losses)
 
-with open('phased/chr.%s.familysize.%s.families.txt' % (chrom, family_size), 'w+') as famf, open('phased/chr.%s.familysize.%s.phased.txt' % (chrom, family_size), 'w+') as statef:
+with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size), 'w+') as famf, open('%s/chr.%s.familysize.%s.phased.txt' % (out_dir, chrom, family_size), 'w+') as statef:
 	# write headers
 	famf.write('\t'.join(['family_id', 'mother_id', 'father_id', 
 		'\t'.join(['child%d_id' % (i+1) for i in range(0, family_size-2)]), 
