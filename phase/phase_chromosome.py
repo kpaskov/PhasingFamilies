@@ -286,7 +286,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 			new_states = set()
 			for i, k in enumerate(paths):
 				# get best tracebacks
-				min_indices = transitions[k, np.where(total_cost[i, :] == min_value[i])[0]]	
+				min_indices = transitions[k, np.where(total_cost[i, :] <= min_value[i])[0]]	
 				new_states.update(min_indices.tolist())
 			new_states = list(new_states)
 
