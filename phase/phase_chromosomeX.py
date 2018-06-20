@@ -11,18 +11,18 @@ from scipy import sparse
 import random
 
 
-# Run locally with python3 phase_chromosome2.py 22 all 160826.ped split_gen
+# Run locally with python3 phase/phase_chromosomeX.py 3 data/160826.ped split_gen phased
 
-chrom = sys.argv[1]
-family_size = int(sys.argv[2])
-ped_file = sys.argv[3] #'data/v34.forCompoundHet.ped'
-data_dir = sys.argv[4]
-out_dir = sys.argv[5]
+chrom = 'X'
+family_size = int(sys.argv[1])
+ped_file = sys.argv[2]
+data_dir = sys.argv[3]
+out_dir = sys.argv[4]
 
-sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
-variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
-clean_file = '%s/clean_indices_%s.txt' % (data_dir, 'X' if chrom.startswith('PAR') else chrom) 
-gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % ('X' if chrom.startswith('PAR') else chrom)) in f and 'gen.npz' in f])
+sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
+variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, chrom)
+clean_file = '%s/clean_indices_%s.txt' % (data_dir, chrom) 
+gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
 
 # genotype (pred, obs): cost
 g_cost = {
@@ -54,6 +54,7 @@ sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_i
 
 # pull families from ped file
 families = dict()
+ind_to_is_male = dict()
 with open(ped_file, 'r') as f:	
     for line in f:
         pieces = line.strip().split('\t')
@@ -63,13 +64,13 @@ with open(ped_file, 'r') as f:
         	if (fam_id, m_id, f_id) not in families:
         		families[(fam_id, m_id, f_id)] = [m_id, f_id]
         	families[(fam_id, m_id, f_id)].append(child_id)
+        	ind_to_is_male[child_id] = (pieces[4] == '1')
+        	ind_to_is_male[m_id] = False
+        	ind_to_is_male[f_id] = True
 
-# randomly permute parents and children (separately)
-family_to_mom_dad = dict([(k, tuple(x[:2])) for k, x in families.items()])
-families = dict([(k, random.sample(x[:2], 2)+random.sample(x[2:], len(x)-2)) for k, x in families.items()])
+# randomly permute children
+families = dict([(k, x[:2]+random.sample(x[2:], len(x)-2)) for k, x in families.items()])
 family_to_indices = dict([(fid, [sample_id_to_index[x] for x in vs]) for fid, vs in families.items()])
-family_to_index = dict([(fid, i) for i, fid in enumerate(families.keys())])
-
 print('families with sequence data', len(families))
 
 families_of_this_size = [(fkey, ind_indices) for fkey, ind_indices in family_to_indices.items() if len(ind_indices) == family_size]
@@ -102,16 +103,6 @@ whole_chrom = whole_chrom[:, snp_indices]
 m, n = whole_chrom.shape
 print('chrom shape only SNPs', m, n)
 
-# If we're looking at one of the PAR, restrict X to appropriate region
-if chrom == 'PAR1':
-	PAR1X_indices = np.where(np.logical_and(snp_positions >= PAR1X[0], snp_positions <= PAR1X[1]))[0]
-	whole_chrom = whole_chrom[:, PAR1X_indices]
-	snp_positions = snp_positions[PAR1X_indices]
-elif chrom == 'PAR2':
-	PAR2X_indices = np.where(np.logical_and(snp_positions >= PAR2X[0], snp_positions <= PAR2X[1]))[0]
-	whole_chrom = whole_chrom[:, PAR2X_indices]
-	snp_positions = snp_positions[PAR2X_indices]
-
 m = family_size
 print('Family size', m)
 # inheritance states
@@ -131,7 +122,7 @@ print('Family size', m)
 if family_size >= 5:
 	inheritance_states = np.array(list(product(*[[0, 1]]*(2*m))), dtype=np.int8)
 else:
-	inheritance_states = np.array([x for x in product(*[[0, 1]]*(2*m)) if x[4] == 0 and x[5] == 0], dtype=np.int8)
+	inheritance_states = np.array([x for x in product(*[[0, 1]]*(2*m)) if x[4] == 0], dtype=np.int8)
 state_to_index = dict([(tuple(x), i) for i, x in enumerate(inheritance_states)])
 p = inheritance_states.shape[0]
 print('inheritance states', inheritance_states.shape)
@@ -218,18 +209,14 @@ print('losses', losses.shape, losses)
 
 with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size), 'w+') as famf, open('%s/chr.%s.familysize.%s.phased.txt' % (out_dir, chrom, family_size), 'w+') as statef:
 	# write headers
-	famf.write('\t'.join(['family_id', 'mother_id', 'father_id', 
-		'\t'.join(['child%d_id' % (i+1) for i in range(0, family_size-2)]), 
-		'mother_vcfindex', 'father_vcfindex',
-		'\t'.join(['child%d_vcfindex' % (i+1) for i in range(0, family_size-2)])]) + '\n')
+	famf.write('family_id\tmother_id\tfather_id\t' + '\t'.join(['child%d_id' % i for i in range(1, family_size-1)]) + '\n')
 	statef.write('\t'.join(['family_id', 'state_id', 'm1_state', 'm2_state', 'p1_state', 'p2_state',
 		'\t'.join(['child%d_%s_state' % ((i+1), c) for i, c in product(range(family_size-2), ['m', 'p'])]),
 		'start_pos', 'end_pos', 'start_index', 'end_index', 'start_family_index', 'end_family_index' 'pos_length', 'index_length', 'family_index_length']) + '\n')
 
 	# phase each family
 	for fkey, ind_indices in families_of_this_size:
-		family_index = family_to_index[fkey]
-		print('family', fkey, family_index)
+		print('family', fkey)
 
 		# pull genotype data for this family
 		family_genotypes = whole_chrom[ind_indices, :].A
@@ -242,42 +229,81 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 		n = pos_to_genindex.shape[0]
 		print('family chrom shape', m, n)
 
+		# Find states that follow X-transmission pattern
+		inds = families[fkey]
+		print([ind_to_is_male[ind] for ind in inds])
+
+		x_inh_states = []	
+		not_x_inh_states = []	
+		for i, x in enumerate(inheritance_states):
+			state_ok = True
+
+			if x[3] != 1:
+				# dad must have a deletion on his second chromosome
+				state_ok = False
+		
+			for index in range(m-2):
+				pat = x[4+(2*index)+1]
+			
+				if ind_to_is_male[inds[index+2]]:
+					if pat != 1:
+						# male children inherit dad's second chromosome (the deleted one)
+						state_ok = False
+				else:
+					if pat == 1:
+						# female children inherit dad's first chromosome (the one that isn't deleted)
+						state_ok = False
+			if state_ok:
+				x_inh_states.append(i)
+			else:
+				not_x_inh_states.append(i)
+
+		# Are we in PAR?
+		in_par = np.zeros((n,), dtype=int)
+		in_par[(family_snp_positions >= PAR1X[0]) & (family_snp_positions <= PAR1X[1])] = 1
+		in_par[(family_snp_positions >= PAR2X[0]) & (family_snp_positions <= PAR2X[1])] = 1
+			
+		print(p, len(x_inh_states), len(not_x_inh_states))
+
 		# viterbi
 		v_cost = np.zeros((p, n+1), dtype=int)
 		#v_traceback = np.zeros((p, n+1), dtype=int)
 		
 		# forward sweep
 		prev_time = time.time()
-		v_cost[:, 0] = [2*s[4]+s[5] for s in inheritance_states]
+		
+		max_value = np.iinfo(v_cost.dtype).max - 10000
 		#v_traceback[:, 0] = -1
 		for j in range(n): 
 		    v_cost[:, j+1] = np.min(v_cost[transitions, j] + transition_costs, axis=1) + losses[:, pos_to_genindex[j]]
+		    if in_par[j] == 0:
+		    	v_cost[not_x_inh_states, j+1] = max_value
 
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
 		# write header to file
-		if family_to_mom_dad[fkey] == tuple(families[fkey][:2]):
-			# mom comes first already
-			new_order = list(range(len(families[fkey])))
-			new_state_order = list(range(2*len(families[fkey])))
-		else:
-			new_order = [1, 0] + list(range(2, len(families[fkey])))
-			new_state_order = [2, 3, 0, 1] + list(range(4, 2*len(families[fkey])))
-
-		famf.write('%s\t%s\t%s\n' % ('.'.join(fkey), '\t'.join([families[fkey][i] for i in new_order]), '\t'.join(map(str, [ind_indices[i] for i in new_order]))))
+		famf.write('%s\t%s\n' % ('.'.join(fkey), '\t'.join(inds)))
 		famf.flush()
 
 		# backward sweep
 		prev_time = time.time()
 		
 		# choose best path
-		k = np.argmin(v_cost[:, n])
-		print('Num solutions', np.sum(v_cost[:, n]==v_cost[k, n]))
-		paths = [k]
-		prev_state = tuple(inheritance_states[k, :])
+		min_value = np.min(v_cost[:, n])
+		print('Num solutions', np.sum(v_cost[:, n]==min_value))
+
+		num_forks = 0
+
+		paths = np.where(v_cost[:, n]==min_value)[0].tolist()
+		# combine into a single state (with missing values)
+		prev_state = tuple(inheritance_states[paths[0], :])
+		if len(paths) > 1:
+			num_forks += 1
+			for k in paths[1:]:
+				prev_state = tuple(['*' if x != y else x for x, y in zip(prev_state, tuple(inheritance_states[k, :]))])
+		print(inheritance_states[paths, :])
 		prev_state_end = n-1
 		
-		num_forks = 0
 		index = n
 		while index > 0:
 			# traceback
@@ -286,7 +312,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 			new_states = set()
 			for i, k in enumerate(paths):
 				# get best tracebacks
-				min_indices = transitions[k, np.where(total_cost[i, :] <= min_value[i])[0]]	
+				min_indices = transitions[k, np.where(total_cost[i, :] == min_value[i])[0]]	
 				new_states.update(min_indices.tolist())
 			new_states = list(new_states)
 
@@ -302,7 +328,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 				s_start, s_end = index, prev_state_end
 				statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
 					'.'.join(fkey), 
-					'\t'.join([str(prev_state[i]) for i in new_state_order]), 
+					'\t'.join(map(str, prev_state)), 
 					family_snp_positions[s_start], family_snp_positions[s_end], 
 					family_indices[s_start], family_indices[s_end], 
 					s_start, s_end, 
@@ -319,7 +345,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 		s_start, s_end = 0, prev_state_end
 		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
 					'.'.join(fkey), 
-					'\t'.join([str(prev_state[i]) for i in new_state_order]), 
+					'\t'.join(map(str, prev_state)), 
 					family_snp_positions[s_start], family_snp_positions[s_end], 
 					family_indices[s_start], family_indices[s_end], 
 					s_start, s_end, 

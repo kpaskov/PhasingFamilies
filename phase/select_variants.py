@@ -7,12 +7,13 @@ import numpy as np
 from scipy import sparse
 from scipy.stats import chi2_contingency
 
+# run with python phase/select_variants.py X data/160826.ped split_gen
 
 chrom = sys.argv[1]
-ped_file = sys.argv[2] #'data/v34.forCompoundHet.ped'
+ped_file = sys.argv[2]
 data_dir = sys.argv[3]
 
-variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, 'X' if chrom.startswith('PAR') else chrom)
+variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir, chrom)
 
 # pull sample indices
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
