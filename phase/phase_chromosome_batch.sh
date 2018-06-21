@@ -14,4 +14,4 @@
 echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
 
 module load py-scipystack/1.0_py36
-srun python3 phase_chromosome2.py $SLURM_ARRAY_TASK_ID $1 ../../vcf/v3.4/v34.vcf.ped split_gen phased
+srun python3 phase/phase_chromosome.py $SLURM_ARRAY_TASK_ID $1 ../../vcf/v3.4/v34.vcf.ped split_gen phased
