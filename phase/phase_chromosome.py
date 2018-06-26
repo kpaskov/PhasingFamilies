@@ -215,22 +215,26 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 		# pull genotype data for this family
 		family_genotypes = whole_chrom[ind_indices, :].A
 
-		# filter out all_hom_ref
-		pos_to_genindex = np.asarray([genotype_to_index[tuple(x)] for x in family_genotypes.T])
-		family_indices = np.where(pos_to_genindex != genotype_to_index[(0,)*m])[0]
-		pos_to_genindex = pos_to_genindex[family_indices]
-		family_snp_positions = snp_positions[family_indices]
-		n = pos_to_genindex.shape[0]
-		print('family chrom shape', m, n)
+		# condense repeated genotypes
+		rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
+		n = rep_indices.shape[0]+1
+		pos_gens = [genotype_to_index[tuple(x)] for x in family_genotypes[:, rep_indices].T] + [genotype_to_index[tuple(family_genotypes[:, -1])]]
+		mult_factor = [rep_indices[0]+1] + (rep_indices[1:]-rep_indices[:-1]).tolist() + [family_genotypes.shape[0]-rep_indices[-1]-1]
+		family_snp_positions = np.zeros((n, 2), dtype=int)
+		family_snp_positions[1:, 0] = snp_positions[(rep_indices+1)]
+		family_snp_positions[0, 0] = snp_positions[0]
+		family_snp_positions[:-1, 1] = snp_positions[rep_indices]
+		family_snp_positions[-1, 1] = snp_positions[-1]
 
 		# viterbi
 		v_cost = np.zeros((p, n+1), dtype=int)
+		v_cost[:, 0] = [2*s[4]+s[5] for s in inheritance_states]
 		#v_traceback = np.zeros((p, n+1), dtype=int)
 		
 		# forward sweep
 		prev_time = time.time()
 		for j in range(n): 
-		    v_cost[:, j+1] = np.min(v_cost[transitions, j] + transition_costs, axis=1) + losses[:, pos_to_genindex[j]]
+		    v_cost[:, j+1] = np.min(v_cost[transitions, j] + transition_costs, axis=1) + mult_factor[j]*losses[:, pos_gens[j]]
 
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
@@ -278,16 +282,15 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 
 			# write to file
 			if prev_state != new_state:
-				s_start, s_end = index, prev_state_end
-				statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
-					'.'.join(fkey), 
-					'\t'.join(map(str, prev_state)), 
-					family_snp_positions[s_start], family_snp_positions[s_end], 
-					family_indices[s_start], family_indices[s_end], 
-					s_start, s_end, 
-					family_snp_positions[s_end]-family_snp_positions[s_start], 
-					family_indices[s_end]-family_indices[s_start], 
-					s_end-s_start))
+				s_start, s_end = index-1, prev_state_end
+
+				statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
+						'.'.join(fkey), 
+						'\t'.join(map(str, prev_state)), 
+						family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
+						s_start, s_end, 
+						family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
+						s_end-s_start+1))
 				prev_state = new_state
 				prev_state_end = index-1
 
@@ -296,15 +299,13 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 
 		# last state
 		s_start, s_end = 0, prev_state_end
-		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
+		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
 					'.'.join(fkey), 
 					'\t'.join(map(str, prev_state)), 
-					family_snp_positions[s_start], family_snp_positions[s_end], 
-					family_indices[s_start], family_indices[s_end], 
+					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
 					s_start, s_end, 
-					family_snp_positions[s_end]-family_snp_positions[s_start], 
-					family_indices[s_end]-family_indices[s_start], 
-					s_end-s_start))
+					family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
+					s_end-s_start+1))
 		statef.flush()	
 
 		print('Num positions in fork', num_forks)
