@@ -206,7 +206,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 	famf.write('family_id\tmother_id\tfather_id\t' + '\t'.join(['child%d_id' % i for i in range(1, family_size-1)]) + '\n')
 	statef.write('\t'.join(['family_id', 'state_id', 'm1_state', 'm2_state', 'p1_state', 'p2_state',
 		'\t'.join(['child%d_%s_state' % ((i+1), c) for i, c in product(range(family_size-2), ['m', 'p'])]),
-		'start_pos', 'end_pos', 'start_index', 'end_index', 'start_family_index', 'end_family_index' 'pos_length', 'index_length', 'family_index_length']) + '\n')
+		'start_pos', 'end_pos', 'start_family_index', 'end_family_index' 'pos_length', 'family_index_length']) + '\n')
 
 	# phase each family
 	for fkey, ind_indices in families_of_this_size:
@@ -234,7 +234,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 		prev_time = time.time()
 
 		# first step, break symmetry
-		# we enforce that the chromosome starts and ends with child1 (0, 0) and no deletions
+		# we enforce that the chromosome starts with child1 (0, 0) and no deletions
 		v_cost[:, 0] = mult_factor[0]*losses[:, pos_gens[0]] + zero_transition_costs
 
 		# next steps
@@ -252,10 +252,11 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 		final_states = -np.ones((state_len, n), dtype=int)
 		
 		# choose best paths
+		# we enforce that the chromosome ends with no deletions
 		num_forks = 0
-		zero_states = np.sum(inheritance_states[:, :6], axis=1)==0
-		min_value = np.min(v_cost[zero_states, -1])
-		paths = np.where((v_cost[:, -1]==min_value) & zero_states)[0]
+		no_delstates = np.sum(inheritance_states[:, :4], axis=1)==0
+		min_value = np.min(v_cost[no_delstates, -1])
+		paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
 		print('Num solutions', paths.shape, inheritance_states[paths, :])
 
 		# combine path states into a single state (unknown values represented with -1)
