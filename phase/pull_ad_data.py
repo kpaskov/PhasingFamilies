@@ -17,8 +17,8 @@ cutoff = int(sys.argv[5])
 
 # Pull data from vcf
 with gzip.open(vcf_file, 'rt') as f, \
-    open('%s/chr.%s.dp.samples.txt' % (out_directory, chrom), 'w+') as sample_f, \
-    gzip.open('%s/chr.%s.dp.variants.txt.gz' % (out_directory, chrom), 'wt') as variant_f:
+    open('%s/chr.%s.ad.samples.txt' % (out_directory, chrom), 'w+') as sample_f, \
+    gzip.open('%s/chr.%s.ad.variants.txt.gz' % (out_directory, chrom), 'wt') as variant_f:
 
     # Skip header
     line = next(f)
@@ -30,7 +30,7 @@ with gzip.open(vcf_file, 'rt') as f, \
     sample_f.write('\n'.join(sample_ids))
     print('Num individuals with genomic data', len(sample_ids))
 
-    # Pull genotypes from vcf
+    # Pull AD from vcf
     m = len(sample_ids)
     data, indices, indptr = [], [], [0]
     
@@ -43,48 +43,51 @@ with gzip.open(vcf_file, 'rt') as f, \
         # Write variant to file
         variant_f.write('\t'.join(pieces[:9]) + '\n')
 
-        # Pull out genotypes
+        # Pull out AD
         format = pieces[8].strip().split(':')
-        dp_index = format.index('DP')
+        ad_index = format.index('AD')
         for i, piece in enumerate(pieces[9:]):
-            segment = piece.split(':', maxsplit=dp_index+1)
+            segment = piece.split(':', maxsplit=ad_index+1)
 
-            dp = -2
-            if segment[dp_index] != '.':
+            ads = -2, -2
+            if segment[ad_index] != '.':
                 try:
-                    dp = int(segment[dp_index])
+                    ads = tuple(map(int, segment[ad_index].split(',')))[:2]
                 except:
-                    print(format, dp_index, segment)
+                    print(format, ad_index, segment)
 
-            if dp <= cutoff:
-                indices.append(i)
-                data.append(dp+1)
+            if ad[0] <= cutoff:
+                indices.append(2*i)
+                data.append(ad[0]+1)
+            if ad[1] <= cutoff:
+                indices.append((2*i)+1)
+                data.append(ad[1]+1)
 
         indptr.append(len(data))
         num_lines += 1
 
         # If file has gotten really big, write subfile to disk
         if len(data) > 500000000:
-            dp = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
-            print('Sub dataset', dp.shape)
+            ad = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+            print('Sub dataset', ad.shape)
 
             # Save to file
-            save_npz('%s/chr.%s.%d.dp.cutoff.%d' % (out_directory, chrom, subfile, cutoff), dp)
+            save_npz('%s/chr.%s.%d.ad.cutoff.%d' % (out_directory, chrom, subfile, cutoff), ad)
 
             # Start fresh
             subfile += 1
             num_lines = 0
             data, indices, indptr = [], [], [0]
 
-    dp = csc_matrix((data, indices, indptr), shape=(m, num_lines, cutoff), dtype=np.int8)
+    ad = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
     
     # Save to file
     if subfile == 0:
-        print('Full dataset', dp.shape)
-        save_npz('%s/chr.%s.dp.cutoff.%d' % (out_directory, chrom), dp)
+        print('Full dataset', ad.shape)
+        save_npz('%s/chr.%s.ad.cutoff.%d' % (out_directory, chrom, cutoff), ad)
     else:
-        print('Sub dataset', dp.shape)
-        save_npz('%s/chr.%s.%d.dp.cutoff.%d' % (out_directory, chrom, subfile, cutoff), dp)
+        print('Sub dataset', ad.shape)
+        save_npz('%s/chr.%s.%d.ad.cutoff.%d' % (out_directory, chrom, subfile, cutoff), ad)
 
 print('Completed in ', time.time()-t0, 'sec')
 
