@@ -56,12 +56,12 @@ with gzip.open(vcf_file, 'rt') as f, \
                 except:
                     print(format, ad_index, segment)
 
-            if ad[0] <= cutoff:
+            if ads[0] <= cutoff:
                 indices.append(2*i)
-                data.append(ad[0]+1)
-            if ad[1] <= cutoff:
+                data.append(ads[0]+1)
+            if ads[1] <= cutoff:
                 indices.append((2*i)+1)
-                data.append(ad[1]+1)
+                data.append(ads[1]+1)
 
         indptr.append(len(data))
         num_lines += 1
