@@ -68,7 +68,7 @@ with gzip.open(vcf_file, 'rt') as f, \
 
         # If file has gotten really big, write subfile to disk
         if len(data) > 500000000:
-            ad = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+            ad = csc_matrix((data, indices, indptr), shape=(2*m, num_lines), dtype=np.int8)
             print('Sub dataset', ad.shape)
 
             # Save to file
@@ -79,7 +79,7 @@ with gzip.open(vcf_file, 'rt') as f, \
             num_lines = 0
             data, indices, indptr = [], [], [0]
 
-    ad = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+    ad = csc_matrix((data, indices, indptr), shape=(2*m, num_lines), dtype=np.int8)
     
     # Save to file
     if subfile == 0:
