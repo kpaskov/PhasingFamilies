@@ -46,8 +46,9 @@ with gzip.open(vcf_file, 'rt') as f, \
         format = pieces[8].strip().split(':')
         gen_index = format.index('GT')
         dp_index = format.index('DP')
+        maxsplit = max(gen_index, dp_index)+1
         for i, piece in enumerate(pieces[9:]):
-            segment = piece.split(':', maxsplit=gen_index+1)
+            segment = piece.split(':', maxsplit=maxsplit)
 
             if segment[dp_index] == '0' or segment[dp_index] == '1':
                 # very low coverage is marked double deletion rather than unknown
