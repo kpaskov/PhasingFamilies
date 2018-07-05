@@ -50,7 +50,7 @@ with gzip.open(vcf_file, 'rt') as f, \
         for i, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=maxsplit)
 
-            if segment[dp_index] == '0' or segment[dp_index] == '1':
+            if dp_index < len(segment) and (segment[dp_index] == '0' or segment[dp_index] == '1'):
                 # very low coverage is marked double deletion rather than unknown
                 gt = -2
             elif segment[gen_index] in gen_mapping:
