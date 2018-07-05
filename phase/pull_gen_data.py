@@ -46,10 +46,14 @@ with gzip.open(vcf_file, 'rt') as f, \
         # Pull out genotypes
         format = pieces[8].strip().split(':')
         gen_index = format.index('GT')
+        dp_index = format.index('DP')
         for i, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=gen_index+1)
 
-            if segment[gen_index] in gen_mapping:
+            if segment[dp_index] == '0' or segment[dp_index] == '1':
+                # very low coverage is marked double deletion rather than unknown
+                gt = -2
+            elif segment[gen_index] in gen_mapping:
                 gt = gen_mapping[segment[gen_index]]
             else:
                 # For now we mark multi-base loci as unknown
