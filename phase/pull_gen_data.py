@@ -10,9 +10,8 @@ t0 = time.time()
 
 # Pull arguments
 vcf_file = sys.argv[1]
-ped_file = sys.argv[2]
-out_directory = sys.argv[3]
-chrom = sys.argv[4]
+out_directory = sys.argv[2]
+chrom = sys.argv[3]
 
 # Pull data from vcf
 with gzip.open(vcf_file, 'rt') as f, \
