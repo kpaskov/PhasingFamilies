@@ -8,7 +8,7 @@
 #SBATCH -p dpwall
 #SBATCH -D /scratch/PI/dpwall/DATA/iHART/kpaskov/PhasingFamilies
 #SBATCH -t 10:00:00
-#SBATCH --mem=32
+#SBATCH --mem=64
 
 # Print this sub-job's task ID
 echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
