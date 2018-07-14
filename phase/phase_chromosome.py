@@ -48,40 +48,6 @@ g_cost = {
 	(2, 2): 0
 }
 
-# # from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
-# class memoized(object):
-# 	'''Decorator. Caches a function's return value each time it is called.
-# 	If called later with the same arguments, the cached value is returned
-# 	(not reevaluated).
-# 	'''
-# 	def __init__(self, func):
-# 		self.func = func
-# 		self.n = 1000
-# 		self.cache = np.zeros((self.n, p), dtype=np.int8)
-# 		self.args_to_index = dict()
-# 		self.args = [None]*self.n
-# 	def __call__(self, *args):
-# 		if args in self.args_to_index:
-# 			return self.cache[self.args_to_index[args], :]
-# 		else:
-# 			value = self.func(*args)
-# 			if len(self.args_to_index) == self.n:
-# 				index = random.randint(0, self.n-1)
-# 				del self.args_to_index[self.args[index]]
-# 			else:
-# 				index = len(self.args_to_index)
-			
-# 			self.args[index] = args
-# 			self.args_to_index[args] = index
-# 			self.cache[index, :] = value
-# 			return value
-# 	def __repr__(self):
-# 		'''Return the function's docstring.'''
-# 		return self.func.__doc__
-# 	def __get__(self, obj, objtype):
-# 		'''Support instance methods.'''
-# 		return functools.partial(self.__call__, obj)
-
 # pull families with sequence data
 with open(sample_file, 'r') as f:
 	sample_ids = [line.strip() for line in f]
@@ -211,25 +177,24 @@ for pm, i in pm_gen_to_index.items():
 	pm_gen[i, :] = pm
 print('perfect matches', pm_gen.shape, Counter([len(v) for v in pm_gen_indices]))
 
-def calculate_loss(gen): 
-	s = np.zeros((len(pm_gen_to_index),), dtype=np.int8)
-	for pm, i in pm_gen_to_index.items():
-		s[i] = sum([g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
-    
-	d = np.zeros((p,), dtype=np.int8)
-	for i, indices in enumerate(pm_gen_indices):
-		d[i] = np.min(s[indices])
-	return d
-
 genotypes = np.array(list(product(*[[-2, -1, 0, 1, 2]]*m)), dtype=np.int8)
 genotype_to_index = dict([(tuple(x), i) for i, x in enumerate(genotypes)])
 q = genotypes.shape[0]
 print('genotypes', genotypes.shape)
 
 losses = np.zeros((p, q), dtype=np.int8)
-for i in range(q):
-	losses[:, i] = calculate_loss(genotypes[i, :])
-print('losses', losses.shape)
+already_calculated = np.zeros((q,), dtype=bool)
+def calculate_loss(gen): 
+	gen_index = genotype_to_index[tuple(gen)]
+	if not already_calculated[gen_index]:
+		s = np.zeros((len(pm_gen_to_index),), dtype=np.int8)
+		for pm, i in pm_gen_to_index.items():
+			s[i] = sum([g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
+	    
+		for i, indices in enumerate(pm_gen_indices):
+			losses[i, gen_index] = np.min(s[indices])
+		already_calculated[gen_index] = True
+	return losses[:, gen_index]
 
 # pull genotype data from .npz
 indices_of_interest = sum([v for k, v in families_of_this_size], [])
@@ -289,17 +254,15 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		# first step, break symmetry
 		# we enforce that the chromosome starts with child1 (0, 0) and no deletions
 		pos_gen = tuple(family_genotypes[:, 0])
-		#loss = cache_losses[:, genotype_to_index[pos_gen]] if pos_gen in genotype_to_index else calculate_loss(pos_gen)
-		#loss = calculate_loss(pos_gen)
-		loss = losses[:, genotype_to_index[pos_gen]].astype(int)
+		loss = calculate_loss(pos_gen).astype(int)
+		#loss = losses[:, genotype_to_index[pos_gen]].astype(int)
 		v_cost[:, 0] = mult_factor[0]*loss + zero_transition_costs
 
 		# next steps
 		for j in range(1, n): 
 			pos_gen = tuple(family_genotypes[:, rep_indices[j]])
-			#loss = cache_losses[:, genotype_to_index[pos_gen]] if pos_gen in genotype_to_index else calculate_loss(pos_gen)
-			#loss = calculate_loss(pos_gen)
-			loss = losses[:, genotype_to_index[pos_gen]].astype(int)
+			loss = calculate_loss(pos_gen).astype(int)
+			#loss = losses[:, genotype_to_index[pos_gen]].astype(int)
 			v_cost[:, j] = np.min(v_cost[transitions, j-1] + transition_costs, axis=1) + mult_factor[j]*loss
 
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
