@@ -73,18 +73,18 @@ print('families with sequence data', len(families))
 families_of_this_size = [(fkey, ind_indices) for fkey, ind_indices in family_to_indices.items() if len(ind_indices) == m]
 print('families of size %d: %d' % (m, len(families_of_this_size)))
 
-# ancestral_variants (m1, m2, p1, p2)
-anc_variants = np.array(list(product(*[[0, 1]]*4)), dtype=np.int8)
-anc_variant_to_index = dict([(tuple(x), i) for i, x in enumerate(anc_variants)])
-print('ancestral variants', anc_variants.shape)
-
 # inheritance states
 #
 # for parents:
-# (0, 0) -> normal
-# (0, 1) -> deletion on parental2
-# (1, 0) -> deletion on parental1
-# (1, 1) -> deletion on parental1 and parental2
+# (0, 0) -> deletion on parental1 and parental2
+# (0, 1) -> deletion on parental1
+# (0, 2) -> deletion on parental1 and duplication on parental2
+# (1, 0) -> deletion on parental2
+# (1, 1) -> normal
+# (1, 2) -> duplication on parental2
+# (2, 0) -> duplication on parental1 and deletion on parental2
+# (2, 1) -> duplication on parental1
+# (2, 2) -> duplication on parental1 and parental2
 # 
 # for children:
 # (0, 0) -> m1p1
@@ -93,22 +93,21 @@ print('ancestral variants', anc_variants.shape)
 # (1, 1) -> m2p2
 
 if m >= 5:
-	inheritance_states = np.array(list(product(*[[0, 1]]*(2*m))), dtype=np.int8)
+	inheritance_states = np.array(list(product(*(([[0, 1, 2]]*4)+([[0, 1]]*(2*(m-2)))))), dtype=np.int8)
 else:
-	inheritance_states = np.array([x for x in product(*[[0, 1]]*(2*m)) if x[4] == 0 and x[5] == 0], dtype=np.int8)
+	inheritance_states = np.array([x for x in product(*([[0, 1, 2]]*4)+([[0, 1]]*(2*(m-2)))) if x[4] == 0 and x[5] == 0], dtype=np.int8)
 state_to_index = dict([(tuple(x), i) for i, x in enumerate(inheritance_states)])
 p, state_len = inheritance_states.shape
 print('inheritance states', inheritance_states.shape)
 
 # transition matrix
 # only allow one shift at a time
-shift_costs = [10]*4 + [500]*(2*(m-2))
+shift_costs = [50]*4 + [500]*(2*(m-2))
 
 transitions = [[] for i in range(p)]
 transition_costs = [[] for i in range(p)]
 for i, state in enumerate(inheritance_states):
-	# allow multiple deletion transitions
-	for delstate in list(product(*[[0, 1]]*4)):
+	for delstate in list(product(*[[0, 1, 2]]*4)):
 		new_state = tuple(delstate) + tuple(state[4:])
 		new_index = state_to_index[new_state]
 		transitions[i].append(new_index)
@@ -124,47 +123,68 @@ for i, state in enumerate(inheritance_states):
             
 transitions = np.array(transitions)
 transition_costs = np.array(transition_costs)
-zero_transition_costs = inheritance_states[:, :6].dot(np.asarray(shift_costs, dtype=int)[:6])
+
+starting_state = (1, 1, 1, 1, 0, 0)
+zero_transition_costs = np.zeros((p,), dtype=int)
+for i, ss in enumerate(starting_state):
+	zero_transition_costs[inheritance_states[:, i] != ss] += shift_costs[i]
 print('transitions', transitions.shape)
 
 # perfect match genotypes
 pm_gen_to_index = dict()
 pm_gen_indices = []
 for s in inheritance_states:
+	anc_pos = [[-1] if s[i] == 0 else [0, 1] if s[i] == 1 else [0, 2] for i in range(4)]
+	anc_variants = np.array(list(product(*anc_pos)), dtype=np.int8)
 	pred_gens = np.zeros((anc_variants.shape[0], m), dtype=np.int8)
 
 	# mom
-	if s[0] == 0 and s[1] == 0:
-		pred_gens[:, 0] = anc_variants[:, 0] + anc_variants[:, 1]
-	elif s[0] == 0:
-		pred_gens[:, 0] = 2*anc_variants[:, 0]
-	elif s[1] == 0:
-		pred_gens[:, 0] = 2*anc_variants[:, 1]
-	else:
-		pred_gens[:, 0] = -1*np.ones((anc_variants.shape[0],))
-    
+	# duplication
+	pred_gens[(anc_variants[:, 0]==2) | (anc_variants[:, 1]==2), 0] = 1
+	# deletion
+	pred_gens[(anc_variants[:, 0]==-1) & (anc_variants[:, 1]==-1), 0] = -1
+	pred_gens[(anc_variants[:, 0]==-1) & (anc_variants[:, 1]==0), 0] = 0
+	pred_gens[(anc_variants[:, 0]==-1) & (anc_variants[:, 1]==1), 0] = 2
+	pred_gens[(anc_variants[:, 0]==0) & (anc_variants[:, 1]==-1), 0] = 0
+	pred_gens[(anc_variants[:, 0]==1) & (anc_variants[:, 1]==-1), 0] = 2
+	# normal
+	pred_gens[(anc_variants[:, 0]==0) & (anc_variants[:, 1]==0), 0] = 0
+	pred_gens[(anc_variants[:, 0]==1) & (anc_variants[:, 1]==1), 0] = 2
+	pred_gens[(anc_variants[:, 0]==0) & (anc_variants[:, 1]==1), 0] = 1
+	pred_gens[(anc_variants[:, 0]==1) & (anc_variants[:, 1]==0), 0] = 1
+
 	# dad
-	if s[2] == 0 and s[3] == 0:
-		pred_gens[:, 1] = anc_variants[:, 2] + anc_variants[:, 3]
-	elif s[2] == 0:
-		pred_gens[:, 1] = 2*anc_variants[:, 2]
-	elif s[3] == 0:
-		pred_gens[:, 1] = 2*anc_variants[:, 3]
-	else:
-		pred_gens[:, 1] = -1*np.ones((anc_variants.shape[0],))
-    
+	# duplication
+	pred_gens[(anc_variants[:, 2]==2) | (anc_variants[:, 3]==2), 1] = 1
+	# deletion
+	pred_gens[(anc_variants[:, 2]==-1) & (anc_variants[:, 3]==-1), 1] = -1
+	pred_gens[(anc_variants[:, 2]==-1) & (anc_variants[:, 3]==0), 1] = 0
+	pred_gens[(anc_variants[:, 2]==-1) & (anc_variants[:, 3]==1), 1] = 2
+	pred_gens[(anc_variants[:, 2]==0) & (anc_variants[:, 3]==-1), 1] = 0
+	pred_gens[(anc_variants[:, 2]==1) & (anc_variants[:, 3]==-1), 1] = 2
+	# normal
+	pred_gens[(anc_variants[:, 2]==0) & (anc_variants[:, 3]==0), 1] = 0
+	pred_gens[(anc_variants[:, 2]==1) & (anc_variants[:, 3]==1), 1] = 2
+	pred_gens[(anc_variants[:, 2]==0) & (anc_variants[:, 3]==1), 1] = 1
+	pred_gens[(anc_variants[:, 2]==1) & (anc_variants[:, 3]==0), 1] = 1
+
 	# children
 	for index in range(m-2):
 		mat, pat = s[(4+(2*index)):(6+(2*index))]
-
-		if s[mat] == 0 and s[2+pat] == 0:
-			pred_gens[:, 2+index] = anc_variants[:, mat] + anc_variants[:, 2+pat]
-		elif s[mat] == 0:
-			pred_gens[:, 2+index] = 2*anc_variants[:, mat]
-		elif s[2+pat] == 0:
-			pred_gens[:, 2+index] = 2*anc_variants[:, 2+pat]
-		else:
-			pred_gens[:, 2+index] = -1*np.ones((anc_variants.shape[0],))
+        
+		# duplication
+		pred_gens[(anc_variants[:, mat]==2) | (anc_variants[:, 2+pat]==2), 2+index] = 1
+		# deletion
+		pred_gens[(anc_variants[:, mat]==-1) & (anc_variants[:, 2+pat]==-1), 2+index] = -1
+		pred_gens[(anc_variants[:, mat]==-1) & (anc_variants[:, 2+pat]==0), 2+index] = 0
+		pred_gens[(anc_variants[:, mat]==-1) & (anc_variants[:, 2+pat]==1), 2+index] = 2
+		pred_gens[(anc_variants[:, mat]==0) & (anc_variants[:, 2+pat]==-1), 2+index] = 0
+		pred_gens[(anc_variants[:, mat]==1) & (anc_variants[:, 2+pat]==-1), 2+index] = 2
+		# normal
+		pred_gens[(anc_variants[:, mat]==0) & (anc_variants[:, 2+pat]==0), 2+index] = 0
+		pred_gens[(anc_variants[:, mat]==1) & (anc_variants[:, 2+pat]==1), 2+index] = 2
+		pred_gens[(anc_variants[:, mat]==0) & (anc_variants[:, 2+pat]==1), 2+index] = 1
+		pred_gens[(anc_variants[:, mat]==1) & (anc_variants[:, 2+pat]==0), 2+index] = 1
 
 	unique_pred_gens = set(map(tuple, pred_gens))
 	for pg in unique_pred_gens:
@@ -252,7 +272,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		prev_time = time.time()
 
 		# first step, break symmetry
-		# we enforce that the chromosome starts with child1 (0, 0) and no deletions
+		# we enforce that the chromosome starts with child1 (0, 0) and no deletions or duplications
 		pos_gen = tuple(family_genotypes[:, 0])
 		loss = calculate_loss(pos_gen).astype(int)
 		#loss = losses[:, genotype_to_index[pos_gen]].astype(int)
@@ -278,7 +298,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		# choose best paths
 		# we enforce that the chromosome ends with no deletions
 		num_forks = 0
-		no_delstates = np.sum(inheritance_states[:, :4], axis=1)==0
+		no_delstates = np.sum(inheritance_states[:, :4] == 1, axis=1)==4  
 		min_value = np.min(v_cost[no_delstates, -1])
 		paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
 		print('Num solutions', paths.shape, inheritance_states[paths, :])

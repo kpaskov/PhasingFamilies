@@ -11,7 +11,7 @@ from scipy import sparse
 import random
 
 
-# Run locally with python3 phase/phase_chromosomeX.py 3 data/160826.ped split_gen phased
+# Run locally with python phase/phase_chromosomeX.py 3 data/160826.ped split_gen phased
 
 chrom = 'X'
 family_size = int(sys.argv[1])
@@ -124,7 +124,7 @@ if family_size >= 5:
 else:
 	inheritance_states = np.array([x for x in product(*[[0, 1]]*(2*m)) if x[4] == 0], dtype=np.int8)
 state_to_index = dict([(tuple(x), i) for i, x in enumerate(inheritance_states)])
-p = inheritance_states.shape[0]
+p, state_len = inheritance_states.shape
 print('inheritance states', inheritance_states.shape)
 
 # genotypes
@@ -157,6 +157,7 @@ for i, state in enumerate(inheritance_states):
             
 transitions = np.array(transitions)
 transition_costs = np.array(transition_costs)
+zero_transition_costs = inheritance_states[:, :6].dot(np.asarray(shift_costs, dtype=int)[:6])
 print('transitions', transitions.shape)
 
 # loss matrix
@@ -212,27 +213,29 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 	famf.write('family_id\tmother_id\tfather_id\t' + '\t'.join(['child%d_id' % i for i in range(1, family_size-1)]) + '\n')
 	statef.write('\t'.join(['family_id', 'state_id', 'm1_state', 'm2_state', 'p1_state', 'p2_state',
 		'\t'.join(['child%d_%s_state' % ((i+1), c) for i, c in product(range(family_size-2), ['m', 'p'])]),
-		'start_pos', 'end_pos', 'start_index', 'end_index', 'start_family_index', 'end_family_index' 'pos_length', 'index_length', 'family_index_length']) + '\n')
+		'start_pos', 'end_pos', 'start_family_index', 'end_family_index' 'pos_length', 'family_index_length']) + '\n')
 
 	# phase each family
 	for fkey, ind_indices in families_of_this_size:
+		inds = families[fkey]
 		print('family', fkey)
+		print([ind_to_is_male[ind] for ind in inds])
 
 		# pull genotype data for this family
 		family_genotypes = whole_chrom[ind_indices, :].A
 
-		# filter out all_hom_ref
-		pos_to_genindex = np.asarray([genotype_to_index[tuple(x)] for x in family_genotypes.T])
-		family_indices = np.where(pos_to_genindex != genotype_to_index[(0,)*m])[0]
-		pos_to_genindex = pos_to_genindex[family_indices]
-		family_snp_positions = snp_positions[family_indices]
-		n = pos_to_genindex.shape[0]
-		print('family chrom shape', m, n)
+		# condense repeated genotypes
+		rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
+		n = rep_indices.shape[0]+1
+		pos_gens = [genotype_to_index[tuple(x)] for x in family_genotypes[:, rep_indices].T] + [genotype_to_index[tuple(family_genotypes[:, -1])]]
+		mult_factor = [rep_indices[0]+1] + (rep_indices[1:]-rep_indices[:-1]).tolist() + [family_genotypes.shape[1]-rep_indices[-1]-1]
+		family_snp_positions = np.zeros((n, 2), dtype=int)
+		family_snp_positions[1:, 0] = snp_positions[(rep_indices+1)]
+		family_snp_positions[0, 0] = snp_positions[0]
+		family_snp_positions[:-1, 1] = snp_positions[rep_indices]
+		family_snp_positions[-1, 1] = snp_positions[-1]
 
 		# Find states that follow X-transmission pattern
-		inds = families[fkey]
-		print([ind_to_is_male[ind] for ind in inds])
-
 		x_inh_states = []	
 		not_x_inh_states = []	
 		for i, x in enumerate(inheritance_states):
@@ -258,26 +261,36 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 			else:
 				not_x_inh_states.append(i)
 
+		# build non-PAR transition matrix
+		
+
 		# Are we in PAR?
-		in_par = np.zeros((n,), dtype=int)
-		in_par[(family_snp_positions >= PAR1X[0]) & (family_snp_positions <= PAR1X[1])] = 1
-		in_par[(family_snp_positions >= PAR2X[0]) & (family_snp_positions <= PAR2X[1])] = 1
+		in_par1 = np.zeros((n,), dtype=int)
+		in_par2 = np.zeros((n,), dtype=int)
+		in_par1[(family_snp_positions[:, 0] >= PAR1X[0]) & (family_snp_positions[:, 1] <= PAR1X[1])] = 1
+		in_par2[(family_snp_positions[:, 0] >= PAR2X[0]) & (family_snp_positions[:, 1] <= PAR2X[1])] = 1
 			
 		print(p, len(x_inh_states), len(not_x_inh_states))
 
 		# viterbi
 		v_cost = np.zeros((p, n+1), dtype=int)
-		#v_traceback = np.zeros((p, n+1), dtype=int)
 		
 		# forward sweep
 		prev_time = time.time()
-		
+
+		# first step, break symmetry
+		# we enforce that the PAR starts with child1 (0, 0) and no deletions
 		max_value = np.iinfo(v_cost.dtype).max - 10000
-		#v_traceback[:, 0] = -1
-		for j in range(n): 
-		    v_cost[:, j+1] = np.min(v_cost[transitions, j] + transition_costs, axis=1) + losses[:, pos_to_genindex[j]]
-		    if in_par[j] == 0:
-		    	v_cost[not_x_inh_states, j+1] = max_value
+		v_cost[:, 0] = mult_factor[0]*losses[:, pos_gens[0]] + zero_transition_costs
+
+		# next steps
+		for j in range(1, n): 
+			if in_par1[j] == 1:
+				v_cost[:, j] = np.min(v_cost[transitions, j-1] + transition_costs, axis=1) + mult_factor[j]*losses[:, pos_gens[j]]
+			elif in_par2[j] == 1:
+
+			else:
+				v_cost[:, j] = np.min(v_cost[x_transitions, j-1] + x_transition_costs, axis=1) + mult_factor[j]*losses[:, pos_gens[j]]
 
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
@@ -287,72 +300,86 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, family_size)
 
 		# backward sweep
 		prev_time = time.time()
-		
-		# choose best path
-		min_value = np.min(v_cost[:, n])
-		print('Num solutions', np.sum(v_cost[:, n]==min_value))
+		final_states = -np.ones((state_len, n), dtype=int)
 
+		# choose best paths
+		# we enforce that the chromosome ends with no deletions
 		num_forks = 0
-
-		paths = np.where(v_cost[:, n]==min_value)[0].tolist()
-		# combine into a single state (with missing values)
-		prev_state = tuple(inheritance_states[paths[0], :])
-		if len(paths) > 1:
-			num_forks += 1
-			for k in paths[1:]:
-				prev_state = tuple(['*' if x != y else x for x, y in zip(prev_state, tuple(inheritance_states[k, :]))])
-		print(inheritance_states[paths, :])
-		prev_state_end = n-1
+		no_delstates = np.sum(inheritance_states[:, :4], axis=1)==0
+		min_value = np.min(v_cost[no_delstates, -1])
+		paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
+		print('Num solutions', paths.shape, inheritance_states[paths, :])
 		
-		index = n
-		while index > 0:
+		# combine path states into a single state (unknown values represented with -1)
+		if paths.shape[0] == 1:
+			final_states[:, -1] = inheritance_states[paths[0], :]
+		else:
+			num_forks += 1
+			path_states = inheritance_states[paths, :]
+			known_indices = np.all(path_states == path_states[0, :], axis=0)
+			final_states[known_indices, -1] = path_states[0, known_indices]
+
+		# now work backwards
+		for j in reversed(range(n-1)):
+
 			# traceback
-			total_cost = v_cost[transitions[paths, :], index-1] + transition_costs[paths, :]
+			total_cost = v_cost[transitions[paths, :], j] + transition_costs[paths, :]
 			min_value = np.min(total_cost, axis=1)
-			new_states = set()
+			new_paths = set()
 			for i, k in enumerate(paths):
-				# get best tracebacks
 				min_indices = transitions[k, np.where(total_cost[i, :] == min_value[i])[0]]	
-				new_states.update(min_indices.tolist())
-			new_states = list(new_states)
+				new_paths.update(min_indices.tolist())
+			paths = np.asarray(list(new_paths), dtype=int)
 
-			# combine into a single state (with missing values)
-			new_state = tuple(inheritance_states[new_states[0], :])
-			if len(new_states) > 1:
+			# combine path states a single state (unknown values represented with -1)
+			if paths.shape[0] == 1:
+				final_states[:, j] = inheritance_states[paths[0], :]
+			else:
 				num_forks += 1
-				for k in new_states[1:]:
-					new_state = tuple(['*' if x != y else x for x, y in zip(new_state, tuple(inheritance_states[k, :]))])
-
-			# write to file
-			if prev_state != new_state:
-				s_start, s_end = index, prev_state_end
-				statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
-					'.'.join(fkey), 
-					'\t'.join(map(str, prev_state)), 
-					family_snp_positions[s_start], family_snp_positions[s_end], 
-					family_indices[s_start], family_indices[s_end], 
-					s_start, s_end, 
-					family_snp_positions[s_end]-family_snp_positions[s_start], 
-					family_indices[s_end]-family_indices[s_start], 
-					s_end-s_start))
-				prev_state = new_state
-				prev_state_end = index-1
-
-			index -= 1
-			paths = list(new_states)
-
-		# last state
-		s_start, s_end = 0, prev_state_end
-		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
-					'.'.join(fkey), 
-					'\t'.join(map(str, prev_state)), 
-					family_snp_positions[s_start], family_snp_positions[s_end], 
-					family_indices[s_start], family_indices[s_end], 
-					s_start, s_end, 
-					family_snp_positions[s_end]-family_snp_positions[s_start], 
-					family_indices[s_end]-family_indices[s_start], 
-					s_end-s_start))
-		statef.flush()	
+				path_states = inheritance_states[paths, :]
+				known_indices = np.all(path_states == path_states[0, :], axis=0)
+				final_states[known_indices, j] = path_states[0, known_indices]
 
 		print('Num positions in fork', num_forks)
 		print('Backward sweep complete', time.time()-prev_time, 'sec') 
+
+		# write to file
+		change_indices = np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0]
+
+		# first entry
+		s_start, s_end = 0, change_indices[0]
+		assert np.all(final_states[:, s_start] == final_states[:, s_end])
+		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
+						'.'.join(fkey), 
+						'\t'.join(map(str, final_states[:, s_start])), 
+						family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
+						s_start, s_end, 
+						family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
+						s_end-s_start+1))
+
+		# middle entries
+		for j in range(1, change_indices.shape[0]):
+			s_start, s_end = change_indices[j-1]+1, change_indices[j]
+			assert np.all(final_states[:, s_start] == final_states[:, s_end])
+			statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
+						'.'.join(fkey), 
+						'\t'.join(map(str, final_states[:, s_start])), 
+						family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
+						s_start, s_end, 
+						family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
+						s_end-s_start+1))
+
+		# last entry
+		s_start, s_end = change_indices[-1]+1, family_snp_positions.shape[0]-1
+		assert np.all(final_states[:, s_start] == final_states[:, s_end])
+		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
+					'.'.join(fkey), 
+					'\t'.join(map(str, final_states[:, s_start])), 
+					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
+					s_start, s_end, 
+					family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
+					s_end-s_start+1))
+		statef.flush()	
+
+		print('Write to file complete')
+
