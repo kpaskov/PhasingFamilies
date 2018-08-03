@@ -10,14 +10,13 @@ output_file = sys.argv[3]
 
 # Read in variant coordinates
 coordinates = np.asarray([tuple(map(int, x.decode('UTF-8').split('-'))) for x in pickle.load(open(coord_file, 'rb'))], dtype=int)
-coordinates = coordinates[coordinates[:, 0] >= 21, :]
 
 order_indices = np.lexsort((coordinates[:, 1], coordinates[:, 0]))
 reverse_order_indices = np.argsort(order_indices)
 
 #subcoordinates = []
 submatrices = []
-for chrom in range(21, 23):
+for chrom in range(1, 23):
 	print(chrom)
 	# pull coordinates for chromosome
 	chrom_coords = np.load('%s/chr.%d.gen.coordinates.npy' %(data_dir, chrom))
