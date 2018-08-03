@@ -38,6 +38,7 @@ for chrom in range(1, 23):
 		
 		#subcoordinates.append(chrom_coords[part_pull_indices, :])
 		submatrices.append(part_chrom[:, part_pull_indices-offset])
+		offset += n
 
 #ordered_full_coords = np.vstack(subcoordinates)
 ordered_full_matrix = sparse.hstack(submatrices)
