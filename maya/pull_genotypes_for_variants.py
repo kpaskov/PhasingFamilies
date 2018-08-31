@@ -18,7 +18,7 @@ submatrices = []
 for chrom in range(1, 23):
 	print(chrom)
 	# pull coordinates for chromosome
-	chrom_coords = np.load('%s/chr.%d.gen.coordinates.npy' %(data_dir, chrom))
+	chrom_coords = np.load('%s/chr.%d.gen.coordinates.npy' % (data_dir, chrom))
 
 	# pull only coordinates belonging to snps
 	snp_indices = np.where(chrom_coords[:, 2]==1)[0]
@@ -30,9 +30,22 @@ for chrom in range(1, 23):
 	# find indices of the variants we're looking for on this chromosome (indices are given in snp_index coordinates)
 	pull_indices = np.searchsorted(chrom_coords[:, 1], to_find[:, 1])
 
+	# filter out inexact matches
+	x, y = np.where(chrom_coords[pull_indices, :2] != to_find)
+	to_find = 
+	pull_indices = 
+	print(x, y)
+	print(chrom_coords[pull_indices[x], :], to_find[x, :])
+	print(np.all(np.diff(chrom_coords[:, 1])>=0), np.all(np.diff(to_find[:, 1])>=0))
+	assert np.array_equal(chrom_coords[pull_indices, :2], to_find)
+	
+
+	#print(pull_indices)
+
 	# load genotype data from .npz files
 	offset = 0
 	snp_offset = 0
+	snps_found = 0
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
 	print(gen_files)
 	for gen_file in gen_files:
@@ -45,6 +58,8 @@ for chrom in range(1, 23):
 		print(submatrices[-1].shape)
 		offset += n
 		snp_offset += snp_n
+		snps_found += submatrices[-1].shape[1]
+	assert snps_found == to_find.shape[0]
 
 ordered_full_matrix = sparse.hstack(submatrices)
 print(ordered_full_matrix.shape)
