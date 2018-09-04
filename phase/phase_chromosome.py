@@ -15,34 +15,54 @@ import random
 
 chrom = sys.argv[1]
 m = int(sys.argv[2])
-ped_file = sys.argv[3] #'data/v34.forCompoundHet.ped'
+ped_file = sys.argv[3]
 data_dir = sys.argv[4]
 out_dir = sys.argv[5]
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
-variant_file = '%s/chr.%s.gen.variants.txt.gz' % (data_dir,  chrom)
-clean_file = '%s/clean_indices_%s.txt' % (data_dir, chrom) 
+coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
 gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
+
+# From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
+chrom_lengths = {
+	'1': 249250621,
+	'2': 243199373,
+	'3': 198022430,
+	'4': 191154276,
+	'5': 180915260,
+	'6': 171115067,
+	'7': 159138663,
+	'8': 146364022,
+	'9': 141213431,
+	'10': 135534747,
+	'11': 135006516,
+	'12': 133851895,
+	'13': 115169878,
+	'14': 107349540,
+	'15': 102531392,
+	'16': 90354753,
+	'17': 81195210,
+	'18': 78077248,
+	'19': 59128983,
+	'20': 63025520,
+	'21': 48129895,
+	'22': 51304566,
+	'X': 155270560,
+	'Y': 59373566
+}
+chrom_length = chrom_lengths[chrom]
 
 # genotype (pred, obs): cost
 g_cost = {
-	(-1, -2): 0,
-	(-1, -1): 0,
 	(-1, 0): 1,
 	(-1, 1): 1,
 	(-1, 2): 1,
-	(0, -2): 1,
-	(0, -1): 1,
 	(0, 0): 0,
 	(0, 1): 1,
 	(0, 2): 2,
-	(1, -2): 1,
-	(1, -1): 1,
 	(1, 0): 1,
 	(1, 1): 0,
 	(1, 2): 1,
-	(2, -2): 1,
-	(2, -1): 1,
 	(2, 0): 2,
 	(2, 1): 1,
 	(2, 2): 0
@@ -76,15 +96,9 @@ print('families of size %d: %d' % (m, len(families_of_this_size)))
 # inheritance states
 #
 # for parents:
-# (0, 0) -> deletion on parental1 and parental2
 # (0, 1) -> deletion on parental1
-# (0, 2) -> deletion on parental1 and duplication on parental2
 # (1, 0) -> deletion on parental2
 # (1, 1) -> normal
-# (1, 2) -> duplication on parental2
-# (2, 0) -> duplication on parental1 and deletion on parental2
-# (2, 1) -> duplication on parental1
-# (2, 2) -> duplication on parental1 and parental2
 # 
 # for children:
 # (0, 0) -> m1p1
@@ -93,25 +107,26 @@ print('families of size %d: %d' % (m, len(families_of_this_size)))
 # (1, 1) -> m2p2
 
 if m >= 5:
-	inheritance_states = np.array(list(product(*(([[0, 1, 2]]*4)+([[0, 1]]*(2*(m-2)))))), dtype=np.int8)
+	inheritance_states = np.array(list(product(*([[0, 1]]*(2*m)))), dtype=np.int8)
 else:
-	inheritance_states = np.array([x for x in product(*([[0, 1, 2]]*4)+([[0, 1]]*(2*(m-2)))) if x[4] == 0 and x[5] == 0], dtype=np.int8)
+	inheritance_states = np.array([x for x in product(*([[0, 1]]*(2*m))) if x[4]==0 and x[5]==0], dtype=np.int8)
 state_to_index = dict([(tuple(x), i) for i, x in enumerate(inheritance_states)])
 p, state_len = inheritance_states.shape
 print('inheritance states', inheritance_states.shape)
 
 # transition matrix
 # only allow one shift at a time
-shift_costs = [50]*4 + [500]*(2*(m-2))
+shift_costs = [10]*4 + [500]*(2*(m-2))
 
 transitions = [[] for i in range(p)]
 transition_costs = [[] for i in range(p)]
 for i, state in enumerate(inheritance_states):
-	for delstate in list(product(*[[0, 1, 2]]*4)):
+	for delstate in list(product(*[[0, 1]]*4)):
 		new_state = tuple(delstate) + tuple(state[4:])
-		new_index = state_to_index[new_state]
-		transitions[i].append(new_index)
-		transition_costs[i].append(sum([shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
+		if new_state in state_to_index:
+			new_index = state_to_index[new_state]
+			transitions[i].append(new_index)
+			transition_costs[i].append(sum([shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
 
 	# allow a single recombination event
 	for j in range(4, inheritance_states.shape[1]):
@@ -134,13 +149,11 @@ print('transitions', transitions.shape)
 pm_gen_to_index = dict()
 pm_gen_indices = []
 for s in inheritance_states:
-	anc_pos = [[-1] if s[i] == 0 else [0, 1] if s[i] == 1 else [0, 2] for i in range(4)]
+	anc_pos = [[-1] if s[i] == 0 else [0, 1] for i in range(4)]
 	anc_variants = np.array(list(product(*anc_pos)), dtype=np.int8)
 	pred_gens = np.zeros((anc_variants.shape[0], m), dtype=np.int8)
 
 	# mom
-	# duplication
-	pred_gens[(anc_variants[:, 0]==2) | (anc_variants[:, 1]==2), 0] = 1
 	# deletion
 	pred_gens[(anc_variants[:, 0]==-1) & (anc_variants[:, 1]==-1), 0] = -1
 	pred_gens[(anc_variants[:, 0]==-1) & (anc_variants[:, 1]==0), 0] = 0
@@ -154,8 +167,6 @@ for s in inheritance_states:
 	pred_gens[(anc_variants[:, 0]==1) & (anc_variants[:, 1]==0), 0] = 1
 
 	# dad
-	# duplication
-	pred_gens[(anc_variants[:, 2]==2) | (anc_variants[:, 3]==2), 1] = 1
 	# deletion
 	pred_gens[(anc_variants[:, 2]==-1) & (anc_variants[:, 3]==-1), 1] = -1
 	pred_gens[(anc_variants[:, 2]==-1) & (anc_variants[:, 3]==0), 1] = 0
@@ -172,8 +183,6 @@ for s in inheritance_states:
 	for index in range(m-2):
 		mat, pat = s[(4+(2*index)):(6+(2*index))]
         
-		# duplication
-		pred_gens[(anc_variants[:, mat]==2) | (anc_variants[:, 2+pat]==2), 2+index] = 1
 		# deletion
 		pred_gens[(anc_variants[:, mat]==-1) & (anc_variants[:, 2+pat]==-1), 2+index] = -1
 		pred_gens[(anc_variants[:, mat]==-1) & (anc_variants[:, 2+pat]==0), 2+index] = 0
@@ -197,7 +206,7 @@ for pm, i in pm_gen_to_index.items():
 	pm_gen[i, :] = pm
 print('perfect matches', pm_gen.shape, Counter([len(v) for v in pm_gen_indices]))
 
-genotypes = np.array(list(product(*[[-2, -1, 0, 1, 2]]*m)), dtype=np.int8)
+genotypes = np.array(list(product(*[[0, 1, 2]]*m)), dtype=np.int8)
 genotype_to_index = dict([(tuple(x), i) for i, x in enumerate(genotypes)])
 q = genotypes.shape[0]
 print('genotypes', genotypes.shape)
@@ -223,17 +232,13 @@ families_of_this_size = [(k, [old_index_to_new_index[x] for x in v]) for (k, v) 
 
 whole_chrom = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[indices_of_interest,:] for gen_file in gen_files])
 	
-# use only "cleaned" variants - must be SNPs and missingness in parents can't be sex-biased
-snp_indices = []
-snp_positions = []
-with open(clean_file, 'r') as f:
-    for i, line in enumerate(f):
-        index, position = line.strip().split('\t')
-        snp_indices.append(int(index))
-        snp_positions.append(int(position))
-snp_positions = np.array(snp_positions)
+# use only "cleaned" variants - must be SNPs
+coordinates = np.load(coord_file)
+snp_positions = coordinates[:, 1]
+snp_indices = coordinates[:, 2]==1
 
 whole_chrom = whole_chrom[:, snp_indices]
+snp_positions = snp_positions[snp_indices]
 total_inds, n = whole_chrom.shape
 print('chrom shape only SNPs', total_inds, n)
 
@@ -253,18 +258,28 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		# pull genotype data for this family
 		family_genotypes = whole_chrom[ind_indices, :].A
 
-		# condense repeated genotypes
-		rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
-		mult_factor = [rep_indices[0]+1] + (rep_indices[1:]-rep_indices[:-1]).tolist() + [family_genotypes.shape[1]-rep_indices[-1]-1]
-		family_snp_positions = np.zeros((rep_indices.shape[0]+1, 2), dtype=int)
-		family_snp_positions[1:, 0] = snp_positions[(rep_indices+1)]
-		family_snp_positions[0, 0] = snp_positions[0]
-		family_snp_positions[:-1, 1] = snp_positions[rep_indices]
-		family_snp_positions[-1, 1] = snp_positions[-1]
-		rep_indices = rep_indices.tolist()
-		rep_indices.append(family_genotypes.shape[1]-1)
-		n = len(rep_indices)
+		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
+		family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
 
+		family_whole_chrom = np.zeros((m, chrom_length), dtype=np.int8)
+		family_whole_chrom[:, snp_positions-1] = family_genotypes
+
+		# condense repeated genotypes
+		rep_indices = np.where(np.any(family_whole_chrom[:, 1:]!=family_whole_chrom[:, :-1], axis=0))[0]
+		
+		family_genotypes = family_whole_chrom[:, rep_indices]
+		family_genotypes = np.append(family_genotypes, family_whole_chrom[:, -1][:, np.newaxis], axis=1)
+		print(family_genotypes.shape)
+		n = family_genotypes.shape[1]
+
+		family_snp_positions = np.zeros((n, 2), dtype=int)
+		family_snp_positions[0, 0] = 0
+		family_snp_positions[-1, 1] = chrom_lengths[chrom]
+		family_snp_positions[1:, 0] = (rep_indices+1)
+		family_snp_positions[:-1, 1] = (rep_indices+1)
+		mult_factor = family_snp_positions[:, 1] - family_snp_positions[:, 0]
+
+	
 		# viterbi
 		v_cost = np.zeros((p, n), dtype=int)
 		
@@ -280,7 +295,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 
 		# next steps
 		for j in range(1, n): 
-			pos_gen = tuple(family_genotypes[:, rep_indices[j]])
+			pos_gen = tuple(family_genotypes[:, j])
 			loss = calculate_loss(pos_gen).astype(int)
 			#loss = losses[:, genotype_to_index[pos_gen]].astype(int)
 			v_cost[:, j] = np.min(v_cost[transitions, j-1] + transition_costs, axis=1) + mult_factor[j]*loss
@@ -298,7 +313,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		# choose best paths
 		# we enforce that the chromosome ends with no deletions
 		num_forks = 0
-		no_delstates = np.sum(inheritance_states[:, :4] == 1, axis=1)==4  
+		no_delstates = np.all(inheritance_states[:, :4]==1, axis=1)
 		min_value = np.min(v_cost[no_delstates, -1])
 		paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
 		print('Num solutions', paths.shape, inheritance_states[paths, :])
@@ -353,9 +368,9 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 			statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
 						'.'.join(fkey), 
 						'\t'.join(map(str, final_states[:, s_start])), 
-						family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
+						family_snp_positions[s_start, 0]+1, family_snp_positions[s_end, 1],
 						s_start, s_end, 
-						family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
+						family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0], 
 						s_end-s_start+1))
 
 		# last entry
@@ -364,7 +379,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
 					'.'.join(fkey), 
 					'\t'.join(map(str, final_states[:, s_start])), 
-					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
+					family_snp_positions[s_start, 0]+1, family_snp_positions[s_end, 1],
 					s_start, s_end, 
 					family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
 					s_end-s_start+1))

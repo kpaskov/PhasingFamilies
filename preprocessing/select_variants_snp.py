@@ -7,7 +7,7 @@ import numpy as np
 from scipy import sparse
 from scipy.stats import chi2_contingency
 
-# run with python phase/select_variants.py 22 split_gen
+# run with python phase/select_variants_snp.py 22 split_gen_miss
 
 chrom = sys.argv[1]
 data_dir = sys.argv[2]
