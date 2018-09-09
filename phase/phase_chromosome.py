@@ -351,7 +351,7 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
 		# write header to file
-		famf.write('%s\t%s\n' % ('.'.join(fkey), '\t'.join(inds)))
+		famf.write('%s\t%s\t%d\n' % ('.'.join(fkey), '\t'.join(inds), np.min(v_cost[:, -1])))
 		famf.flush()
 
 		# backward sweep
