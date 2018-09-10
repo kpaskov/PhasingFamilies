@@ -154,7 +154,7 @@ print('inheritance states', inheritance_states.shape)
 
 # transition matrix
 # only allow one shift at a time
-shift_costs = [10]*4 + [500]*(2*(m-2)) + [100]
+shift_costs = [10]*4 + [500]*(2*(m-2)) + [500]
 
 transitions = [[] for i in range(p)]
 transition_costs = [[] for i in range(p)]
@@ -167,12 +167,13 @@ for i, state in enumerate(inheritance_states):
 			transition_costs[i].append(sum([shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4] + [state[-1]], delstate)) if old_s != new_s]))
 
 	# allow a single recombination event
-	for j in range(4, inheritance_states.shape[1]):
-		new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
-		if new_state in state_to_index:
-			new_index = state_to_index[new_state]
-			transitions[i].append(new_index)
-			transition_costs[i].append(shift_costs[j])
+	for j in range(4, inheritance_states.shape[1]-1):
+		if state[-1] == 1: # only allow recombination in family-1
+			new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
+			if new_state in state_to_index:
+				new_index = state_to_index[new_state]
+				transitions[i].append(new_index)
+				transition_costs[i].append(shift_costs[j])
             
 
 maxtrans = max([len(k) for k in transitions])
