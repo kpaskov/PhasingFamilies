@@ -95,9 +95,7 @@ print('families of size %d: %d' % (m, len(families_of_this_size)))
 
 # inheritance states
 #
-#
 # for parents:
-# (0, 0) -> double deletion
 # (0, 1) -> deletion on parental1
 # (1, 0) -> deletion on parental2
 # (1, 1) -> normal
@@ -107,84 +105,39 @@ print('families of size %d: %d' % (m, len(families_of_this_size)))
 # (0, 1) -> m1p2
 # (1, 0) -> m2p1
 # (1, 1) -> m2p2
-#
-# for family:
-# (0) -> can't model
-# (1) -> we're good
 
 if m >= 5:
-	inheritance_states = np.array(list(product(*([[0, 1]]*(2*m+1)))), dtype=np.int8)
+	inheritance_states = np.array(list(product(*([[0, 1]]*(2*m)))), dtype=np.int8)
 else:
-	inheritance_states = np.array([x for x in product(*([[0, 1]]*(2*m+1))) if x[4]==0 and x[5]==0], dtype=np.int8)
-
-# parents aren't allowed to have deletions on a chromosome that no one inherits
-# deletions are also not allowed in the family-0 (can't model state)
-ok_states = []
-state_len = inheritance_states.shape[1]
-maternal_indices = range(4, state_len, 2)
-paternal_indices = range(5, state_len, 2)
-for i, s in enumerate(inheritance_states):
-    if np.all(s[maternal_indices]!=0) and s[0] == 0:
-        pass
-    elif np.all(s[maternal_indices]!=1) and s[1] == 0:
-        pass
-    elif np.all(s[paternal_indices]!=0) and s[2] == 0:
-        pass
-    elif np.all(s[paternal_indices]!=1) and s[3] == 0:
-        pass
-    elif np.any(s[:4]==0) and s[-1] == 0:
-        pass
-    else:
-        ok_states.append(i)
-
-# parents aren't allowed to have deletions unless both chromosomes are inherited
-#for i, s in enumerate(inheritance_states):
-#    if (np.all(s[maternal_indices]!=0) or np.all(s[maternal_indices]!=1)) and (s[0] == 0 or s[1] == 0):
-#        pass
-#    elif (np.all(s[paternal_indices]!=0) or np.all(s[paternal_indices]!=1)) and (s[2] == 0 or s[3] == 0):
-#        pass
-#    else:
-#        ok_states.append(i)
-inheritance_states = inheritance_states[ok_states, :]
-
-
+	inheritance_states = np.array([x for x in product(*([[0, 1]]*(2*m))) if x[4]==0 and x[5]==0], dtype=np.int8)
 state_to_index = dict([(tuple(x), i) for i, x in enumerate(inheritance_states)])
-p = inheritance_states.shape[0]
+p, state_len = inheritance_states.shape
 print('inheritance states', inheritance_states.shape)
 
 # transition matrix
 # only allow one shift at a time
-shift_costs = [10]*4 + [500]*(2*(m-2)) + [500]
+shift_costs = [10]*4 + [500]*(2*(m-2))
 
 transitions = [[] for i in range(p)]
 transition_costs = [[] for i in range(p)]
 for i, state in enumerate(inheritance_states):
-	for delstate in list(product(*[[0, 1]]*5)):
-		new_state = tuple(delstate[:4]) + tuple(state[4:-1]) + (delstate[-1],)
+	for delstate in list(product(*[[0, 1]]*4)):
+		new_state = tuple(delstate) + tuple(state[4:])
 		if new_state in state_to_index:
 			new_index = state_to_index[new_state]
 			transitions[i].append(new_index)
-			transition_costs[i].append(sum([shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4] + [state[-1]], delstate)) if old_s != new_s]))
+			transition_costs[i].append(sum([shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
 
 	# allow a single recombination event
-	for j in range(4, inheritance_states.shape[1]-1):
-		if state[-1] == 1: # only allow recombination in family-1
-			new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
-			if new_state in state_to_index:
-				new_index = state_to_index[new_state]
-				transitions[i].append(new_index)
-				transition_costs[i].append(shift_costs[j])
+	for j in range(4, inheritance_states.shape[1]):
+		new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
+		if new_state in state_to_index:
+			new_index = state_to_index[new_state]
+			transitions[i].append(new_index)
+			transition_costs[i].append(shift_costs[j])
             
-
-maxtrans = max([len(k) for k in transitions])
-for i, trans in enumerate(transitions):
-    num_trans = len(trans)
-    trans.extend([i]*(maxtrans-num_trans))
-    transition_costs[i].extend([0]*(maxtrans-num_trans))
 transitions = np.array(transitions)
 transition_costs = np.array(transition_costs)
-print(transitions.shape)
-print(transition_costs.shape)
 
 starting_state = (1, 1, 1, 1, 0, 0)
 zero_transition_costs = np.zeros((p,), dtype=int)
@@ -341,18 +294,16 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		v_cost[:, 0] = mult_factor[0]*loss + zero_transition_costs
 
 		# next steps
-		no_model_states = np.where(inheritance_states[:, -1]==0)[0]
 		for j in range(1, n): 
 			pos_gen = tuple(family_genotypes[:, j])
 			loss = calculate_loss(pos_gen).astype(int)
 			#loss = losses[:, genotype_to_index[pos_gen]].astype(int)
 			v_cost[:, j] = np.min(v_cost[transitions, j-1] + transition_costs, axis=1) + mult_factor[j]*loss
-			v_cost[no_model_states, j] += ((np.random.randint(10, size=no_model_states.shape[0])==0))
 
 		print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
 		# write header to file
-		famf.write('%s\t%s\t%d\n' % ('.'.join(fkey), '\t'.join(inds), np.min(v_cost[:, -1])))
+		famf.write('%s\t%s\n' % ('.'.join(fkey), '\t'.join(inds)))
 		famf.flush()
 
 		# backward sweep
@@ -366,7 +317,6 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		min_value = np.min(v_cost[no_delstates, -1])
 		paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
 		print('Num solutions', paths.shape, inheritance_states[paths, :])
-		print('Min Cost', np.min(v_cost[:, -1]))
 
 		# combine path states into a single state (unknown values represented with -1)
 		if paths.shape[0] == 1:
@@ -402,14 +352,13 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		print('Backward sweep complete', time.time()-prev_time, 'sec') 
 
 		# if a parental chromosome isn't inherited, then we don't know if it has a deletion
-		maternal_indices = range(4, state_len-1, 2)
-		paternal_indices = range(5, state_len-1, 2)
+		maternal_indices = range(4, state_len, 2)
+		paternal_indices = range(5, state_len, 2)
 
 		final_states[0, np.all(final_states[maternal_indices, :]!=0, axis=0)] = -1
 		final_states[1, np.all(final_states[maternal_indices, :]!=1, axis=0)] = -1
 		final_states[2, np.all(final_states[paternal_indices, :]!=0, axis=0)] = -1
 		final_states[3, np.all(final_states[paternal_indices, :]!=1, axis=0)] = -1
-		final_states[:4, final_states[-1, :]==0] = -1
 
 		# write to file
 		change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist()
