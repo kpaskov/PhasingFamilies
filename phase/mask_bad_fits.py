@@ -204,7 +204,13 @@ with open('%s/chr.%s.familysize.%s.phased.masked.txt' % (phase_dir, chrom, m), '
 		ind_indices = [sample_id_to_index[x] for x in inds]
 		
 		# pull genotype data from .npz
-		family_genotypes = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[np.ix_(ind_indices, snp_indices)] for gen_file in gen_files]).A
+		family_genotypes = np.zeros((m, snp_positions.shape[0]), dtype=np.int8)
+		offset = 0
+		for gen_file in gen_files:
+			segment = sparse.load_npz('%s/%s' % (data_dir, gen_file))[:, snp_indices]
+			for i, index in enumerate(ind_indices):
+				if index >= offset and index < offset+segment.shape[0]:
+					family_genotypes[i, :] = segment[index-offset, :].A
 
 		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
 		family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
@@ -262,8 +268,9 @@ with open('%s/chr.%s.familysize.%s.phased.masked.txt' % (phase_dir, chrom, m), '
 
 
 		c = np.convolve(fit/m, np.ones(smooth,), mode='same')
-		print('Percent masked', 100*np.sum(c>error_rate*smooth)/n)
-		np.append(final_states, (c>error_rate*smooth).astype(np.int8)[np.newaxis, :], axis=0)
+		masked = (c>(error_rate*smooth)).astype(np.int8)
+		print('Percent masked', 100*np.sum(masked)/n)
+		final_states = np.append(final_states, masked[np.newaxis, :], axis=0)
 
 		# write to file
 		change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist()
