@@ -155,23 +155,13 @@ with open(sample_file, 'r') as f:
 	sample_ids = [line.strip() for line in f]
 sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
 
-# pull genotype data from .npz
-gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
-whole_chrom = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
-#whole_chrom = whole_chrom[:, snp_indices]
-
-total_inds, n = whole_chrom.shape
-print('chrom shape', total_inds, n)
-
 # use only "cleaned" variants - must be SNPs
+gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
+
 coordinates = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom))
 snp_positions = coordinates[:, 1]
 snp_indices = coordinates[:, 2]==1
-
-whole_chrom = whole_chrom[:, snp_indices]
 snp_positions = snp_positions[snp_indices]
-total_inds, n = whole_chrom.shape
-print('chrom shape only SNPs', total_inds, n)
 
 # From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
 chrom_lengths = {
@@ -213,8 +203,8 @@ with open('%s/chr.%s.familysize.%s.phased.masked.txt' % (phase_dir, chrom, m), '
 		
 		ind_indices = [sample_id_to_index[x] for x in inds]
 		
-		# pull genotype data for this family
-		family_genotypes = whole_chrom[ind_indices, :].A
+		# pull genotype data from .npz
+		family_genotypes = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[np.ix_(ind_indices, snp_indices)] for gen_file in gen_files]).A
 
 		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
 		family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
@@ -273,7 +263,7 @@ with open('%s/chr.%s.familysize.%s.phased.masked.txt' % (phase_dir, chrom, m), '
 
 		c = np.convolve(fit/m, np.ones(smooth,), mode='same')
 		print('Percent masked', 100*np.sum(c>error_rate*smooth)/n)
-		final_states[:4, c>error_rate*smooth] = -1
+		np.append(final_states, (c>error_rate*smooth).astype(np.int8)[np.newaxis, :], axis=0)
 
 		# write to file
 		change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist()
