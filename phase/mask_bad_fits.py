@@ -161,6 +161,7 @@ gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 
 coordinates = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom))
 snp_positions = coordinates[:, 1]
 snp_indices = coordinates[:, 2]==1
+
 snp_positions = snp_positions[snp_indices]
 
 # From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
@@ -204,13 +205,8 @@ with open('%s/chr.%s.familysize.%s.phased.masked.txt' % (phase_dir, chrom, m), '
 		ind_indices = [sample_id_to_index[x] for x in inds]
 		
 		# pull genotype data from .npz
-		family_genotypes = np.zeros((m, snp_positions.shape[0]), dtype=np.int8)
-		offset = 0
-		for gen_file in gen_files:
-			segment = sparse.load_npz('%s/%s' % (data_dir, gen_file))[:, snp_indices]
-			for i, index in enumerate(ind_indices):
-				if index >= offset and index < offset+segment.shape[0]:
-					family_genotypes[i, :] = segment[index-offset, :].A
+		family_genotypes = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :] for gen_file in gen_files]).A
+		family_genotypes = family_genotypes[:, snp_indices]
 
 		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
 		family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
