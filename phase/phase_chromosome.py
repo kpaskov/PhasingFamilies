@@ -18,8 +18,8 @@ m = int(sys.argv[2])
 ped_file = sys.argv[3]
 data_dir = sys.argv[4]
 out_dir = sys.argv[5]
-batch_size = None if len(sys.argv) < 8 else sys.argv[6]
-batch_num = None if len(sys.argv) < 8 else sys.argv[7]
+batch_size = None if len(sys.argv) < 8 else int(sys.argv[6])
+batch_num = None if len(sys.argv) < 8 else int(sys.argv[7])
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
@@ -105,7 +105,7 @@ print('families of size %d: %d' % (m, len(families_of_this_size)))
 
 # limit to batch
 if batch_size is not None:
-	family_keys = set(sorted([x[0] for x in families_of_this_size])[offset:(batch_size+offset)])
+	family_keys = set(sorted([x[0] for x in families_of_this_size])[batch_offset:(batch_size+batch_offset)])
 	families_of_this_size = [(k, v) for k, v in families_of_this_size if k in family_keys]
 
 # inheritance states
