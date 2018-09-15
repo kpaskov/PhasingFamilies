@@ -239,6 +239,7 @@ snp_indices = coordinates[:, 2]==1
 
 whole_chrom = whole_chrom[:, snp_indices]
 snp_positions = snp_positions[snp_indices]
+min_position, max_position = snp_positions[0], snp_positions[-1]
 total_inds, n = whole_chrom.shape
 print('chrom shape only SNPs', total_inds, n)
 
@@ -261,8 +262,10 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
 		family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
 
-		family_whole_chrom = np.zeros((m, chrom_length), dtype=np.int8)
-		family_whole_chrom[:, snp_positions-1] = family_genotypes
+
+		family_whole_chrom = np.zeros((m, max_position-min_position+3), dtype=np.int8)
+		#family_whole_chrom = np.zeros((m, chrom_length), dtype=np.int8)
+		family_whole_chrom[:, snp_positions-min_position+1] = family_genotypes
 
 		# condense repeated genotypes
 		rep_indices = np.where(np.any(family_whole_chrom[:, 1:]!=family_whole_chrom[:, :-1], axis=0))[0]
@@ -275,8 +278,8 @@ with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as
 		family_snp_positions = np.zeros((n, 2), dtype=int)
 		family_snp_positions[0, 0] = 0
 		family_snp_positions[-1, 1] = chrom_lengths[chrom]
-		family_snp_positions[1:, 0] = (rep_indices+1)
-		family_snp_positions[:-1, 1] = (rep_indices+1)
+		family_snp_positions[1:, 0] = (rep_indices+min_position-1)
+		family_snp_positions[:-1, 1] = (rep_indices+min_position-1)
 		mult_factor = family_snp_positions[:, 1] - family_snp_positions[:, 0]
 
 	
