@@ -245,19 +245,15 @@ def calculate_loss(gen):
 indices_of_interest = sum([v for k, v in families_of_this_size], [])
 old_index_to_new_index = dict([(ind, i) for (i, ind) in enumerate(indices_of_interest)])
 families_of_this_size = [(k, [old_index_to_new_index[x] for x in v]) for (k, v) in families_of_this_size]
-
-whole_chrom = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[indices_of_interest,:] for gen_file in gen_files])
 	
 # use only "cleaned" variants - must be SNPs
 coordinates = np.load(coord_file)
 snp_positions = coordinates[:, 1]
 snp_indices = coordinates[:, 2]==1
 
-whole_chrom = whole_chrom[:, snp_indices]
 snp_positions = snp_positions[snp_indices]
 min_position, max_position = snp_positions[0], snp_positions[-1]
-total_inds, n = whole_chrom.shape
-print('chrom shape only SNPs', total_inds, n)
+print('chrom shape only SNPs', snp_positions.shape[0])
 
 
 with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as statef:
@@ -270,12 +266,18 @@ with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as state
 	# phase each family
 	for fkey, ind_indices in families_of_this_size:
 		inds = families[fkey]
+		ind_indices = [sample_id_to_index[x] for x in inds]
 		print('family', fkey)
 
 		# pull genotype data for this family
+
+		#load from npz
+		data = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :] for gen_file in gen_files]).A
+		data = data[:, snp_indices]
+
 		n = 2*snp_positions.shape[0]+1
 		family_genotypes = np.zeros((m, n), dtype=np.int8)
-		family_genotypes[:, np.arange(1, n-1, 2)] = whole_chrom[ind_indices, :].A
+		family_genotypes[:, np.arange(1, n-1, 2)] = data
 		family_genotypes[:, -2] = family_genotypes[:, -1]
 
 		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
