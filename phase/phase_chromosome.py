@@ -273,31 +273,44 @@ with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as state
 		print('family', fkey)
 
 		# pull genotype data for this family
-		family_genotypes = whole_chrom[ind_indices, :].A
+		n = 2*snp_positions.shape[0]+1
+		family_genotypes = np.zeros((m, n), dtype=np.int8)
+		family_genotypes[:, np.arange(1, n-1, 2)] = whole_chrom[ind_indices, :].A
+		family_genotypes[:, -2] = family_genotypes[:, -1]
 
 		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
 		family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
 
-
-		family_whole_chrom = np.zeros((m, max_position-min_position+3), dtype=np.int8)
-		#family_whole_chrom = np.zeros((m, chrom_length), dtype=np.int8)
-		family_whole_chrom[:, snp_positions-min_position+1] = family_genotypes
-
-		# condense repeated genotypes
-		rep_indices = np.where(np.any(family_whole_chrom[:, 1:]!=family_whole_chrom[:, :-1], axis=0))[0]
-		
-		family_genotypes = family_whole_chrom[:, rep_indices]
-		family_genotypes = np.append(family_genotypes, family_whole_chrom[:, -1][:, np.newaxis], axis=1)
-		print(family_genotypes.shape)
-		n = family_genotypes.shape[1]
-
-		family_snp_positions = np.zeros((n, 2), dtype=int)
+		family_snp_positions = np.zeros((n, 2), dtype=np.int)
 		family_snp_positions[0, 0] = 0
+		family_snp_positions[np.arange(0, n-2, 2), 1] = snp_positions-1
+		family_snp_positions[np.arange(1, n-1, 2), 0] = snp_positions-1
+		family_snp_positions[np.arange(1, n-1, 2), 1] = snp_positions
+		family_snp_positions[np.arange(2, n, 2), 0] = snp_positions
 		family_snp_positions[-1, 1] = chrom_lengths[chrom]
-		family_snp_positions[1:, 0] = (rep_indices+min_position-1)
-		family_snp_positions[:-1, 1] = (rep_indices+min_position-1)
-		mult_factor = family_snp_positions[:, 1] - family_snp_positions[:, 0]
 
+		# remove unnecessary ref positions
+		haslength = np.where(family_snp_positions[:, 0]!=family_snp_positions[:, 1])[0]
+		family_genotypes = family_genotypes[:, haslength]
+		family_snp_positions = family_snp_positions[haslength, :]
+
+		# aggregate identical genotypes
+		rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
+		n = rep_indices.shape[0]+1
+
+		new_family_genotypes = np.zeros((m, n), dtype=np.int8)
+		new_family_genotypes[:, :-1] = family_genotypes[:, rep_indices]
+		new_family_genotypes[:, -1] = family_genotypes[:, -1]
+
+		new_family_snp_positions = np.zeros((n, 2), dtype=np.int)
+		new_family_snp_positions[0, 0] = family_snp_positions[0, 0]
+		new_family_snp_positions[:-1, 1] = family_snp_positions[rep_indices, 1]
+		new_family_snp_positions[1:, 0] = family_snp_positions[rep_indices+1, 0]
+		new_family_snp_positions[-1, 1] = family_snp_positions[-1, 1]
+
+		family_genotypes, family_snp_positions = new_family_genotypes, new_family_snp_positions
+
+		mult_factor = family_snp_positions[:, 1] - family_snp_positions[:, 0]
 	
 		# viterbi
 		v_cost = np.zeros((p, n), dtype=int)
