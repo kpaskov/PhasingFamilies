@@ -107,6 +107,7 @@ print('families of size %d: %d' % (m, len(families_of_this_size)))
 if batch_size is not None:
 	family_keys = set(sorted([x[0] for x in families_of_this_size])[batch_offset:(batch_size+batch_offset)])
 	families_of_this_size = [(k, v) for k, v in families_of_this_size if k in family_keys]
+	print('families of size %d: %d' % (m, len(families_of_this_size)))
 
 # inheritance states
 #
