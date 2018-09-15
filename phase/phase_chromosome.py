@@ -18,10 +18,20 @@ m = int(sys.argv[2])
 ped_file = sys.argv[3]
 data_dir = sys.argv[4]
 out_dir = sys.argv[5]
+batch_size = None if len(sys.argv) < 8 else sys.argv[6]
+batch_num = None if len(sys.argv) < 8 else sys.argv[7]
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
 gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
+
+fam_output_file = '%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m)
+phase_output_file = '%s/chr.%s.familysize.%s.phased.txt' % (out_dir, chrom, m)
+
+if batch_size is not None:
+	batch_offset = batch_size*batch_num
+	fam_output_file = fam_output_file[:-4] + str(batch_num) + '.txt'
+	phase_output_file = phase_output_file[:-4] + str(batch_num) + '.txt'
 
 # From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
 chrom_lengths = {
@@ -92,6 +102,11 @@ print('families with sequence data', len(families))
 
 families_of_this_size = [(fkey, ind_indices) for fkey, ind_indices in family_to_indices.items() if len(ind_indices) == m]
 print('families of size %d: %d' % (m, len(families_of_this_size)))
+
+# limit to batch
+if batch_size is not None:
+	family_keys = set(sorted([x[0] for x in families_of_this_size])[offset:(batch_size+offset)])
+	families_of_this_size = [(k, v) for k, v in families_of_this_size if k in family_keys]
 
 # inheritance states
 #
@@ -244,7 +259,7 @@ total_inds, n = whole_chrom.shape
 print('chrom shape only SNPs', total_inds, n)
 
 
-with open('%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m), 'w+') as famf, open('%s/chr.%s.familysize.%s.phased.txt' % (out_dir, chrom, m), 'w+') as statef:
+with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as statef:
 	# write headers
 	famf.write('family_id\tmother_id\tfather_id\t' + '\t'.join(['child%d_id' % i for i in range(1, m-1)]) + '\n')
 	statef.write('\t'.join(['family_id', 'state_id', 'm1_state', 'm2_state', 'p1_state', 'p2_state',
