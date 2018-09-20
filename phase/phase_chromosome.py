@@ -64,15 +64,19 @@ chrom_length = chrom_lengths[chrom]
 
 # genotype (pred, obs): cost
 g_cost = {
+	(-1, -1): 0,
 	(-1, 0): 1,
 	(-1, 1): 1,
 	(-1, 2): 1,
+	(0, -1): 0,
 	(0, 0): 0,
 	(0, 1): 1,
 	(0, 2): 2,
+	(1, -1): 0,
 	(1, 0): 1,
 	(1, 1): 0,
 	(1, 2): 1,
+	(2, -1): 0,
 	(2, 0): 2,
 	(2, 1): 1,
 	(2, 2): 0
@@ -242,7 +246,7 @@ for i, s in enumerate(inheritance_states):
 		new_s[np.arange(5, state_len, 2)] = 1-s[np.arange(5, state_len, 2)]
 	full_loss_indices[i] = loss_state_to_index[tuple(new_s)]
 
-genotypes = np.array(list(product(*[[0, 1, 2]]*m)), dtype=np.int8)
+genotypes = np.array(list(product(*[[-1, 0, 1, 2]]*m)), dtype=np.int8)
 genotype_to_index = dict([(tuple(x), i) for i, x in enumerate(genotypes)])
 q = genotypes.shape[0]
 print('genotypes', genotypes.shape)
@@ -301,7 +305,13 @@ with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as state
 		family_genotypes[:, -2] = family_genotypes[:, -1]
 
 		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
-		family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
+		#family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
+		
+		# if we see two missing entries in a row, mark the middle interval as possibly missing/possibly homref (-1)
+		family_genotypes[family_genotypes<0] = -1
+		for i in range(m):
+			double_missing = np.where((data[i, 1:]==-1) & (data[i, :-1]==-1))[0]
+			family_genotypes[i, (2*double_missing)+2] = -1
 
 		family_snp_positions = np.zeros((n, 2), dtype=np.int)
 		family_snp_positions[0, 0] = 0
