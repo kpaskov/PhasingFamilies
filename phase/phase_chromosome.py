@@ -21,6 +21,9 @@ out_dir = sys.argv[5]
 batch_size = None if len(sys.argv) < 8 else int(sys.argv[6])
 batch_num = None if len(sys.argv) < 8 else int(sys.argv[7])
 
+error_rate = .02
+smooth = 5000
+
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
 gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
@@ -414,6 +417,36 @@ with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as state
 
 		print('Num positions in fork', num_forks)
 		print('Backward sweep complete', time.time()-prev_time, 'sec') 
+
+		# Now, do masking
+		prev_time = time.time()
+		fit = -np.ones((n,), dtype=int)
+		prev_state = None
+		prev_state_indices = None
+		for j in range(n): 
+			pos_gen = tuple(family_genotypes[:, j])
+			loss = calculate_loss(pos_gen).astype(int)
+			current_state = tuple(final_states[:, j])
+
+			if current_state != prev_state:
+				prev_state = current_state
+				num_unknowns = len([x for x in current_state if x == -1])
+				if num_unknowns>0:
+					prev_state_indices = []
+					for poss_itr in [iter(x) for x in product(*([[0, 1]]*num_unknowns))]:
+						poss_state = tuple([x if x != -1 else next(poss_itr) for x in current_state])
+						prev_state_indices.append(state_to_index[poss_state])
+				else:
+					prev_state_indices = [state_to_index[tuple(final_states[:, j])]]
+
+			fit[j] = mult_factor[j]*np.min(loss[prev_state_indices])
+
+
+		c = np.convolve(fit/m, np.ones(smooth,), mode='same')
+		masked = (c>(error_rate*smooth)).astype(np.int8)
+		print('Percent masked', 100*np.sum(masked)/n)
+		final_states = np.append(final_states, masked[np.newaxis, :], axis=0)
+		print('Masking complete', time.time()-prev_time, 'sec') 
 
 		# if a parental chromosome isn't inherited, then we don't know if it has a deletion
 		maternal_indices = range(4, state_len, 2)
