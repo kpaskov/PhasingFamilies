@@ -1,28 +1,36 @@
 import sys
+import time
 from os import listdir
-from itertools import product
+import gzip
 
+from collections import Counter, Hashable, defaultdict
+from itertools import chain, product
 
-from inheritance_states import AutosomalInheritanceStates
-from input_output import WGSData, write_to_file, pull_families
-from transition_matrices import AutosomalTransitionMatrix
+import numpy as np
+from scipy import sparse
+import random
+
+from inheritance_states import XInheritanceStates
+from input_output import WGSData, write_to_file, pull_families, pull_sex
+from transition_matrices import XTransitionMatrix
 from genotypes import Genotypes
 from losses import LazyLoss
-from viterbi import viterbi_forward_sweep_autosomes, viterbi_backward_sweep_autosomes
+from viterbi import viterbi_forward_sweep_X, viterbi_backward_sweep_X
 from mask import mask_states
 
-# Run locally with python3 phase/phase_chromosome.py 22 3 data/160826.ped split_gen_miss phased
+# Run locally with python3 phase/phase_chromosome.py 3 data/160826.ped split_gen_miss phased
+
+chrom = 'X'
 
 if __name__ == "__main__":
 
 	# Read in command line arguments
-	chrom = sys.argv[1]
-	m = int(sys.argv[2])
-	ped_file = sys.argv[3]
-	data_dir = sys.argv[4]
-	out_dir = sys.argv[5]
-	batch_size = None if len(sys.argv) < 8 else int(sys.argv[6])
-	batch_num = None if len(sys.argv) < 8 else int(sys.argv[7])
+	m = int(sys.argv[1])
+	ped_file = sys.argv[2]
+	data_dir = sys.argv[3]
+	out_dir = sys.argv[4]
+	batch_size = None if len(sys.argv) < 8 else int(sys.argv[5])
+	batch_num = None if len(sys.argv) < 8 else int(sys.argv[6])
 	batch_offset = None
 
 	shift_costs = [10]*4 + [500]*(2*(m-2))
@@ -42,18 +50,16 @@ if __name__ == "__main__":
 
 	# pull families of interest
 	families_of_this_size = pull_families(sample_file, ped_file, m, batch_size, batch_offset)
+	sample_id_to_sex = pull_sex(ped_file)
 
 	# create inheritance states
-	inheritance_states = AutosomalInheritanceStates(m)
-	
-	# create transition matrix
-	transition_matrix = AutosomalTransitionMatrix(inheritance_states, shift_costs)
+	inheritance_states = XInheritanceStates(m)
 
 	# create genotypes
 	genotypes = Genotypes(m)
 
 	# create loss function
-	loss = LazyLoss(m, inheritance_states, genotypes, cached=False)
+	loss = LazyLoss(m, inheritance_states, genotypes)
 
 	# get ready to pull processed WGS data 
 	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, chrom)
@@ -69,17 +75,22 @@ if __name__ == "__main__":
 		for fkey, inds in families_of_this_size:
 			print('family', fkey)
 
+			# create transition matrix
+			sex_of_children = [sample_id_to_sex[x] for x in inds[2:]]
+			transition_matrix = XTransitionMatrix(inheritance_states, shift_costs, sex_of_children)
+
 			# pull genotype data for this family
 			family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(inds)
 
 			# forward sweep
-			v_cost = viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+			PAR1_v_cost, outPAR_v_cost, PAR2_v_cost, last_in_par1, first_in_par2 = viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
 
 			# backward sweep
-			final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
+			final_states = viterbi_backward_sweep_X(PAR1_v_cost, outPAR_v_cost, PAR2_v_cost, last_in_par1, first_in_par2, inheritance_states, transition_matrix)
 
 			# mask messy areas
 			final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss)
 
 			# write to file
 			write_to_file(famf, statef, fkey, inds, final_states, family_snp_positions)
+

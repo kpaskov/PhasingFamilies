@@ -39,9 +39,17 @@ with gzip.open(variant_file, 'rb') as f, open(out_file, 'w+') as outf:
         pieces = line.decode("utf-8").strip().split('\t', maxsplit=5)
         if pieces[4] == '<DEL>':
             pieces = pieces[:-1] + pieces[-1].split('\t')
-            hets = [x for x, y in zip(sample_ids, pieces[9:]) if y[:3]=='0/1']
-            if len(hets)>1:
-            	outf.write('\t'.join(pieces[:9]+hets) + '\n')
+            hets = set([x for x, y in zip(sample_ids, pieces[9:]) if y[:3]=='0/1'])
+            trans = set()
+            for het in hets:
+                if het in child_id_to_parent_ids:
+                    f, m = child_id_to_parent_ids[het]
+                    if f in hets:
+                        trans.add((f, het))
+                    if m in hets:
+                        trans.add((m, het))
+            if len(trans)>0:
+            	outf.write('\t'.join(pieces[:9]+['%s-%s' % (p, c) for p, c in trans]) + '\n')
 
 
 

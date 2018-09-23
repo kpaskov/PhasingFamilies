@@ -6,6 +6,8 @@ import gzip
 from itertools import product, zip_longest
 import sys
 
+# run with python preprocessing/pull_gen_data_gvcf.py  split_gen_gvcf/AU1274.AU1274202.AU1274201.gen.samples.txt 22 split_gen_gvcf
+
 t0 = time.time()
 
 # Pull arguments
