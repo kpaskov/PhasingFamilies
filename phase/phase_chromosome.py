@@ -25,7 +25,9 @@ if __name__ == "__main__":
 	batch_num = None if len(sys.argv) < 8 else int(sys.argv[7])
 	batch_offset = None
 
-	shift_costs = [10]*4 + [500]*(2*(m-2))
+	#shift_costs = [10]*4 + [500]*(2*(m-2))
+	shift_costs = [10]*4 + [10*(m-2)]*(2*(m-2))
+
 
 	# set up filenames
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
