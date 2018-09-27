@@ -53,7 +53,7 @@ if __name__ == "__main__":
 	genotypes = Genotypes(m)
 
 	# create loss function
-	loss = LazyLoss(m, inheritance_states, genotypes, cached=False)
+	loss = LazyLoss(m, inheritance_states, genotypes)
 
 	# get ready to pull processed WGS data 
 	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, chrom)
