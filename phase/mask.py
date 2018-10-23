@@ -2,10 +2,7 @@ import time
 import numpy as np
 from itertools import product
 
-error_rate = .02
-smooth = 5000
-
-def mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss):
+def mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss, error_rate=0.02, smooth=5000):
 
 	# Now, do masking
 	prev_time = time.time()
