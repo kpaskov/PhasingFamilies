@@ -29,7 +29,7 @@ def viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult
 
 def merge_paths(paths, inheritance_states):
 	# combine path states a single state (unknown values represented with -1)
-	merged_state = np.zeros((inheritance_states.state_len,), dtype=np.int8)
+	merged_state = -np.ones((inheritance_states.state_len,), dtype=np.int8)
 	if paths.shape[0] == 1:
 		merged_state = inheritance_states[paths[0], :]
 	else:
