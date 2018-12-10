@@ -10,10 +10,8 @@ t0 = time.time()
 
 # Pull arguments
 vcf_file = sys.argv[1]
-ped_file = sys.argv[2]
-out_directory = sys.argv[3]
-chrom = sys.argv[4]
-cutoff = int(sys.argv[5])
+out_directory = sys.argv[2]
+chrom = sys.argv[3]
 
 # Pull data from vcf
 with gzip.open(vcf_file, 'rt') as f, \
@@ -37,6 +35,8 @@ with gzip.open(vcf_file, 'rt') as f, \
     line = next(f)
     subfile = 0
     num_lines = 0
+
+    prev_format, prev_ad_index = None, None
     for j, line in enumerate(f):
         pieces = line.split('\t')
 
@@ -44,50 +44,58 @@ with gzip.open(vcf_file, 'rt') as f, \
         variant_f.write('\t'.join(pieces[:9]) + '\n')
 
         # Pull out AD
-        format = pieces[8].strip().split(':')
-        ad_index = format.index('AD')
+        if pieces[8] == prev_format:
+            ad_index = prev_ad_index
+        else:
+            format = pieces[8].strip().split(':')
+            ad_index = format.index('AD')
+            prev_format, prev_ad_index = pieces[8], ad_index
+
         for i, piece in enumerate(pieces[9:]):
             segment = piece.split(':', maxsplit=ad_index+1)
 
-            ads = -2, -2
-            if segment[ad_index] != '.':
-                try:
-                    ads = tuple(map(int, segment[ad_index].split(',')))[:2]
-                except:
-                    print(format, ad_index, segment)
-
-            if ads[0] <= cutoff:
-                indices.append(2*i)
-                data.append(ads[0]+1)
-            if ads[1] <= cutoff:
-                indices.append((2*i)+1)
-                data.append(ads[1]+1)
+            ad1, _, ad2 = segment[ad_index].partition(',')
+            if ad2 == '' or ',' in ad2:
+                pass
+            else:
+                if ad1 != '0':
+                    indices.append(2*i)
+                    data.append(int(ad1))
+                if ad2 != '0':
+                    indices.append((2*i)+1)
+                    data.append(int(ad2))
+                
+                #except:
+                #    print(format, ad_index, segment)
 
         indptr.append(len(data))
         num_lines += 1
 
+        if num_lines % 1000 == 0:
+            print('Lines', num_lines, time.time()-t0, 'sec')
+
         # If file has gotten really big, write subfile to disk
         if len(data) > 500000000:
-            ad = csc_matrix((data, indices, indptr), shape=(2*m, num_lines), dtype=np.int8)
+            ad = csc_matrix((data, indices, indptr), shape=(2*m, num_lines), dtype=np.uint8)
             print('Sub dataset', ad.shape)
 
             # Save to file
-            save_npz('%s/chr.%s.%d.ad.cutoff.%d' % (out_directory, chrom, subfile, cutoff), ad)
+            save_npz('%s/chr.%s.%d.ad' % (out_directory, chrom, subfile), ad)
 
             # Start fresh
             subfile += 1
             num_lines = 0
             data, indices, indptr = [], [], [0]
 
-    ad = csc_matrix((data, indices, indptr), shape=(2*m, num_lines), dtype=np.int8)
+    ad = csc_matrix((data, indices, indptr), shape=(2*m, num_lines), dtype=np.uint8)
     
     # Save to file
     if subfile == 0:
         print('Full dataset', ad.shape)
-        save_npz('%s/chr.%s.ad.cutoff.%d' % (out_directory, chrom, cutoff), ad)
+        save_npz('%s/chr.%s.ad' % (out_directory, chrom), ad)
     else:
         print('Sub dataset', ad.shape)
-        save_npz('%s/chr.%s.%d.ad.cutoff.%d' % (out_directory, chrom, subfile, cutoff), ad)
+        save_npz('%s/chr.%s.%d.ad' % (out_directory, chrom, subfile), ad)
 
 print('Completed in ', time.time()-t0, 'sec')
 
