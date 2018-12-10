@@ -15,4 +15,4 @@ echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
 
 module load py-scipystack/1.0_py36
 
-srun python3 phase/pull_ad_data.py ../../vcf/v3.4/$SLURM_ARRAY_TASK_ID.reheader.vcf.gz split_ad $SLURM_ARRAY_TASK_ID
+srun python3 preprocessing/pull_ad_data.py ../../vcf/v3.4/$SLURM_ARRAY_TASK_ID.reheader.vcf.gz split_ad $SLURM_ARRAY_TASK_ID
