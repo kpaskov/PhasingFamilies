@@ -36,7 +36,7 @@ snp_positions = pos_data[:, 1]
 is_snp = pos_data[:, 2].astype(bool)
 
 # pull genotype data from .npz
-gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
+gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
 whole_chrom = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
 
 # filter only monoallelic snps

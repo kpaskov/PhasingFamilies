@@ -30,7 +30,7 @@ if __name__ == "__main__":
 	# set up filenames
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 	coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
-	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
+	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
 
 	fam_output_file = '%s/chr.%s.familysize.%s.families.txt' % (out_dir, chrom, m)
 	phase_output_file = '%s/chr.%s.familysize.%s.phased.txt' % (out_dir, chrom, m)
@@ -61,9 +61,9 @@ if __name__ == "__main__":
 	with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as statef:
 		# write headers
 		famf.write('family_id\tmother_id\tfather_id\t' + '\t'.join(['child%d_id' % i for i in range(1, m-1)]) + '\n')
-		statef.write('\t'.join(['family_id', 'state_id', 'm1_state', 'm2_state', 'p1_state', 'p2_state',
+		statef.write('\t'.join(['family_id', 'm1_del', 'm2_del', 'p1_del', 'p2_del',
 			'\t'.join(['child%d_%s_state' % ((i+1), c) for i, c in product(range(m-2), ['m', 'p'])]),
-			'start_pos', 'end_pos', 'start_family_index', 'end_family_index' 'pos_length', 'family_index_length']) + '\n')
+			'is_masked', 'start_pos', 'end_pos', 'start_family_index', 'end_family_index' 'pos_length', 'family_index_length']) + '\n')
 
 		# phase each family
 		for fkey, inds in families_of_this_size:
@@ -79,7 +79,7 @@ if __name__ == "__main__":
 			final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
 
 			# mask messy areas
-			final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss)
+			#final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss)
 
 			# write to file
 			write_to_file(famf, statef, fkey, inds, final_states, family_snp_positions)

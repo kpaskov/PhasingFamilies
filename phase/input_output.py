@@ -62,6 +62,28 @@ def pull_families(sample_file, ped_file, m, batch_size=None, batch_offset=None):
 	print('families pulled %d: %d' % (m, len(families_of_this_size)))
 	return families_of_this_size
 
+def pull_families_from_file(fam_file):
+	families = []
+	with open(fam_file, 'r') as f:
+		next(f) # skip header
+		for line in f:
+			pieces = line.strip().split('\t')
+			families.append((pieces[0], pieces[1:]))
+	return families
+
+def pull_phase(phase_file, famkey, m, n):
+	state_len = 2*m
+	states = np.zeros((state_len, n), dtype=np.int8)
+	with open(phase_file, 'r') as f:
+		next(f) # skip header
+		for line in f:
+			pieces = line.strip().split('\t')
+			if pieces[0] == famkey:
+				# this is our family of interest
+				start, end = int(pieces[-4]), int(pieces[-3])+1
+				states[:, start:end] = np.tile([int(x) for x in pieces[1:(state_len+1)]], (end-start, 1)).T
+	return states
+
 def pull_sex(ped_file):
 	sample_id_to_sex = dict()
 	with open(ped_file, 'r') as f:	
@@ -177,3 +199,21 @@ def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_posi
 	statef.flush()	
 
 	print('Write to file complete')
+
+def convert_to_csr(A, family_snp_positions, mult_factor, chrom_length):
+	nonzeros = np.sum(mult_factor*np.sum(A!=0, axis=0))
+	data = np.zeros((nonzeros,), dtype=A.dtype)
+	row_ind = np.zeros((nonzeros,), dtype=int)
+	col_ind = np.zeros((nonzeros,), dtype=int)
+
+	data_index = 0
+	for i, j in zip(*np.nonzero(A)):
+		pos_start, pos_end = family_snp_positions[j, :]
+		pos_length = pos_end - pos_start
+		
+		data[data_index:(data_index+pos_length)] = A[i, j]
+		row_ind[data_index:(data_index+pos_length)] = i
+		col_ind[data_index:(data_index+pos_length)] = range(pos_start, pos_end)
+		data_index += pos_length
+
+	return sparse.csr_matrix((data, (row_ind, col_ind)), shape=(A.shape[0], chrom_length), dtype=A.dtype)
