@@ -1,0 +1,190 @@
+{
+	"$schema": "http://json-schema.org/schema#",
+	"title": "PhasingParams",
+	"id": "resource:/schemas/PhasingParams#",
+	"type": "object",
+	"properties": {
+		"-log10(P[deletion_entry_exit])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of entering or exiting a deletion (transition probability).",
+		},
+		"-log10(P[maternal_crossover])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of a maternal crossover (transition probability).",
+
+		},
+		"-log10(P[paternal_crossover])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of a paternal crossover (transition probability).",
+		},
+		"-log10(P[hard_to_seq_region_entry_exit])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of entering or exiting a hard to sequence region (transition probability).",
+		},
+		"-log10(P[obs=-|true_gen=0/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability that a site is not in the VCF, given that the individual's true genotype is homozygous reference.",
+		},
+		"-log10(P[obs=./.|true_gen=0/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing ./. in the VCF, given that the individual's true genotype is homozygous reference.",
+		},
+		"-log10(P[obs=0/0|true_gen=0/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/0 in the VCF, given that the individual's true genotype is homozygous reference.",
+		},
+		"-log10(P[obs=0/1|true_gen=0/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/1 in the VCF, given that the individual's true genotype is homozygous reference.",
+		},
+		"-log10(P[obs=1/1|true_gen=0/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 1/1 in the VCF, given that the individual's true genotype is homozygous reference.",
+		},
+		"-log10(P[obs=-|true_gen=0/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability that a site is not in the VCF, given that the individual's true genotype is heterozygous.",
+		},
+		"-log10(P[obs=./.|true_gen=0/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing ./. in the VCF, given that the individual's true genotype is heterozygous.",
+		},
+		"-log10(P[obs=0/0|true_gen=0/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/0 in the VCF, given that the individual's true genotype is heterozygous.",
+		},
+		"-log10(P[obs=0/1|true_gen=0/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/1 in the VCF, given that the individual's true genotype is heterozygous.",
+		},
+		"-log10(P[obs=1/1|true_gen=0/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 1/1 in the VCF, given that the individual's true genotype is heterozygous.",
+		},
+		"-log10(P[obs=-|true_gen=1/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability that a site is not in the VCF, given that the individual's true genotype is homozygous alternate.",
+		},
+		"-log10(P[obs=./.|true_gen=1/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing ./. in the VCF, given that the individual's true genotype is homozygous alternate.",
+		},
+		"-log10(P[obs=0/0|true_gen=1/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/0 in the VCF, given that the individual's true genotype is homozygous alternate.",
+		},
+		"-log10(P[obs=0/1|true_gen=1/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/1 in the VCF, given that the individual's true genotype is homozygous alternate.",
+		},
+		"-log10(P[obs=1/1|true_gen=1/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 1/1 in the VCF, given that the individual's true genotype is homozygous alternate.",
+		},
+		"-log10(P[obs=-|true_gen=-/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability that a site is not in the VCF, given that the individual's true genotype is hemizygous reference.",
+		},
+		"-log10(P[obs=./.|true_gen=-/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing ./. in the VCF, given that the individual's true genotype is hemizygous reference.",
+		},
+		"-log10(P[obs=0/0|true_gen=-/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/0 in the VCF, given that the individual's true genotype is hemizygous reference.",
+		},
+		"-log10(P[obs=0/1|true_gen=-/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/1 in the VCF, given that the individual's true genotype is hemizygous reference.",
+		},
+		"-log10(P[obs=1/1|true_gen=-/0])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 1/1 in the VCF, given that the individual's true genotype is hemizygous reference.",
+		},
+		"-log10(P[obs=-|true_gen=-/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability that a site is not in the VCF, given that the individual's true genotype is hemizygous alternate.",
+		},
+		"-log10(P[obs=./.|true_gen=-/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing ./. in the VCF, given that the individual's true genotype is hemizygous alternate.",
+		},
+		"-log10(P[obs=0/0|true_gen=-/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/0 in the VCF, given that the individual's true genotype is hemizygous alternate.",
+		},
+		"-log10(P[obs=0/1|true_gen=-/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/1 in the VCF, given that the individual's true genotype is hemizygous alternate.",
+		},
+		"-log10(P[obs=1/1|true_gen=-/1])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 1/1 in the VCF, given that the individual's true genotype is hemizygous alternate.",
+		},
+		"-log10(P[obs=-|true_gen=-/-])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability that a site is not in the VCF, given that the individual's true genotype is double deletion.",
+		},
+		"-log10(P[obs=./.|true_gen=-/-])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing ./. in the VCF, given that the individual's true genotype is double deletion.",
+		},
+		"-log10(P[obs=0/0|true_gen=-/-])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/0 in the VCF, given that the individual's true genotype is double deletion.",
+		},
+		"-log10(P[obs=0/1|true_gen=-/-])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 0/1 in the VCF, given that the individual's true genotype is double deletion.",
+		},
+		"-log10(P[obs=1/1|true_gen=-/-])": {
+			"type": "int",
+			"minimum": 0,
+			"description": "Estimate of the probability of observing 1/1 in the VCF, given that the individual's true genotype is double deletion.",
+		}
+	},
+	"required": [
+		"-log10(P[deletion_entry_exit])", "-log10(P[maternal_crossover])", "-log10(P[paternal_crossover])", "-log10(P[hard_to_seq_region_entry_exit])",
+		"-log10(P[obs=-|true_gen=0/0])", "-log10(P[obs=./.|true_gen=0/0])", "-log10(P[obs=0/0|true_gen=0/0])", "-log10(P[obs=0/1|true_gen=0/0])", "-log10(P[obs=1/1|true_gen=0/0])",
+		"-log10(P[obs=-|true_gen=0/1])", "-log10(P[obs=./.|true_gen=0/1])", "-log10(P[obs=0/0|true_gen=0/1])", "-log10(P[obs=0/1|true_gen=0/1])", "-log10(P[obs=1/1|true_gen=0/1])",
+		"-log10(P[obs=-|true_gen=1/1])", "-log10(P[obs=./.|true_gen=1/1])", "-log10(P[obs=0/0|true_gen=1/1])", "-log10(P[obs=0/1|true_gen=1/1])", "-log10(P[obs=1/1|true_gen=1/1])",
+		"-log10(P[obs=-|true_gen=-/0])", "-log10(P[obs=./.|true_gen=-/0])", "-log10(P[obs=0/0|true_gen=-/0])", "-log10(P[obs=0/1|true_gen=-/0])", "-log10(P[obs=1/1|true_gen=-/0])",
+		"-log10(P[obs=-|true_gen=-/1])", "-log10(P[obs=./.|true_gen=-/1])", "-log10(P[obs=0/0|true_gen=-/1])", "-log10(P[obs=0/1|true_gen=-/1])", "-log10(P[obs=1/1|true_gen=-/1])",
+		"-log10(P[obs=-|true_gen=-/-])", "-log10(P[obs=./.|true_gen=-/-])", "-log10(P[obs=0/0|true_gen=-/-])", "-log10(P[obs=0/1|true_gen=-/-])", "-log10(P[obs=1/1|true_gen=-/-])"
+	],
+	"additionalProperties": false
+}
+

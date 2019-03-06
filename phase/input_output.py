@@ -121,19 +121,19 @@ class WGSData:
 		data = sparse.hstack([sparse.load_npz('%s/%s' % (self.data_dir, gen_file))[ind_indices, :] for gen_file in self.gen_files]).A
 		data = data[:, self.snp_indices]
 
+		data[data<0] = -1
+
 		n = 2*self.snp_positions.shape[0]+1
+		#family_genotypes = -2*np.ones((m, n), dtype=np.int8)
 		family_genotypes = np.zeros((m, n), dtype=np.int8)
 		family_genotypes[:, np.arange(1, n-1, 2)] = data
-		family_genotypes[:, -2] = family_genotypes[:, -1]
-
-		# if any family member is missing, set whole family to 0 - this has the effect of ignoring missing positions
-		#family_genotypes[:, np.any(family_genotypes<0, axis=0)] = 0
+		#family_genotypes[:, -2] = family_genotypes[:, -1]
 		
 		# if we see two missing entries in a row, mark the middle interval as possibly missing/possibly homref (-1)
-		family_genotypes[family_genotypes<0] = -1
-		for i in range(m):
-			double_missing = np.where((data[i, 1:]==-1) & (data[i, :-1]==-1))[0]
-			family_genotypes[i, (2*double_missing)+2] = -1
+		#family_genotypes[family_genotypes<0] = -1
+		#for i in range(m):
+		#	double_missing = np.where((data[i, 1:]==-1) & (data[i, :-1]==-1))[0]
+		#	family_genotypes[i, (2*double_missing)+2] = -1
 
 		family_snp_positions = np.zeros((n, 2), dtype=np.int)
 		family_snp_positions[0, 0] = 0

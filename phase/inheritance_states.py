@@ -20,9 +20,21 @@ class AutosomalInheritanceStates:
 	def __init__(self, m):
 		self.m = m
 		if m >= 5:
-			self.states = np.array(list(product(*([[0, 1]]*(2*m)))), dtype=np.int8)
+			states = list(product(*([[0, 1]]*(2*m) + [[0, 1]])))
 		else:
-			self.states = np.array([x for x in product(*([[0, 1]]*(2*m))) if x[4]==0 and x[5]==0], dtype=np.int8)
+			states = [x for x in product(*([[0, 1]]*((2*m)+1))) if x[4]==0 and x[5]==0]
+
+		# can't have a state where a parent has a deletion that isn't inherited
+		states = [x for x in states if x[0]==1 or len([i for i in range(4, 2*m, 2) if x[i] == 0])>0]
+		states = [x for x in states if x[1]==1 or len([i for i in range(4, 2*m, 2) if x[i] == 1])>0]
+		states = [x for x in states if x[2]==1 or len([i for i in range(5, 2*m, 2) if x[i] == 0])>0]
+		states = [x for x in states if x[3]==1 or len([i for i in range(5, 2*m, 2) if x[i] == 1])>0]
+
+		# can't have a state with a deletion in a hard-to-sequence region
+		states = [x for x in states if x[-1] == 0 or (x[0]==1 and x[1]==1 and x[2]==1 and x[3]==1)]
+		print(states)
+		
+		self.states = np.asarray(states, dtype=np.int8)
 		print('inheritance states', self.states.shape)
 
 		self.p, self.state_len = self.states.shape

@@ -36,58 +36,69 @@ with gzip.open(vcf_file, 'rt') as f, \
     line = next(f)
     subfile = 0
     num_lines = 0
+    chrom_coord = []
     for j, line in enumerate(f):
         pieces = line.split('\t')
 
-        # Write variant to file
-        variant_f.write('\t'.join(pieces[:9]) + '\n')
+        if pieces[0] == chrom:
 
-        # Pull out genotypes
-        format = pieces[8].strip().split(':')
-        gen_index = format.index('GT')
-        for i, piece in enumerate(pieces[9:]):
-            segment = piece.split(':', maxsplit=gen_index+1)
-            if segment[gen_index] in gen_mapping:
-                gt = gen_mapping[segment[gen_index]]
-                if gt == -1:
-                    if 'DP' in format:
-                        dp_index = format.index('DP')
-                        segment = piece.split(':', maxsplit=dp_index+1)
-                        if dp_index < len(segment) and (segment[dp_index] == '0' or segment[dp_index] == '1'):
-                            # very low coverage is marked double deletion rather than unknown
-                            gt = -2
-            else:
-                # For now we mark multi-base loci as unknown
-                gt = -1
+            format = pieces[8].strip().split(':')
 
-            if gt != 0:
-                indices.append(i)
-                data.append(gt)
-        indptr.append(len(data))
-        num_lines += 1
+            # Write variant to file
+            variant_f.write('\t'.join(pieces[:9]) + '\n')
 
-        # If file has gotten really big, write subfile to disk
-        if len(data) > 500000000:
-            gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
-            print('Sub dataset', gen.shape)
+            pos, _, ref, alt = pieces[1:5]
+            is_biallelic_snp = 1 if len(ref) == 1 and len(alt) == 1 and ref != '.' and alt != '.' else 0
+            chrom_coord.append((0, int(pos), is_biallelic_snp))
 
-            # Save to file
-            save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
+            # Pull out genotypes
+            gen_index = format.index('GT')
+            for i, piece in enumerate(pieces[9:]):
+                segment = piece.split(':', maxsplit=gen_index+1)
+                if segment[gen_index] in gen_mapping:
+                    gt = gen_mapping[segment[gen_index]]
+                    if gt == -1:
+                        if 'DP' in format:
+                            dp_index = format.index('DP')
+                            segment = piece.split(':', maxsplit=dp_index+1)
+                            if dp_index < len(segment) and (segment[dp_index] == '0' or segment[dp_index] == '1'):
+                                # very low coverage is marked double deletion rather than unknown
+                                gt = -2
+                else:
+                    # For now we mark multi-base loci as unknown
+                    gt = -1
 
-            # Start fresh
-            subfile += 1
-            num_lines = 0
-            data, indices, indptr = [], [], [0]
+                if gt != 0:
+                    indices.append(i)
+                    data.append(gt)
+            indptr.append(len(data))
+            num_lines += 1
 
-    gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+            # If file has gotten really big, write subfile to disk
+            if len(data) > 500000000:
+                gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+                print('Sub dataset', gen.shape)
+
+                # Save to file
+                save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
+
+                # Start fresh
+                subfile += 1
+                num_lines = 0
+                data, indices, indptr = [], [], [0]
+           
+
+gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
     
-    # Save to file
-    if subfile == 0:
-        print('Full dataset', gen.shape)
-        save_npz('%s/chr.%s.gen' % (out_directory, chrom), gen)
-    else:
-        print('Sub dataset', gen.shape)
-        save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
+# Save to file
+if subfile == 0:
+    print('Full dataset', gen.shape)
+    save_npz('%s/chr.%s.gen' % (out_directory, chrom), gen)
+else:
+    print('Sub dataset', gen.shape)
+    save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
+
+np.save('%s/chr.%s.gen.coordinates' % (out_directory, chrom), np.asarray(chrom_coord, dtype=int))
 
 print('Completed in ', time.time()-t0, 'sec')
 

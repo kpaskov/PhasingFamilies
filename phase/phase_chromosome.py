@@ -1,4 +1,5 @@
 import sys
+import json
 from os import listdir
 from itertools import product
 
@@ -11,7 +12,7 @@ from losses import LazyLoss
 from viterbi import viterbi_forward_sweep_autosomes, viterbi_backward_sweep_autosomes
 from mask import mask_states
 
-# Run locally with python3 phase/phase_chromosome.py 22 3 data/160826.ped split_gen_miss phased
+# Run locally with python phase/phase_chromosome.py 22 4 data/160826.ped split_gen_ihart phased_test phase/current_params.json
 
 if __name__ == "__main__":
 
@@ -21,11 +22,13 @@ if __name__ == "__main__":
 	ped_file = sys.argv[3]
 	data_dir = sys.argv[4]
 	out_dir = sys.argv[5]
-	batch_size = None if len(sys.argv) < 8 else int(sys.argv[6])
-	batch_num = None if len(sys.argv) < 8 else int(sys.argv[7])
+	param_file = sys.argv[6]
+	batch_size = None if len(sys.argv) < 9 else int(sys.argv[7])
+	batch_num = None if len(sys.argv) < 9 else int(sys.argv[8])
 	batch_offset = None
 
-	shift_costs = [10]*4 + [500]*(2*(m-2))
+	with open(param_file, 'r') as f:
+		params = json.load(f)
 
 	# set up filenames
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
@@ -47,13 +50,13 @@ if __name__ == "__main__":
 	inheritance_states = AutosomalInheritanceStates(m)
 	
 	# create transition matrix
-	transition_matrix = AutosomalTransitionMatrix(inheritance_states, shift_costs)
+	transition_matrix = AutosomalTransitionMatrix(inheritance_states, params)
 
 	# create genotypes
 	genotypes = Genotypes(m)
 
 	# create loss function
-	loss = LazyLoss(m, inheritance_states, genotypes)
+	loss = LazyLoss(inheritance_states, genotypes, params)
 
 	# get ready to pull processed WGS data 
 	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, chrom)
@@ -78,8 +81,8 @@ if __name__ == "__main__":
 			# backward sweep
 			final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
 
-			# mask messy areas
-			#final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss)
+			## mask messy areas
+			#final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss, smooth=1000)
 
 			# write to file
 			write_to_file(famf, statef, fkey, inds, final_states, family_snp_positions)

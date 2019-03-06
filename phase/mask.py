@@ -47,6 +47,7 @@ def mask_states(family_genotypes, mult_factor, final_states, inheritance_states,
 	final_states[1, m2_ninh] = -1
 	final_states[2, p1_ninh] = -1
 	final_states[3, p2_ninh] = -1
+	print(final_states.shape, masked[np.newaxis, :].shape, c.shape, fit.shape, n)
 	final_states = np.append(final_states, masked[np.newaxis, :], axis=0)
 	print('Percent never inherited', 100*np.sum(m1_ninh)/n, 100*np.sum(m2_ninh)/n, 100*np.sum(p1_ninh)/n, 100*np.sum(p2_ninh)/n)
 

@@ -11,7 +11,7 @@ def viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult
 
 	m, n = family_genotypes.shape
 	p, state_len = inheritance_states.p, inheritance_states.state_len
-	v_cost = np.zeros((p, n), dtype=int)
+	v_cost = np.zeros((p, n), dtype=float)
 
 	# first step, break symmetry
 	# we enforce that the chromosome starts with child1 (0, 0) and no deletions or duplications

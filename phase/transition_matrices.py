@@ -3,16 +3,19 @@ from itertools import product
 
 class AutosomalTransitionMatrix:
 
-	def __init__(self, inheritance_states, shift_costs):
+	def __init__(self, inheritance_states, params):
 
-		self.shift_costs = shift_costs
+		self.shift_costs = 	[params['-log10(P[deletion_entry_exit])']]*4 + \
+			[params['-log10(P[maternal_crossover])'] if i%2==0 else params['-log10(P[paternal_crossover])'] for i in range(2*(inheritance_states.m-2))] + \
+			[params['-log10(P[hard_to_seq_region_entry_exit])']]
+
 		p, state_len = inheritance_states.p, inheritance_states.state_len
 
 		# starting costs
 		starting_state = (1, 1, 1, 1, 0, 0)
-		self.first_costs = np.zeros((p,), dtype=int)
+		self.first_costs = np.zeros((p,), dtype=float)
 		for i, ss in enumerate(starting_state):
-			self.first_costs[inheritance_states[:, i] != ss] += shift_costs[i]
+			self.first_costs[inheritance_states[:, i] != ss] += self.shift_costs[i]
 
 		# transition matrix
 		transitions = [[] for i in range(p)]
@@ -23,16 +26,34 @@ class AutosomalTransitionMatrix:
 				if new_state in inheritance_states:
 					new_index = inheritance_states.index(new_state)
 					transitions[i].append(new_index)
-					transition_costs[i].append(sum([shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
+					transition_costs[i].append(sum([self.shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
 
-			# allow a single recombination event
-			for j in range(4, inheritance_states.state_len):
-				new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
-				if new_state in inheritance_states:
-					new_index = inheritance_states.index(new_state)
-					transitions[i].append(new_index)
-					transition_costs[i].append(shift_costs[j])
+			# allow a single recombination event (if we're not in a hard to sequence region)
+			if state[-1] == 0:
+				for j in range(4, inheritance_states.state_len-1):
+					new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
+					if new_state in inheritance_states:
+						new_index = inheritance_states.index(new_state)
+						transitions[i].append(new_index)
+						transition_costs[i].append(self.shift_costs[j])
+
+			# allow a transition into hard_to_sequence regions
+			for o, n in [(0, 1), (1, 0), (0, 2), (2, 0), (0, 3), (3, 0)]:
+				if state[-1] == o:
+					new_state = tuple(n if k == inheritance_states.state_len-1 else x for k, x in enumerate(state))
+
+					if new_state in inheritance_states:
+						new_index = inheritance_states.index(new_state)
+						transitions[i].append(new_index)
+						transition_costs[i].append(self.shift_costs[-1])
 		            
+		# transitions is a ragged matrix - square it off
+		max_trans = max([len(x) for x in transitions])
+		for t, c in zip(transitions, transition_costs):
+			while len(t) < max_trans:
+				t.append(t[-1])
+				c.append(c[-1])
+
 		self.transitions = np.array(transitions)
 		self.costs = np.array(transition_costs)
 

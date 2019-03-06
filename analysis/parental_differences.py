@@ -53,25 +53,29 @@ dad_gen = whole_chrom[list(dad_indices), :].A
 num_moms, num_dads = len(mom_indices), len(dad_indices)
 cached_logpvalues = -np.ones((num_moms+1, num_dads+1), dtype=int)
 
-def calc_pvalue(m, d):
+def calc_pvalue(dc):        
+    if np.all(dc>5):
+        pvalue = chi2_contingency(dc, correction=True)[1]
+        if pvalue == 0:
+            logpvalue = 1000
+        else:
+            logpvalue = -np.log10(pvalue)
+    elif (m==0 and d==0) or (m==num_moms and d==num_dads):
+        logpvalue = 0
+    else:
+        pvalue = fisher_exact(dc)[1]
+        if pvalue == 0:
+            logpvalue = 1000
+        else:
+            logpvalue = -np.log10(pvalue)
+    return logpvalue
+
+def calc_pvalue_cached(m, d):
     if cached_logpvalues[m, d] == -1:
         dc = np.asarray([[m, d],
                          [num_moms-m, num_dads-d]])
         
-        if np.all(dc>5):
-            pvalue = chi2_contingency(dc, correction=True)[1]
-            if pvalue == 0:
-                cached_logpvalues[m, d] = 1000
-            else:
-                cached_logpvalues[m, d] = -np.log10(pvalue)
-        elif (m==0 and d==0) or (m==num_moms and d==num_dads):
-            cached_logpvalues[m, d] = 0
-        else:
-            pvalue = fisher_exact(dc)[1]
-            if pvalue == 0:
-                cached_logpvalues[m, d] = 1000
-            else:
-                cached_logpvalues[m, d] = -np.log10(pvalue)
+        cached_logpvalues[m, d] = calc_pvalue(dc)
     return cached_logpvalues[m, d]
 
 gens = [-1, 0, 1, 2]
@@ -80,10 +84,20 @@ for i, gen in enumerate(gens):
     par_gen_counts[:, i, 0] = np.sum(mom_gen==gen, axis=0)
     par_gen_counts[:, i, 1] = np.sum(dad_gen==gen, axis=0)
 
-log_pvalues = np.zeros((n, 4), dtype=int)
+log_pvalues = np.zeros((n, 5), dtype=int)
 for i in range(n):
+	# calc pvalue for each genotype
     for j, gen in enumerate(gens):
-        log_pvalues[i, j] = calc_pvalue(par_gen_counts[i, j, 0], par_gen_counts[i, j, 1])
+        log_pvalues[i, j] = calc_pvalue_cached(par_gen_counts[i, j, 0], par_gen_counts[i, j, 1])
+
+    # calc pvalue for allele frequency
+    dc = np.asarray([[
+    	2*np.sum(mom_gen[:, i]==0) + np.sum(mom_gen[:, i]==1), 
+    	2*np.sum(dad_gen[:, i]==0) + np.sum(dad_gen[:, i]==1)], 
+    	[2*np.sum(mom_gen[:, i]==2) + np.sum(mom_gen[:, i]==1), 
+    	2*np.sum(dad_gen[:, i]==2) + np.sum(mom_gen[:, i]==1)]])
+    print(dc)
+    log_pvalues[i, 4] = calc_pvalue(dc)
 
     if i % 100000 == 0:
         print(i)

@@ -9,4 +9,4 @@
 
 module load py-scipystack/1.0_py36
 
-srun python3 pull_gen_data.py ../../vcf/v3.4/$1.reheader.vcf.gz ../../vcf/v3.4/v34.forCompoundHet.ped split_gen $1
+srun python3 preprocessing/pull_gen_data.py ../../vcf/v3.4/$1.reheader.vcf.gz split_gen_ihart $1

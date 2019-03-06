@@ -1,0 +1,43 @@
+{
+	"-log10(P[deletion_entry_exit])": 9.15590701902,
+	"-log10(P[maternal_crossover])": 8.09900216768,
+	"-log10(P[paternal_crossover])": 7.8685532463,
+	"-log10(P[hard_to_seq_region_entry_exit])": 6.15590701902,
+
+	"-log10(P[obs=./.|true_gen=0/0])": 4.94146261578,
+	"-log10(P[obs=0/0|true_gen=0/0])": 0.00000876251358641,
+	"-log10(P[obs=0/1|true_gen=0/0])": 5.06355804022,
+	"-log10(P[obs=1/1|true_gen=0/0])": 7.02354087895,
+
+	"-log10(P[obs=./.|true_gen=0/1])": 4.17651249194,
+	"-log10(P[obs=0/0|true_gen=0/1])": 2.98674026891,
+	"-log10(P[obs=0/1|true_gen=0/1])": 0.000613107855169,
+	"-log10(P[obs=1/1|true_gen=0/1])": 3.50427197273,
+
+	"-log10(P[obs=./.|true_gen=1/1])": 4.15130603735,
+	"-log10(P[obs=0/0|true_gen=1/1])": 5.60258127541,
+	"-log10(P[obs=0/1|true_gen=1/1])": 3.19542864628,
+	"-log10(P[obs=1/1|true_gen=1/1])": 0.000308768398653,
+
+	"-log10(P[obs=./.|true_gen=-/0])": 2.49767215104,
+	"-log10(P[obs=0/0|true_gen=-/0])": 0.00210304809644,
+	"-log10(P[obs=0/1|true_gen=-/0])": 2.91587268574,
+	"-log10(P[obs=1/1|true_gen=-/0])": 3.35879999482,
+
+	"-log10(P[obs=./.|true_gen=-/1])": 2.16808772144,
+	"-log10(P[obs=0/0|true_gen=-/1])": 1.85600983366,
+	"-log10(P[obs=0/1|true_gen=-/1])": 2.50079741366,
+	"-log10(P[obs=1/1|true_gen=-/1])": 0.0104960741421,
+
+	"-log10(P[obs=./.|true_gen=-/-])": 0.144537796426,
+	"-log10(P[obs=0/0|true_gen=-/-])": 0.653717287308,
+	"-log10(P[obs=0/1|true_gen=-/-])": 1.5134905257,
+	"-log10(P[obs=1/1|true_gen=-/-])": 1.51606545457,
+
+	"x-times higher probability of error in hard-to-sequence region": 10,
+
+	"-log10(P[obs=./.|compression-region])": 1.7619539,
+	"-log10(P[obs=0/0|compression-region])": 0.18788916,
+	"-log10(P[obs=0/1|compression-region])": 0.48059864,
+	"-log10(P[obs=1/1|compression-region])": 2.49147028
+}
