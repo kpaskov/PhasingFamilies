@@ -122,6 +122,9 @@ class WGSData:
 		data = data[:, self.snp_indices]
 
 		data[data<0] = -1
+		#data[data==-1] = 0
+		#data[data==-2] = 0
+		#data[:, np.all(data<=0, axis=0)] = 0
 
 		n = 2*self.snp_positions.shape[0]+1
 		#family_genotypes = -2*np.ones((m, n), dtype=np.int8)
@@ -129,11 +132,15 @@ class WGSData:
 		family_genotypes[:, np.arange(1, n-1, 2)] = data
 		#family_genotypes[:, -2] = family_genotypes[:, -1]
 		
-		# if we see two missing entries in a row, mark the middle interval as possibly missing/possibly homref (-1)
-		#family_genotypes[family_genotypes<0] = -1
+		# if we see two missing entries in a row, mark the middle interval as possibly missing
 		#for i in range(m):
 		#	double_missing = np.where((data[i, 1:]==-1) & (data[i, :-1]==-1))[0]
-		#	family_genotypes[i, (2*double_missing)+2] = -1
+		#	family_genotypes[:, (2*double_missing)+2] = -2
+
+		missing_indices = np.where(np.any(family_genotypes==-1, axis=0))[0]
+		for j in range(1, 8, 2):
+			family_genotypes[:, np.clip(missing_indices-j, 0, None)] = -2
+			family_genotypes[:, np.clip(missing_indices+j, None, n-1)] = -2
 
 		family_snp_positions = np.zeros((n, 2), dtype=np.int)
 		family_snp_positions[0, 0] = 0

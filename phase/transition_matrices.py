@@ -28,8 +28,8 @@ class AutosomalTransitionMatrix:
 					transitions[i].append(new_index)
 					transition_costs[i].append(sum([self.shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
 
-			# allow a single recombination event (if we're not in a hard to sequence region)
-			if state[-1] == 0:
+			# allow a single recombination event (if we're not in a deletion)
+			if state[0]==1 and state[1]==1 and state[2]==1 and state[3]==1:
 				for j in range(4, inheritance_states.state_len-1):
 					new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
 					if new_state in inheritance_states:
@@ -37,15 +37,16 @@ class AutosomalTransitionMatrix:
 						transitions[i].append(new_index)
 						transition_costs[i].append(self.shift_costs[j])
 
-			# allow a transition into hard_to_sequence regions
-			for o, n in [(0, 1), (1, 0), (0, 2), (2, 0), (0, 3), (3, 0)]:
-				if state[-1] == o:
-					new_state = tuple(n if k == inheritance_states.state_len-1 else x for k, x in enumerate(state))
+			# allow a transition into hard_to_sequence regions (as long as we're not in a deletion)
+			if np.all(state[:4]==1):
+				for o, n in [(0, 1), (1, 0), (0, 2), (2, 0), (0, 3), (3, 0)]:
+					if state[-1] == o:
+						new_state = tuple(n if k == inheritance_states.state_len-1 else x for k, x in enumerate(state))
 
-					if new_state in inheritance_states:
-						new_index = inheritance_states.index(new_state)
-						transitions[i].append(new_index)
-						transition_costs[i].append(self.shift_costs[-1])
+						if new_state in inheritance_states:
+							new_index = inheritance_states.index(new_state)
+							transitions[i].append(new_index)
+							transition_costs[i].append(self.shift_costs[-1])
 		            
 		# transitions is a ragged matrix - square it off
 		max_trans = max([len(x) for x in transitions])

@@ -34,10 +34,5 @@
 	"-log10(P[obs=0/1|true_gen=-/-])": 1.5134905257,
 	"-log10(P[obs=1/1|true_gen=-/-])": 1.51606545457,
 
-	"x-times higher probability of error in hard-to-sequence region": 10,
-
-	"-log10(P[obs=./.|compression-region])": 1.7619539,
-	"-log10(P[obs=0/0|compression-region])": 0.18788916,
-	"-log10(P[obs=0/1|compression-region])": 0.48059864,
-	"-log10(P[obs=1/1|compression-region])": 2.49147028
+	"x-times higher probability of error in hard-to-sequence region": 10
 }
