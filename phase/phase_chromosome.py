@@ -70,19 +70,22 @@ if __name__ == "__main__":
 
 		# phase each family
 		for fkey, inds in families_of_this_size:
-			print('family', fkey)
+			try:
+				print('family', fkey)
 
-			# pull genotype data for this family
-			family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(inds)
+				# pull genotype data for this family
+				family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(inds)
 
-			# forward sweep
-			v_cost = viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+				# forward sweep
+				v_cost = viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
 
-			# backward sweep
-			final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
+				# backward sweep
+				final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
 
-			## mask messy areas
-			#final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss, smooth=1000)
+				## mask messy areas
+				#final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss, smooth=1000)
 
-			# write to file
-			write_to_file(famf, statef, fkey, inds, final_states, family_snp_positions)
+				# write to file
+				write_to_file(famf, statef, fkey, inds, final_states, family_snp_positions)
+			except Exception as e:
+				print(fkey, e)

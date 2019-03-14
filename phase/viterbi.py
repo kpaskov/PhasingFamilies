@@ -47,9 +47,9 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 	final_states = -np.ones((state_len, n), dtype=int)
 	
 	# choose best paths
-	# we enforce that the chromosome ends with no deletions
+	# we enforce that the chromosome ends with no deletions and a hard-to-sequence region
 	num_forks = 0
-	no_delstates = np.all(inheritance_states[:, :4]==1, axis=1)
+	no_delstates = np.all(inheritance_states[:, [0, 1, 2, 3, -1]]==1, axis=1)
 	min_value = np.min(v_cost[no_delstates, -1])
 	paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
 	print('Num solutions', paths.shape, inheritance_states[paths, :])
@@ -73,6 +73,12 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 
 	print('Num positions in fork', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 
+
+	# clean up ends
+	final_states[:4, 0] = 1
+	final_states[-1, 0] = 1
+	final_states[:4, -1] = 1
+	final_states[-1, -1] = 1
 	
 	return final_states
 

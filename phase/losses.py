@@ -29,6 +29,10 @@ from collections import Counter
 # 3 = -/0 (hemizygous ref)
 # 4 = -/1 (hemizygous alt)
 # 5 = -/- (double deletion)
+# 6 = 0/0/0
+# 7 = 0/0/1
+# 8 = 0/1/1
+# 9 = 1/1/1
 
 # This code takes advantage of the fact that our loss is symmetric in the sense that the state (1, 1, 1, 1, 0, 1, 0, 1)
 # will have equivalent losses for all genotypes as (1, 1, 1, 1, 1, 0, 1, 0). Essentially, we can swap parental
@@ -44,62 +48,68 @@ class LazyLoss:
 	def __init__(self, inheritance_states, genotypes, params):
 
 		# pull params
-		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}
+		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}#, 6: '0/0/0', 7: '0/0/1', 8: '0/1/1', 9: '1/1/1'}
 		obs_value_to_param = {-1: './.', 0: '0/0', 1: '0/1', 2: '1/1'}
 		hts_mult = params['x-times higher probability of error in hard-to-sequence region']
 
-		# deletion region costs
+		preds = sorted(pred_value_to_param.keys())
+		obss = sorted(obs_value_to_param.keys())
+
+		# typical region costs
+		self.g_cost = dict()
+		for pred, obs in product(preds, obss):
+			self.g_cost[(pred, obs)] = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
+
+		# del region costs
 		self.del_g_cost = dict()
-		for pred, obs in product([0, 1, 2, 3, 4, 5], [-1, 0, 1, 2]):
+		for pred, obs in product(preds, obss):
 			self.del_g_cost[(pred, obs)] = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
 			
-		for pred in [0, 1, 2, 3, 4, 5]:
-			self.del_g_cost[(pred, -2)] = min(self.del_g_cost[(pred, -1)], self.del_g_cost[(pred, 0)])
-
-		# region costs
-		self.g_cost = dict()
-		for pred, obs in product([0, 1, 2, 3, 4, 5], [-1, 0, 1, 2]):
-			if obs != -1:
-				self.g_cost[(pred, obs)] = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
-
-		for pred, correct_obs in [(0, 0), (1, 1), (2, 2), (3, 0), (4, 2), (5, 0)]:
-			p = 1
-			for obs in [0, 1, 2]:
-				if obs != correct_obs:
-					p -= pow(10, -self.g_cost[(pred, obs)])
-			self.g_cost[(pred, correct_obs)] = -np.log10(p)
-
-		for pred in [0, 1, 2, 3, 4, 5]:
-			self.g_cost[(pred, -1)] = self.g_cost[(pred, 0)]
-			self.g_cost[(pred, -2)] = self.g_cost[(pred, 0)]
+		pred_to_correct_obs = dict()
+		for pred in preds:
+			pred_to_correct_obs[pred] = sorted(obss, key=lambda x: np.inf if self.g_cost[(pred, x)]==0 else self.g_cost[(pred, x)])[0]
+		print('Prediction to best obs', pred_to_correct_obs)
 
 		# hard-to-sequence region costs
 		self.hts_g_cost = dict()
-		for pred, obs in product([0, 1, 2, 3, 4, 5], [-1, 0, 1, 2]):
-			if obs != -1:
-				self.hts_g_cost[(pred, obs)] = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])] - np.log10(hts_mult)
+		for pred, obs in product(preds, obss):
+			c = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
+				
+			if pred_to_correct_obs[pred] != obs and c - np.log10(hts_mult) > 0.5:
+				self.hts_g_cost[(pred, obs)] = c - np.log10(hts_mult)
+			else:
+				if pred_to_correct_obs[pred] != obs:
+					print("Couldn't apply hard-to-sequence region factor to (%d->%d), would have created P(%d->%d)=%0.2f." % (pred, obs, pred, obs, pow(10, -c+np.log10(hts_mult))))
+				self.hts_g_cost[(pred, obs)] = c
 
-		for pred, correct_obs in [(0, 0), (1, 1), (2, 2), (3, 0), (4, 2), (5, 0)]:
-			p = 1
-			for obs in [0, 1, 2]:
-				if obs != correct_obs:
-					p -= pow(10, -self.hts_g_cost[(pred, obs)])
-			self.hts_g_cost[(pred, correct_obs)] = -np.log10(p)
+		for pred in preds:
+			p = 1 - sum([pow(10, -self.hts_g_cost[(pred, obs)]) for obs in obss if pred_to_correct_obs[pred] != obs and self.hts_g_cost[(pred, obs)] != 0])
+			self.hts_g_cost[(pred, pred_to_correct_obs[pred])] = -np.log10(p)
+		#print('renormalized', [(pred, self.hts_g_cost[(pred, pred_to_correct_obs[pred])]) for pred in preds])
 
-		for pred in [0, 1, 2, 3, 4, 5]:
-			self.hts_g_cost[(pred, -1)] = self.hts_g_cost[(pred, 0)]
-			self.hts_g_cost[(pred, -2)] = self.hts_g_cost[(pred, 0)]
+		for pred in preds:
+			if pred < 3:
+				self.g_cost[(pred, -2)] = self.g_cost[(pred, 0)]
+				self.hts_g_cost[(pred, -2)] = self.hts_g_cost[(pred, 0)]
+			else:
+				self.g_cost[(pred, -2)] = min(self.g_cost[(pred, -1)], self.g_cost[(pred, 0)])
+				self.hts_g_cost[(pred, -2)] = min(self.hts_g_cost[(pred, -1)], self.hts_g_cost[(pred, 0)])
+			self.del_g_cost[(pred, -2)] = min(self.del_g_cost[(pred, -1)], self.del_g_cost[(pred, 0)])
 
-		for k in sorted(self.g_cost.keys()):
-			print(k, self.g_cost[k], self.del_g_cost[k], self.hts_g_cost[k])
+		assert np.all(np.asarray(list(self.g_cost.values()))>=0)
+		assert np.all(np.asarray(list(self.del_g_cost.values()))>=0)
+		assert np.all(np.asarray(list(self.hts_g_cost.values()))>=0)
 
+		print('\t' + ('\t\t'.join(map(str, obss + [-2]))))
+		for pred in preds:
+			print(str(pred) + '\t' + '\t'.join(['%0.2f-%0.2f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss + [-2]]))
+			
 		self.m = inheritance_states.m
 		self.q, self.state_len = genotypes.q, inheritance_states.state_len
 		self.genotypes = genotypes
 
 		self.__build_loss_equivalence__(inheritance_states)
 		self.already_calculated = np.zeros((self.q,), dtype=bool)
-		#self.already_calculated[self.genotypes.index((0,)*self.m)] = True
 
 		self.__build_perfect_matches__()
 		
@@ -107,34 +117,58 @@ class LazyLoss:
 		self.is_hts = np.asarray([x[-1]==1 for x in self.loss_states], dtype=bool)
 		self.is_del = np.asarray([x[0]==0 or x[1]==0 or x[2]==0 or x[3]==0 for x in self.loss_states], dtype=bool)
 		print('hts loss states', np.sum(self.is_hts), 'del loss states', np.sum(self.is_del))
-		self.s = np.zeros((len(self.perfect_matches), 3), dtype=float)
-
-		self.__precompute_loss_for_all_hom_ref__()
 		
+		self.s = np.zeros((len(self.perfect_matches)+1, 3), dtype=float)
+
+		self.s[-1, :] = np.inf
+		self.__precompute_loss_for_all_hom_ref__()
+
 	def __call__(self, gen): 
 		gen_index = self.genotypes.index(gen)
 		if not self.already_calculated[gen_index]:
+			#for i, pm in enumerate(self.perfect_matches):
+			#	self.s[i, 0] = np.power(10, -sum([self.g_cost[(pred, obs)] for pred, obs in zip(pm, gen)]))
+			#	self.s[i, 1] = np.power(10, -sum([self.del_g_cost[(pred, obs)] for pred, obs in zip(pm, gen)]))
+			#	self.s[i, 2] = np.power(10, -sum([self.hts_g_cost[(pred, obs)] for pred, obs in zip(pm, gen)]))
+			#	    
+			#values = -np.log10(np.sum(self.s[self.perfect_match_indices[(~self.is_hts) & (~self.is_del), :], 0], axis=1)) \
+			#			+ self.c[(~self.is_hts) & (~self.is_del)]
+			#del_values = -np.log10(np.sum(self.s[self.perfect_match_indices[self.is_del, :], 1], axis=1)) \
+			#			+ self.c[self.is_del]
+			#hts_values = -np.log10(np.sum(self.s[self.perfect_match_indices[self.is_hts, :], 2], axis=1)) \
+			#			+ self.c[self.is_hts]
+			#
+			#self.losses[(~self.is_hts) & (~self.is_del), gen_index] = values
+			#self.losses[self.is_del, gen_index] = del_values
+			#self.losses[self.is_hts, gen_index] = hts_values
+
 			for i, pm in enumerate(self.perfect_matches):
 				self.s[i, 0] = sum([self.g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
 				self.s[i, 1] = sum([self.del_g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
 				self.s[i, 2] = sum([self.hts_g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
-
-			self.s += np.log10(16)
 				    
-			values = -np.log10(np.sum(np.power(10, -self.s[self.perfect_match_indices[(~self.is_hts) & (~self.is_del), :], 0]), axis=1))
-			del_values = -np.log10(np.sum(np.power(10, -self.s[self.perfect_match_indices[self.is_del, :], 1]), axis=1))
-			hts_values = -np.log10(np.sum(np.power(10, -self.s[self.perfect_match_indices[self.is_hts, :], 2]), axis=1))
+			values = np.min(self.s[self.perfect_match_indices[(~self.is_hts) & (~self.is_del), :], 0], axis=1)
+			del_values = np.min(self.s[self.perfect_match_indices[self.is_del, :], 1], axis=1)
+			hts_values = np.min(self.s[self.perfect_match_indices[self.is_hts, :], 2], axis=1)
 
 			self.losses[(~self.is_hts) & (~self.is_del), gen_index] = values
+			if len([x for x in gen if x>0]) == 0:
+				gen_index2 = self.genotypes.index((-2,)*self.m)
+				self.losses[(~self.is_hts) & (~self.is_del), gen_index] = self.losses[(~self.is_hts) & (~self.is_del), gen_index2]
+				self.losses[self.is_hts, gen_index] = self.losses[self.is_hts, gen_index2]
+			else:
+				self.losses[(~self.is_hts) & (~self.is_del), gen_index] = values
+				self.losses[self.is_hts, gen_index] = hts_values
+
 			self.losses[self.is_del, gen_index] = del_values
-			self.losses[self.is_hts, gen_index] = hts_values
 
 			self.already_calculated[gen_index] = True
 		return self.losses[self.rep_state_indices, gen_index]
 
 	def __precompute_loss_for_all_hom_ref__(self):
-		for gen in [(0,)*self.m, (-2,)*self.m]:
+		for gen in [(-2,)*self.m]:
 			gen_index = self.genotypes.index(gen)
+
 			for i, pm in enumerate(self.perfect_matches):
 				self.s[i, 0] = sum([self.g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
 				self.s[i, 1] = sum([self.del_g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
@@ -149,6 +183,17 @@ class LazyLoss:
 			self.losses[self.is_hts, gen_index] = hts_values
 
 			self.already_calculated[gen_index] = True
+
+
+		gen_index0 = self.genotypes.index((0,)*self.m)
+		gen_index2 = self.genotypes.index((-2,)*self.m)
+		self.losses[:, gen_index0] = self.losses[:, gen_index2]
+		self.already_calculated[gen_index0] = True
+
+		#for gen_index, gen in enumerate(self.genotypes):
+		#	if len([x for x in gen if x>0]) == 0 and not self.already_calculated[gen_index]:
+		#		self.losses[:, gen_index] = self.losses[:, gen_index2]
+		#		self.already_calculated[gen_index] = True
 
 	def __build_loss_equivalence__(self, inheritance_states):
 		# states are equivalent if they have the same cost for every possible genotype
@@ -199,15 +244,33 @@ class LazyLoss:
 		# we generate a list of all perfect matches (self.perfect_matches)
 		# and then we generate a len(loss_states) x 16 matrix of indices indicating the perfect matches for each loss_state
 
+		# -1 = ./.
+		# 0 = 0/0
+		# 1 = 0/1
+		# 2 = 1/1
+		# 3 = -/0 (hemizygous ref)
+		# 4 = -/1 (hemizygous alt)
+		# 5 = -/- (double deletion)
+		# 6 = 0/0/0
+		# 7 = 0/0/1
+		# 8 = 0/1/1
+		# 9 = 1/1/1
+
 		state_to_perfect_matches = dict()
 		mat_pat_to_gen = {
-			(-1, -1): 5, (-1, 0): 3, (-1, 1): 4,
-			(0, -1): 3, (0, 0): 0, (0, 1): 1,
-			(1, -1): 4, (1, 0): 1, (1, 1): 2
+			('-', '-'): 5, ('-', '0'): 3, ('-', '1'): 4, #('-', '00'): 0, ('-', '01'): 1, ('-', '11'): 2,
+			('0', '-'): 3, ('0', '0'): 0, ('0', '1'): 1, #('0', '00'): 6, ('0', '01'): 7, ('0', '11'): 8,
+			('1', '-'): 4, ('1', '0'): 1, ('1', '1'): 2, #('1', '00'): 7, ('1', '01'): 8, ('1', '11'): 9,
+			#('00', '-'): 0, ('00', '0'): 6, ('00', '1'): 7,
+			#('01', '-'): 1, ('01', '0'): 7, ('01', '1'): 8,
+			#('11', '-'): 2, ('11', '0'): 8, ('11', '1'): 9
+
 		}
+		state_to_options = {0: ['-'], 1: ['0', '1']} #, 2: ['00', '01', '11']}
+
 		for s in self.loss_states:
-			anc_pos = [[-1, -1] if s[i] == 0 else [0, 1] for i in range(4)]
-			anc_variants = np.array(list(product(*anc_pos)), dtype=np.int8)
+			anc_pos = [state_to_options[x] for x in s[:4]]
+			anc_variants = list(product(*anc_pos))
 
 			state_to_perfect_matches[s] = []
 			for av in anc_variants:
@@ -223,20 +286,13 @@ class LazyLoss:
 		perfect_match_to_index = dict([(x, i) for i, x in enumerate(self.perfect_matches)])
 		self.perfect_match_indices = [[perfect_match_to_index[pm] for pm in state_to_perfect_matches[s]] for s in self.loss_states]
 
-		#self.cost_offsets = []
-		#for pm_inds in self.perfect_match_indices:
-		#	c = Counter(pm_inds)
-		#	self.cost_offsets.append([-np.log10(c[pm_ind]/len(pm_inds)) for pm_ind in pm_inds])
-
-		## both perfect_match_indices and cost_offsets are ragged, square them off
-		#for pm, c in zip(self.perfect_match_indices, self.cost_offsets):
-		#	while len(pm) < 16:
-		#		pm.append(len(perfect_match_to_index))
-		#		c.append(c[-1])
+		# perfect_match_indices is ragged, square it off
+		max_match = max([len(x) for x in self.perfect_match_indices])
+		for pm in self.perfect_match_indices:
+			while len(pm) < max_match:
+				pm.append(len(perfect_match_to_index))
 		self.perfect_match_indices = np.asarray(self.perfect_match_indices, dtype=int)
-		#self.cost_offsets = np.asarray(self.cost_offsets, dtype=float)
 
-		#print('cost offsets range from ', np.min(self.cost_offsets), 'to', np.max(self.cost_offsets))
 		print('perfect_match_indices', self.perfect_match_indices.shape)
 
 	# def get_parental_variants(self, state, gen):

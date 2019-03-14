@@ -126,6 +126,8 @@ class WGSData:
 		#data[data==-2] = 0
 		#data[:, np.all(data<=0, axis=0)] = 0
 
+		#data[:, np.any(data<0, axis=0)] = -1
+
 		n = 2*self.snp_positions.shape[0]+1
 		#family_genotypes = -2*np.ones((m, n), dtype=np.int8)
 		family_genotypes = np.zeros((m, n), dtype=np.int8)
@@ -137,6 +139,9 @@ class WGSData:
 		#	double_missing = np.where((data[i, 1:]==-1) & (data[i, :-1]==-1))[0]
 		#	family_genotypes[:, (2*double_missing)+2] = -2
 
+		# positions that are missing in the VCF and are nearby positions with missing
+		# genotypes are marked (-2) this means it's unknown whether the position is
+		# ./. or 0/0
 		missing_indices = np.where(np.any(family_genotypes==-1, axis=0))[0]
 		for j in range(1, 8, 2):
 			family_genotypes[:, np.clip(missing_indices-j, 0, None)] = -2

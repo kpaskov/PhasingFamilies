@@ -23,20 +23,22 @@ class AutosomalInheritanceStates:
 		#	states = list(product(*([[0, 1]]*(2*m) + [[0, 1]])))
 		#else:
 		#	states = [x for x in product(*([[0, 1]]*(2*m) + [[0, 1]])) if x[4]==0 and x[5]==0]
-		states = [x for x in product(*([[0, 1]]*(2*m) + [[0, 1]])) if x[4]==0 and x[5]==0]
+		states = [x for x in product(*([[0, 1]]*4 + [[0, 1]]*(2*m-4) + [[0, 1]])) if x[4]==0 and x[5]==0]
 
-		# can't have a state where a parent has a deletion that isn't inherited
-		states = [x for x in states if x[0]==1 or len([i for i in range(4, 2*m, 2) if x[i] == 0])>0]
-		states = [x for x in states if x[1]==1 or len([i for i in range(4, 2*m, 2) if x[i] == 1])>0]
-		states = [x for x in states if x[2]==1 or len([i for i in range(5, 2*m, 2) if x[i] == 0])>0]
-		states = [x for x in states if x[3]==1 or len([i for i in range(5, 2*m, 2) if x[i] == 1])>0]
+		# don't consider deletion/insertion combinations
+		#states = [x for x in states if len([y for y in x[:4] if y==0]) == 0 or len([y for y in x[:4] if y==2]) == 0]
 
-		# can't have a state with a deletion in a hard-to-sequence region
+		# don't consider multiple insertions
+		#states = [x for x in states if len([y for y in x[:4] if y==2]) <= 1]
+
+		# can't have a state where a parent has a deletion that isn't inherited, unless it's a double deletion
+		states = [x for x in states if x[0]==1 or x[0]==2 or (x[0]==0 and x[1]==0) or len([i for i in range(4, 2*m, 2) if x[i] == 0])>0]
+		states = [x for x in states if x[1]==1 or x[1]==2 or (x[0]==0 and x[1]==0) or len([i for i in range(4, 2*m, 2) if x[i] == 1])>0]
+		states = [x for x in states if x[2]==1 or x[2]==2 or (x[2]==0 and x[3]==0) or len([i for i in range(5, 2*m, 2) if x[i] == 0])>0]
+		states = [x for x in states if x[3]==1 or x[3]==2 or (x[2]==0 and x[3]==0) or len([i for i in range(5, 2*m, 2) if x[i] == 1])>0]
+
+		# can't have a state with a deletion or an insertion in a hard-to-sequence region
 		states = [x for x in states if x[-1] == 0 or (x[0]==1 and x[1]==1 and x[2]==1 and x[3]==1)]
-
-		# can't have a state with full deletion in hard-to-sequence region
-		#states = [x for x in states if x[-1]==0 or x[0]==1 or x[1]==1 or x[2]==1 or x[3]==1]
-
 		print(len(states))
 		
 		self.states = np.asarray(states, dtype=np.int8)
