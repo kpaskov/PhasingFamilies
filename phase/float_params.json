@@ -1,5 +1,5 @@
 {
-	"-log10(P[deletion_entry_exit])": 9.15590701902,
+	"-log10(P[deletion_entry_exit])": 7.15590701902,
 	"-log10(P[maternal_crossover])": 8.09900216768,
 	"-log10(P[paternal_crossover])": 7.8685532463,
 	"-log10(P[hard_to_seq_region_entry_exit])": 6.15590701902,

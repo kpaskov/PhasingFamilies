@@ -16,7 +16,10 @@ def viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult
 	# first step, break symmetry
 	# we enforce that the chromosome starts with child1 (0, 0) and no deletions or duplications
 	pos_gen = tuple(family_genotypes[:, 0])
-	v_cost[:, 0] = mult_factor[0]*loss(pos_gen) + transition_matrix.first_costs
+	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
+
+	disallowed_states = [np.any(s[:4]!=1) or s[-1] == 0 or s[4]==1 or s[5]==1 for s in inheritance_states]
+	v_cost[disallowed_states, 0] = np.inf
 
 	# next steps
 	for j in range(1, n): 
@@ -73,12 +76,6 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 
 	print('Num positions in fork', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 
-
-	# clean up ends
-	final_states[:4, 0] = 1
-	final_states[-1, 0] = 1
-	final_states[:4, -1] = 1
-	final_states[-1, -1] = 1
 	
 	return final_states
 

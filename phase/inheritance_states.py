@@ -31,7 +31,7 @@ class AutosomalInheritanceStates:
 		# don't consider multiple insertions
 		#states = [x for x in states if len([y for y in x[:4] if y==2]) <= 1]
 
-		# can't have a state where a parent has a deletion that isn't inherited, unless it's a double deletion
+		# can't have a state where a parent has a deletion that isn't inherited
 		states = [x for x in states if x[0]==1 or x[0]==2 or (x[0]==0 and x[1]==0) or len([i for i in range(4, 2*m, 2) if x[i] == 0])>0]
 		states = [x for x in states if x[1]==1 or x[1]==2 or (x[0]==0 and x[1]==0) or len([i for i in range(4, 2*m, 2) if x[i] == 1])>0]
 		states = [x for x in states if x[2]==1 or x[2]==2 or (x[2]==0 and x[3]==0) or len([i for i in range(5, 2*m, 2) if x[i] == 0])>0]

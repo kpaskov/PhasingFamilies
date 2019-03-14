@@ -11,15 +11,6 @@ class AutosomalTransitionMatrix:
 
 		p, state_len = inheritance_states.p, inheritance_states.state_len
 
-		# starting costs
-		starting_state = (1, 1, 1, 1, 0, 0)
-		self.first_costs = np.zeros((p,), dtype=float)
-		for i, ss in enumerate(starting_state):
-			self.first_costs[inheritance_states[:, i] != ss] += self.shift_costs[i]
-
-		# we expect the first position to be hard-to-sequence
-		self.first_costs[inheritance_states[:, -1] != 1] += self.shift_costs[-1]
-
 		# transition matrix
 		transitions = [[] for i in range(p)]
 		transition_costs = [[] for i in range(p)]

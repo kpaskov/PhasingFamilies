@@ -142,10 +142,10 @@ class WGSData:
 		# positions that are missing in the VCF and are nearby positions with missing
 		# genotypes are marked (-2) this means it's unknown whether the position is
 		# ./. or 0/0
-		missing_indices = np.where(np.any(family_genotypes==-1, axis=0))[0]
-		for j in range(1, 8, 2):
-			family_genotypes[:, np.clip(missing_indices-j, 0, None)] = -2
-			family_genotypes[:, np.clip(missing_indices+j, None, n-1)] = -2
+		#missing_indices = np.where(np.any(family_genotypes==-1, axis=0))[0]
+		#for j in range(1, 8, 2):
+		#	family_genotypes[:, np.clip(missing_indices-j, 0, None)] = -2
+		#	family_genotypes[:, np.clip(missing_indices+j, None, n-1)] = -2
 
 		family_snp_positions = np.zeros((n, 2), dtype=np.int)
 		family_snp_positions[0, 0] = 0
