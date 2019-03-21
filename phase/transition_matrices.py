@@ -15,12 +15,18 @@ class AutosomalTransitionMatrix:
 		transitions = [[] for i in range(p)]
 		transition_costs = [[] for i in range(p)]
 		for i, state in enumerate(inheritance_states):
-			for delstate in list(product(*[[0, 1, 2] if x==1 else [0, 1] if x==0 else [1, 2] for x in state[:4]])):
-				new_state = tuple(delstate) + tuple(state[4:])
-				if new_state in inheritance_states:
-					new_index = inheritance_states.index(new_state)
-					transitions[i].append(new_index)
-					transition_costs[i].append(sum([self.shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
+			# allow a transition into the same state
+			transitions[i].append(i)
+			transition_costs[i].append(0)
+
+			# allow a transition into a deletion (if we're not in a hard-to-sequence region)
+			if state[-1] == 0:
+				for delstate in list(product(*[[0, 1, 2] if x==1 else [0, 1] if x==0 else [1, 2] for x in state[:4]])):
+					new_state = tuple(delstate) + tuple(state[4:])
+					if new_state in inheritance_states:
+						new_index = inheritance_states.index(new_state)
+						transitions[i].append(new_index)
+						transition_costs[i].append(sum([self.shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
 
 			# allow a single recombination event (if we're not in a deletion)
 			if state[0]==1 and state[1]==1 and state[2]==1 and state[3]==1:
@@ -31,7 +37,7 @@ class AutosomalTransitionMatrix:
 						transitions[i].append(new_index)
 						transition_costs[i].append(self.shift_costs[j])
 
-			# allow a transition into hard_to_sequence regions (as long as we're not in a deletion)
+			# allow a transition into hard_to_sequence regions (if we're not in a deletion)
 			if np.all(state[:4]==1):
 				for o, n in [(0, 1), (1, 0), (0, 2), (2, 0), (0, 3), (3, 0)]:
 					if state[-1] == o:
