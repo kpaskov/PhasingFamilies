@@ -44,8 +44,10 @@ from collections import Counter
 # for some of them. This trick reduces both compute and memory by a factor of >4. Since this is our most
 # memory intensive piece of code, this is very useful.
 
+
 class LazyLoss:
-	def __init__(self, inheritance_states, genotypes, params):
+	def __init__(self, inheritance_states, genotypes, params, be_strict=False):
+		self.be_strict = be_strict
 
 		# pull params
 		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}#, 6: '0/0/0', 7: '0/0/1', 8: '0/1/1', 9: '1/1/1'}
@@ -86,7 +88,8 @@ class LazyLoss:
 			self.g_cost[(pred, -2)] = min(self.g_cost[(pred, -1)], self.g_cost[(pred, 0)])
 			self.hts_g_cost[(pred, -2)] = min(self.hts_g_cost[(pred, -1)], self.hts_g_cost[(pred, 0)])
 
-			self.hts_g_cost[(pred, -1)] = 0
+			if not self.be_strict:
+				self.hts_g_cost[(pred, -1)] = 0
 
 		assert np.all(np.asarray(list(self.g_cost.values()))>=0)
 		assert np.all(np.asarray(list(self.hts_g_cost.values()))>=0)
@@ -133,9 +136,14 @@ class LazyLoss:
 		self.__call__((-2,)*self.m)
 		gen_index2 = self.genotypes.index((-2,)*self.m)
 		for gen_index, gen in enumerate(self.genotypes):
-			if len([x for x in gen if x>0]) == 0:
-				self.losses[:, gen_index] = self.losses[:, gen_index2]
-				self.already_calculated[gen_index] = True
+			if self.be_strict:
+				if len([x for x in gen if x!=0]) == 0:
+					self.losses[:, gen_index] = self.losses[:, gen_index2]
+					self.already_calculated[gen_index] = True
+			else:
+				if len([x for x in gen if x>0]) == 0:
+					self.losses[:, gen_index] = self.losses[:, gen_index2]
+					self.already_calculated[gen_index] = True
 
 	def __build_loss_equivalence__(self, inheritance_states):
 		# states are equivalent if they have the same cost for every possible genotype
@@ -212,7 +220,7 @@ class LazyLoss:
 			('2', '2'): 1
 
 		}
-		state_to_options = {0: ['-'], 1: ['0', '1', '2']}
+		state_to_options = {0: ['-'], 1: ['0', '1']}#, '2']}
 
 		for s in self.loss_states:
 			anc_pos = [state_to_options[x] for x in s[:4]]
