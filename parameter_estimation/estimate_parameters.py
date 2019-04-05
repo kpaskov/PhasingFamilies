@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-import scipy.stats.stats as stats
+import scipy.stats
 from itertools import product
 import cvxpy as cp
 from collections import Counter
@@ -56,7 +56,7 @@ errors = [(0, 1), (0, 2), (0, 3),
           (5, 0), (5, 1), (5, 3),
           (6, 0), (6, 1), (6, 2)]
 error_to_index = dict([(x, i) for i, x in enumerate(errors)])
-print('errors', len(errors))
+print('num error types', len(errors))
 
 mendelian_trios = {
     (0, 0, 0), 
@@ -73,7 +73,45 @@ mendelian_trios = {
 mendelian_check = lambda x: x in mendelian_trios
 autosome_gen_to_error = dict([(e, e) for e in errors if e[0] <= 2])
 
-print(mendelian_check((0, 0, 0)), mendelian_check((0, 0, 1)))
+mendelian_trios_X_F = {
+    (0, 0, 0), 
+    (0, 2, 1),
+    (1, 0, 0), (1, 0, 1),
+    (1, 2, 1), (1, 2, 2),
+    (2, 0, 1),
+    (2, 2, 2)
+}
+mendelian_trios_X_M = {
+    (0, 0, 0), 
+    (0, 2, 0),
+    (1, 0, 0), (1, 0, 2),
+    (1, 2, 0), (1, 2, 2),
+    (2, 0, 2),
+    (2, 2, 2)
+}
+
+mendelian_X_F_check = lambda x: x in mendelian_trios_X_F
+mendelian_X_M_check = lambda x: x in mendelian_trios_X_M
+
+X_gen_to_error_F = autosome_gen_to_error
+X_gen_to_error_M = {(0, 1): (4, 1), (0, 2): (4, 2), (0, 3): (4, 3),
+                    (2, 0): (5, 0), (2, 1): (5, 1), (2, 3): (5, 3)}
+
+mendelian_trios_Y_F = {
+    (3, 0, 3), 
+    (3, 2, 3)
+}
+mendelian_trios_Y_M = {
+    (3, 0, 0), 
+    (3, 2, 2),
+}
+mendelian_Y_F_check = lambda x: x in mendelian_trios_Y_F
+mendelian_Y_M_check = lambda x: x in mendelian_trios_Y_M
+
+Y_gen_to_error = {(3, 0): (6, 0), (3, 1): (6, 1), (3, 2): (6, 2),
+                  (0, 1): (4, 1), (0, 2): (4, 2), (0, 3): (4, 3),
+                  (2, 0): (5, 0), (2, 1): (5, 1), (2, 3): (5, 3)}
+
 
 # ------------------------------------ Pull Data ------------------------------------
 
@@ -89,7 +127,7 @@ with open(ped_file, 'r') as f:
         if len(pieces) > 4:
             sample_id_to_sex[child_id] = pieces[4]
             
-print('sex for inds: %d' % len(sample_id_to_sex))
+print('pulled sex for %d inds' % len(sample_id_to_sex))
 
 family_chrom_to_counts = dict()
 family_to_inds = dict()
