@@ -122,11 +122,26 @@ class WGSData:
 		data = data[:, self.snp_indices]
 
 		data[data<0] = -1
-		#data[data==-1] = 0
-		#data[data==-2] = 0
-		#data[:, np.all(data<=0, axis=0)] = 0
 
-		#data[:, np.any(data<0, axis=0)] = -1
+		## how many -1s in a row?
+		#from collections import Counter
+		#import matplotlib.pyplot as plt
+		#
+		#plt.figure(figsize=(15, 5))
+		#for i in range(m):
+		#	start_indices = [x for x in np.where((data[i, :-1]!=-1) & (data[i, 1:]==-1))[0] if x != (data.shape[1]-2)]
+		#	end_indices = [x for x in np.where((data[i, :-1]==-1) & (data[i, 1:]!=-1))[0] if x != 0]
+		#
+		#	# switch -1 to -3 if the run of -1s goes on long enough
+		#	for s, e in zip(start_indices, end_indices):
+		#		if e-s >= 100:
+		#			data[i, (s+1):(e+1)] = -3
+		#
+		#	#print(Counter([x-y for x, y in zip(end_indices, start_indices)]))
+		#	w = [x-y for x, y in zip(end_indices, start_indices)]
+		#	plt.hist(w, bins=range(0, max(w)+1), alpha=0.5)
+		#plt.xlim([0, 50])
+		#plt.show()
 
 		n = 2*self.snp_positions.shape[0]+1
 		#family_genotypes = -2*np.ones((m, n), dtype=np.int8)
