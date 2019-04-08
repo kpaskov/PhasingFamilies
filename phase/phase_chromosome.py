@@ -62,7 +62,7 @@ if __name__ == "__main__":
 	loss = LazyLoss(inheritance_states, genotypes, params, be_strict=be_strict)
 
 	# get ready to pull processed WGS data 
-	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, chrom)
+	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, ped_file, chrom)
 
 	with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as statef:
 		# write headers
