@@ -133,29 +133,30 @@ family_chrom_to_counts = dict()
 family_to_inds = dict()
 for i, chrom in enumerate(chroms):
     print(chrom, end=' ')
-    chrom_length = chrom_lengths[chrom]
+    #chrom_length = chrom_lengths[chrom]
     with open('%s/chr.%s.famgen.counts.txt' % (data_dir, chrom), 'r') as f:
         for line in f:
             pieces = line.strip().split('\t')
             famkey, inds = pieces[:2]
             inds = inds.split('.')
             m = len(inds)
-            
-            if famkey not in family_to_inds:
-                family_to_inds[famkey] = inds
-            else:
-                assert family_to_inds[famkey] == inds
-            
-            counts = np.zeros((4,)*m, dtype=int)
-            for g, c in zip(product([0, 1, 2, 3], repeat=m), pieces[2:]):
-                counts[g] = int(c)
+
+            if m <= 7:
+                if famkey not in family_to_inds:
+                    family_to_inds[famkey] = inds
+                else:
+                    assert family_to_inds[famkey] == inds
                 
-            if chrom != 'Y':
-                counts[(0,)*m] += (chrom_length - np.sum(counts)) 
-            else:
-                counts[tuple(0 if sample_id_to_sex[ind]=='1' else 3 if sample_id_to_sex[ind]=='2' else None for ind in inds)] += (chrom_length - np.sum(counts)) 
-                
-            family_chrom_to_counts[(famkey, chrom)] = counts
+                counts = np.zeros((4,)*m, dtype=int)
+                for g, c in zip(product([0, 1, 2, 3], repeat=m), pieces[2:]):
+                    counts[g] = int(c)
+                    
+                #if chrom != 'Y':
+                #    counts[(0,)*m] += (chrom_length - np.sum(counts)) 
+                #else:
+                #    counts[tuple(0 if sample_id_to_sex[ind]=='1' else 3 if sample_id_to_sex[ind]=='2' else None for ind in inds)] += (chrom_length - np.sum(counts)) 
+                    
+                family_chrom_to_counts[(famkey, chrom)] = counts
 
 print('Families of each size', Counter([len(inds) for fkey, inds in family_to_inds.items()]))
 famkeys = sorted(set([x[0] for x in family_chrom_to_counts.keys()]))
@@ -266,8 +267,8 @@ def estimate_family_error(X, y, init=None):
     mu = np.sum(X_norm, axis=0)
     objective = cp.Minimize(mu*n - y*cp.log(X_norm*n))
     
-    _, upper = scipy.stats.poisson.interval(0.95, y[y>0])
-    constraints = [n>=0, X_norm[y>0, :]*n <= upper]
+    upper = 0.5*scipy.stats.chi2.ppf(0.95, (2*y) + 2)
+    constraints = [n>=0, X_norm*n <= upper]
     prob = cp.Problem(objective, constraints)
     
     result = prob.solve(solver='ECOS', max_iters=1000)
@@ -280,16 +281,29 @@ def estimate_family_error(X, y, init=None):
 # ------------------------------------ Estimate Error Rates (autosomes) ------------------------------------
 
 # detect outliers
-family_errors = np.array([np.sum(np.sum(np.asarray([chrom_ys[j][i] for j in range(22)]), axis=0)) for i in range(len(famkeys))])
-median = np.median(family_errors)
-med_abs_deviation = np.median(np.abs(family_errors-median))
-print('Removing %d outliers' % np.sum(family_errors > median+(5*med_abs_deviation)/0.6745))
+outliers = set()
+for j in range(len(chroms)):
+    family_errors = np.array([np.sum(chrom_ys[j][i]) for i in range(len(famkeys))])
+    median = np.median(family_errors)
+    med_abs_deviation = np.median(np.abs(family_errors-median))
+    
+    outlier_indices = family_errors > median+(5*med_abs_deviation)/0.6745
+    outliers.update(np.where(outlier_indices)[0])
+    print('chrom %s outliers %d' % (chroms[j], np.sum(outlier_indices)))
+print('Total outliers removed', len(outliers))
 
 # build X and y
 famsum_genome_X, famsum_genome_y = [], []
-for i in np.where(family_errors <= median+(5*med_abs_deviation)/0.6745)[0]:
-    famsum_genome_X.append(np.sum(np.asarray([chrom_Xs[j][i] for j in range(22)]), axis=0))
-    famsum_genome_y.append(np.sum(np.asarray([chrom_ys[j][i] for j in range(22)]), axis=0))
+for i in range(len(famkeys)):
+    if i not in outliers:
+        famsum_genome_X.append(np.sum(np.asarray([chrom_Xs[j][i] for j in range(22)]), axis=0))
+        famsum_genome_y.append(np.sum(np.asarray([chrom_ys[j][i] for j in range(22)]), axis=0))
+
+        famsum_genome_X.append(chrom_Xs[22][i])
+        famsum_genome_y.append(chrom_ys[22][i])
+
+        famsum_genome_X.append(chrom_Xs[23][i])
+        famsum_genome_y.append(chrom_ys[23][i])
        
 famsum_genome_X, famsum_genome_y = np.vstack(famsum_genome_X), np.hstack(famsum_genome_y)
 
@@ -304,50 +318,52 @@ print(famsum_genome_X.shape, famsum_genome_y.shape)
     
 prob_status, famsum_genome_n, famsum_genome_exp, famsum_genome_obs = estimate_family_error(famsum_genome_X, famsum_genome_y)
 
-# ------------------------------------ Estimate Deletion Error Rates (X, Y) ------------------------------------
+# # ------------------------------------ Estimate Deletion Error Rates (X, Y) ------------------------------------
 
-family_errors_X = np.array([np.sum(chrom_ys[22][i]) for i in range(len(famkeys))])
-median_X = np.median(family_errors_X)
-med_abs_deviation_X = np.median(np.abs(family_errors_X-median_X))
+# #family_errors_X = np.array([np.sum(chrom_ys[22][i]) for i in range(len(famkeys))])
+# #median_X = np.median(family_errors_X)
+# #med_abs_deviation_X = np.median(np.abs(family_errors_X-median_X))
 
-family_errors_Y = np.array([np.sum(chrom_ys[23][i]) for i in range(len(famkeys))])
-median_Y = np.median(family_errors_Y)
-med_abs_deviation_Y = np.median(np.abs(family_errors_Y-median_Y))
+# #family_errors_Y = np.array([np.sum(chrom_ys[23][i]) for i in range(len(famkeys))])
+# #median_Y = np.median(family_errors_Y)
+# #med_abs_deviation_Y = np.median(np.abs(family_errors_Y-median_Y))
 
-outlier_indices = (family_errors_X > median_X+(5*med_abs_deviation_X)/0.6745) & (family_errors_Y > median_Y+(5*med_abs_deviation_Y)/0.6745)
-print('Removing %d outliers' % np.sum(outlier_indices))
+# #outlier_indices = (family_errors_X > median_X+(5*med_abs_deviation_X)/0.6745) & (family_errors_Y > median_Y+(5*med_abs_deviation_Y)/0.6745)
+# #print('Removing %d outliers' % np.sum(outlier_indices))
 
 
-famsum_sex_X, famsum_sex_y = [], []
+# famsum_sex_X, famsum_sex_y = [], []
 
-# append Xchrom
-for i in np.where(~outlier_indices)[0]:
-    famsum_sex_X.append(chrom_Xs[22][i])
-    famsum_sex_y.append(chrom_ys[22][i])
+# # append Xchrom
+# #for i in np.where(~outlier_indices)[0]:
+# for i in range(len(famkeys)):
+#     famsum_sex_X.append(chrom_Xs[22][i])
+#     famsum_sex_y.append(chrom_ys[22][i])
 
-# append Ychrom
-for i in np.where(~outlier_indices)[0]:
-    famsum_sex_X.append(chrom_Xs[23][i])
-    famsum_sex_y.append(chrom_ys[23][i])
+# # append Ychrom
+# #for i in np.where(~outlier_indices)[0]:
+# for i in range(len(famkeys)):
+#     famsum_sex_X.append(chrom_Xs[23][i])
+#     famsum_sex_y.append(chrom_ys[23][i])
     
-famsum_sex_X, famsum_sex_y = np.vstack(famsum_sex_X), np.hstack(famsum_sex_y)
+# famsum_sex_X, famsum_sex_y = np.vstack(famsum_sex_X), np.hstack(famsum_sex_y)
 
-print('Removing zero cols:', [errors[i] for i in np.where(np.sum(famsum_sex_X, axis=0)==0)[0]])
-famsum_sex_X = famsum_sex_X[:, np.sum(famsum_sex_X, axis=0)>0]
+# print('Removing zero cols:', [errors[i] for i in np.where(np.sum(famsum_sex_X, axis=0)==0)[0]])
+# famsum_sex_X = famsum_sex_X[:, np.sum(famsum_sex_X, axis=0)>0]
 
-print('Removing zero rows:', np.sum(np.sum(famsum_sex_X, axis=1)==0))
-indices = np.where(np.sum(famsum_sex_X, axis=1) != 0)[0]
-famsum_sex_X = famsum_sex_X[indices, :]
-famsum_sex_y = famsum_sex_y[indices]
-print(famsum_sex_X.shape, famsum_sex_y.shape)
+# print('Removing zero rows:', np.sum(np.sum(famsum_sex_X, axis=1)==0))
+# indices = np.where(np.sum(famsum_sex_X, axis=1) != 0)[0]
+# famsum_sex_X = famsum_sex_X[indices, :]
+# famsum_sex_y = famsum_sex_y[indices]
+# print(famsum_sex_X.shape, famsum_sex_y.shape)
     
-e = famsum_genome_n.shape[0]
-prob_status, famsum_sex_n, famsum_sex_exp, famsum_sex_obs = estimate_family_error(famsum_sex_X[:, e:], np.clip(famsum_sex_y - famsum_sex_X[:, :e].dot(famsum_genome_n), 0, None))
+# e = famsum_genome_n.shape[0]
+# prob_status, famsum_sex_n, famsum_sex_exp, famsum_sex_obs = estimate_family_error(famsum_sex_X[:, e:], np.clip(famsum_sex_y - famsum_sex_X[:, :e].dot(famsum_genome_n), 0, None))
 
 
 # ------------------------------------ Write to file ------------------------------------
 
-error_estimates = famsum_genome_n.tolist() + famsum_sex_n.tolist()
+error_estimates = famsum_genome_n.tolist()
 baseline = np.ones((7,))
 for e, c in zip(errors, error_estimates):
     #print(e, -np.log10(c))
