@@ -51,7 +51,7 @@ class LazyLoss:
 
 		# pull params
 		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}#, 6: '0/0/0', 7: '0/0/1', 8: '0/1/1', 9: '1/1/1'}
-		obs_value_to_param = {-1: './.', 0: '0/0', 1: '0/1', 2: '1/1'}
+		obs_value_to_param = {-3: './.', 0: '0/0', 1: '0/1', 2: '1/1'}
 		hts_mult = params['x-times higher probability of error in hard-to-sequence region']
 
 		preds = sorted(pred_value_to_param.keys())
@@ -85,21 +85,25 @@ class LazyLoss:
 		#print('renormalized', [(pred, self.hts_g_cost[(pred, pred_to_correct_obs[pred])]) for pred in preds])
 
 		for pred in preds:
-			self.g_cost[(pred, -2)] = min(self.g_cost[(pred, -1)], self.g_cost[(pred, 0)])
-			self.hts_g_cost[(pred, -2)] = min(self.hts_g_cost[(pred, -1)], self.hts_g_cost[(pred, 0)])
+			#self.g_cost[(pred, -2)] = min(self.g_cost[(pred, -3)], self.g_cost[(pred, 0)])
+			self.hts_g_cost[(pred, -2)] = min(self.hts_g_cost[(pred, -3)], self.hts_g_cost[(pred, 0)])
+			self.g_cost[(pred, -2)] = 0
+			#self.hts_g_cost[(pred, -2)] = 0
 
-			#if not self.be_strict:
-			#self.g_cost[(pred, -3)] = self.g_cost[(pred, -1)]
-			#self.hts_g_cost[(pred, -3)] = self.hts_g_cost[(pred, -1)]
+			self.g_cost[(pred, -1)] = 0
 			self.hts_g_cost[(pred, -1)] = 0
+
+			#self.g_cost[(pred, -1)] = self.g_cost[(pred, -2)]
+			#self.hts_g_cost[(pred, -3)] = self.hts_g_cost[(pred, -1)]
+			
 			#self.g_cost[(pred, -1)] = 0
 
 		assert np.all(np.asarray(list(self.g_cost.values()))>=0)
 		assert np.all(np.asarray(list(self.hts_g_cost.values()))>=0)
 
-		print('\t' + ('\t\t'.join(map(str, obss + [-2]))))
+		print('\t' + ('\t\t'.join(map(str, obss + [-1, -2]))))
 		for pred in preds:
-			print(str(pred) + '\t' + '\t'.join(['%0.2f-%0.2f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss + [-2]]))
+			print(str(pred) + '\t' + '\t'.join(['%0.2f-%0.2f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss + [-1, -2]]))
 
 		self.m = inheritance_states.m
 		self.q, self.state_len = genotypes.q, inheritance_states.state_len
@@ -138,19 +142,24 @@ class LazyLoss:
 	def __precompute_loss_for_all_hom_ref__(self):
 		self.__call__((-2,)*self.m)
 		gen_index2 = self.genotypes.index((-2,)*self.m)
-		for gen_index, gen in enumerate(self.genotypes):
-			#if self.be_strict:
-			#	if len([x for x in gen if x!=0]) == 0:
-			#		self.losses[:, gen_index] = self.losses[:, gen_index2]
-			#		self.already_calculated[gen_index] = True
-			#else:
-			#	if len([x for x in gen if x>0]) == 0:
-			#		self.losses[:, gen_index] = self.losses[:, gen_index2]
-			#		self.already_calculated[gen_index] = True
+		gen_index0 = self.genotypes.index((0,)*self.m)
 
-			if np.all([x==0 or x==-1 for x in gen]):
-				self.losses[:, gen_index] = self.losses[:, gen_index2]
-				self.already_calculated[gen_index] = True
+		self.losses[:, gen_index0] = self.losses[:, gen_index2]
+		self.already_calculated[gen_index0] = True
+
+		#for gen_index, gen in enumerate(self.genotypes):
+		#	#if self.be_strict:
+		#	#	if len([x for x in gen if x!=0]) == 0:
+		#	#		self.losses[:, gen_index] = self.losses[:, gen_index2]
+		#	#		self.already_calculated[gen_index] = True
+		#	#else:
+		#	#	if len([x for x in gen if x>0]) == 0:
+		#	#		self.losses[:, gen_index] = self.losses[:, gen_index2]
+		#	#		self.already_calculated[gen_index] = True
+		#
+		#	if np.all([x==0 or x==-1 for x in gen]):
+		#		self.losses[:, gen_index] = self.losses[:, gen_index2]
+		#		self.already_calculated[gen_index] = True
 
 	def __build_loss_equivalence__(self, inheritance_states):
 		# states are equivalent if they have the same cost for every possible genotype
@@ -227,7 +236,7 @@ class LazyLoss:
 			('2', '2'): 1
 
 		}
-		state_to_options = {0: ['-'], 1: ['0', '1', '2']}
+		state_to_options = {0: ['-'], 1: ['0', '1']}
 
 		for s in self.loss_states:
 			anc_pos = [state_to_options[x] for x in s[:4]]

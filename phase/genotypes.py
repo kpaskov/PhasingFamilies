@@ -3,7 +3,7 @@ from itertools import product
 
 class Genotypes:
 	def __init__(self, m):
-		self.genotypes = np.array(list(product(*[[-3, -1, 0, 1, 2]]*m)) + [(-2,)*m], dtype=np.int8)
+		self.genotypes = np.array(list(product(*[[-3, 0, 1, 2]]*m)) + list(product(*[[-1, 0, 1, 2]]*m)) + [(-2,)*m], dtype=np.int8)
 		self.genotype_to_index = dict([(tuple(x), i) for i, x in enumerate(self.genotypes)])
 		self.q = self.genotypes.shape[0]
 		print('genotypes', self.genotypes.shape)
