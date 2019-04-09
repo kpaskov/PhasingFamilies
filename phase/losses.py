@@ -46,8 +46,7 @@ from collections import Counter
 
 
 class LazyLoss:
-	def __init__(self, inheritance_states, genotypes, params, be_strict=False):
-		self.be_strict = be_strict
+	def __init__(self, inheritance_states, genotypes, params):
 
 		# pull params
 		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}#, 6: '0/0/0', 7: '0/0/1', 8: '0/1/1', 9: '1/1/1'}

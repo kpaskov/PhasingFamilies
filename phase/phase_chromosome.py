@@ -23,12 +23,9 @@ if __name__ == "__main__":
 	data_dir = sys.argv[4]
 	out_dir = sys.argv[5]
 	param_file = sys.argv[6]
-	be_strict = False if len(sys.argv) < 8 else bool(sys.argv[7])
-	batch_size = None if len(sys.argv) < 10 else int(sys.argv[8])
-	batch_num = None if len(sys.argv) < 10 else int(sys.argv[9])
+	batch_size = None if len(sys.argv) < 9 else int(sys.argv[7])
+	batch_num = None if len(sys.argv) < 9 else int(sys.argv[8])
 	batch_offset = None
-
-	print('strict?', be_strict)
 
 	with open(param_file, 'r') as f:
 		params = json.load(f)
@@ -59,7 +56,7 @@ if __name__ == "__main__":
 	genotypes = Genotypes(m)
 
 	# create loss function
-	loss = LazyLoss(inheritance_states, genotypes, params, be_strict=be_strict)
+	loss = LazyLoss(inheritance_states, genotypes, params)
 
 	# get ready to pull processed WGS data 
 	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, ped_file, chrom)
