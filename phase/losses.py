@@ -84,25 +84,20 @@ class LazyLoss:
 		#print('renormalized', [(pred, self.hts_g_cost[(pred, pred_to_correct_obs[pred])]) for pred in preds])
 
 		for pred in preds:
-			#self.g_cost[(pred, -2)] = min(self.g_cost[(pred, -3)], self.g_cost[(pred, 0)])
-			self.hts_g_cost[(pred, -2)] = min(self.hts_g_cost[(pred, -3)], self.hts_g_cost[(pred, 0)])
+			# ignore positions where you don't have information (./. or missing in VCF)
+			# we don't ignore these positions in hts because we need the cost to offset the benefits
+			self.hts_g_cost[(pred, -2)] = 0 
 			self.g_cost[(pred, -2)] = 0
-			#self.hts_g_cost[(pred, -2)] = 0
 
 			self.g_cost[(pred, -1)] = 0
 			self.hts_g_cost[(pred, -1)] = 0
-
-			#self.g_cost[(pred, -1)] = self.g_cost[(pred, -2)]
-			#self.hts_g_cost[(pred, -3)] = self.hts_g_cost[(pred, -1)]
-			
-			#self.g_cost[(pred, -1)] = 0
 
 		assert np.all(np.asarray(list(self.g_cost.values()))>=0)
 		assert np.all(np.asarray(list(self.hts_g_cost.values()))>=0)
 
 		print('\t' + ('\t\t'.join(map(str, obss + [-1, -2]))))
 		for pred in preds:
-			print(str(pred) + '\t' + '\t'.join(['%0.2f-%0.2f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss + [-1, -2]]))
+			print(str(pred) + '\t' + '\t'.join(['%0.3f-%0.3f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss + [-1, -2]]))
 
 		self.m = inheritance_states.m
 		self.q, self.state_len = genotypes.q, inheritance_states.state_len
@@ -139,6 +134,7 @@ class LazyLoss:
 		return self.losses[self.rep_state_indices, gen_index]
 
 	def __precompute_loss_for_all_hom_ref__(self):
+		# we treat (0, 0, 0, ...) genotype as if it were (-2, -2, -2, ...) to improve performance
 		self.__call__((-2,)*self.m)
 		gen_index2 = self.genotypes.index((-2,)*self.m)
 		gen_index0 = self.genotypes.index((0,)*self.m)

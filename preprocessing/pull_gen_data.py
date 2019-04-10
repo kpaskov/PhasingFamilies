@@ -40,7 +40,7 @@ with gzip.open(vcf_file, 'rt') as f, \
     for j, line in enumerate(f):
         pieces = line.split('\t')
 
-        if pieces[0] == chrom:
+        if pieces[0] == chrom or (chrom == 'X' and pieces[0] == '23') or (chrom == 'Y' and pieces[0] == '24'):
 
             format = pieces[8].strip().split(':')
 

@@ -118,6 +118,8 @@ class WGSData:
 		self.__test_for_hardy_weinburg__(ped_file)
 
 	def __test_for_hardy_weinburg__(self, ped_file):
+		# test each position for hardy-weinburg equilibrium in the presence of deletions
+
 		# pull parent_indices
 		parent_indices = set()
 		with open(ped_file, 'r') as f:
@@ -182,44 +184,11 @@ class WGSData:
 		# -3 indicates a potential double deletion
 		data[np.tile(self.pass_hw, (m, 1)) & (data==-1)] = -3
 
-		## how many -1s in a row?
-		#from collections import Counter
-		#import matplotlib.pyplot as plt
-		#
-		#plt.figure(figsize=(15, 5))
-		#for i in range(m):
-		#	start_indices = [x for x in np.where((data[i, :-1]!=-1) & (data[i, 1:]==-1))[0] if x != (data.shape[1]-2)]
-		#	end_indices = [x for x in np.where((data[i, :-1]==-1) & (data[i, 1:]!=-1))[0] if x != 0]
-		#
-		#	# switch -1 to -3 if the run of -1s goes on long enough
-		#	for s, e in zip(start_indices, end_indices):
-		#		if e-s >= 100:
-		#			data[i, (s+1):(e+1)] = -3
-		#
-		#	#print(Counter([x-y for x, y in zip(end_indices, start_indices)]))
-		#	w = [x-y for x, y in zip(end_indices, start_indices)]
-		#	plt.hist(w, bins=range(0, max(w)+1), alpha=0.5)
-		#plt.xlim([0, 50])
-		#plt.show()
-
 		n = 2*self.snp_positions.shape[0]+1
 		#family_genotypes = -2*np.ones((m, n), dtype=np.int8)
 		family_genotypes = np.zeros((m, n), dtype=np.int8)
 		family_genotypes[:, np.arange(1, n-1, 2)] = data
-		#family_genotypes[:, -2] = family_genotypes[:, -1]
 		
-		# if we see two missing entries in a row, mark the middle interval as possibly missing
-		#for i in range(m):
-		#	double_missing = np.where((data[i, 1:]==-1) & (data[i, :-1]==-1))[0]
-		#	family_genotypes[:, (2*double_missing)+2] = -2
-
-		# positions that are missing in the VCF and are nearby positions with missing
-		# genotypes are marked (-2) this means it's unknown whether the position is
-		# ./. or 0/0
-		#missing_indices = np.where(np.any(family_genotypes==-1, axis=0))[0]
-		#for j in range(1, 8, 2):
-		#	family_genotypes[:, np.clip(missing_indices-j, 0, None)] = -2
-		#	family_genotypes[:, np.clip(missing_indices+j, None, n-1)] = -2
 
 		family_snp_positions = np.zeros((n, 2), dtype=np.int)
 		family_snp_positions[0, 0] = 0
