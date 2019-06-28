@@ -115,9 +115,11 @@ class WGSData:
 		print('chrom shape only SNPs', self.snp_positions.shape)
 
 		# Test Hardy-Weinburg Equilibrium
-		self.__test_for_hardy_weinburg__(ped_file)
+		#self.__test_for_hardy_weinburg__(ped_file, chrom)
+		self.pass_hw = np.ones((self.snp_positions.shape[0],), dtype=bool)
 
-	def __test_for_hardy_weinburg__(self, ped_file):
+
+	def __test_for_hardy_weinburg__(self, ped_file, chrom):
 		# test each position for hardy-weinburg equilibrium in the presence of deletions
 
 		# pull parent_indices
@@ -127,7 +129,7 @@ class WGSData:
 				pieces = line.strip().split('\t')
 				if len(pieces) >= 6:
 					fam_id, child_id, f_id, m_id, sex, disease_status = pieces[0:6]
-					if f_id in self.sample_id_to_index:
+					if chrom != 'X' and f_id in self.sample_id_to_index:
 						parent_indices.add(self.sample_id_to_index[f_id])
 					if m_id in self.sample_id_to_index:
 						parent_indices.add(self.sample_id_to_index[m_id])
@@ -179,6 +181,9 @@ class WGSData:
 
 		data[data<0] = -1
 
+		print('% all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
+		print('% all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
+
 		# -1 indicates a missing value due to hard to sequence region, etc
 		# -2 indicates no information (not in VCF)
 		# -3 indicates a potential double deletion
@@ -206,6 +211,7 @@ class WGSData:
 		# aggregate identical genotypes
 		rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
 		n = rep_indices.shape[0]+1
+		print('n', n)
 
 		new_family_genotypes = np.zeros((m, n), dtype=np.int8)
 		new_family_genotypes[:, :-1] = family_genotypes[:, rep_indices]

@@ -139,10 +139,17 @@ for i, chrom in enumerate(chroms):
         for line in f:
             pieces = line.strip().split('\t')
             famkey, inds = pieces[:2]
-            inds = inds.split('.')
+            
+            if 'ssc' in data_dir:
+            	# unfortunately, ssc uses . in their sample names
+                inds = inds.split('.')
+                inds = ['%s.%s' % (inds[i], inds[i+1]) for i in range(0, len(inds), 2)]
+            else:
+                inds = inds.split('.')
+
             m = len(inds)
 
-            if m <= 7:
+            if m<=7:
                 if famkey not in family_to_inds:
                     family_to_inds[famkey] = inds
                 else:
@@ -228,6 +235,8 @@ for famkey in famkeys:
         elif chrom == 'X':
             # X has its own rules for mendelian/non-mendelian
             ind_is_mendelian = [None, None] + [mendelian_X_F_check if sample_id_to_sex[ind] == '2' else mendelian_X_M_check if sample_id_to_sex[ind] == '1' else None for ind in inds[2:]]
+            if None in ind_is_mendelian[2:]:
+            	print(inds, [sample_id_to_sex[x] for x in inds])
             X_is_mendelian = get_mendelian(ind_is_mendelian)
             ind_gen_switch_to_error = [X_gen_to_error_F if sample_id_to_sex[ind] == '2' else X_gen_to_error_M if sample_id_to_sex[ind] == '1' else None for ind in inds]
             X_nonmendelian_famgens, X_error_to_fg_pairs = get_error_to_famgen_pairs(X_is_mendelian, ind_gen_switch_to_error)
@@ -309,6 +318,12 @@ print('Removing zero rows:', np.sum(np.sum(famsum_genome_X, axis=1)==0))
 indices = np.where(np.sum(famsum_genome_X, axis=1) != 0)[0]
 famsum_genome_X = famsum_genome_X[indices, :]
 famsum_genome_y = famsum_genome_y[indices]
+
+#print('Removing rows with y=0:', np.sum(famsum_genome_y==0))
+#indices = np.where(famsum_genome_y > 0)[0]
+#famsum_genome_X = famsum_genome_X[indices, :]
+#famsum_genome_y = famsum_genome_y[indices]
+
 print(famsum_genome_X.shape, famsum_genome_y.shape)
     
 prob_status, famsum_genome_n, famsum_genome_exp, famsum_genome_obs = estimate_family_error(famsum_genome_X, famsum_genome_y)
@@ -325,7 +340,7 @@ for e, c in zip(errors, error_estimates):
 mat_crossover = -(np.log10(22.8)-np.log10(sum(chrom_lengths.values())))
 pat_crossover = -(np.log10(1.7*22.8)-np.log10(sum(chrom_lengths.values())))
 
-num_deletions = 1
+num_deletions = 100
 del_trans = -(np.log10(2*num_deletions)-np.log10(sum(chrom_lengths.values())))
 
 num_hts = 1000

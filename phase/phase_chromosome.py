@@ -10,7 +10,6 @@ from transition_matrices import AutosomalTransitionMatrix
 from genotypes import Genotypes
 from losses import LazyLoss
 from viterbi import viterbi_forward_sweep_autosomes, viterbi_backward_sweep_autosomes
-from mask import mask_states
 
 # Run locally with python phase/phase_chromosome.py 22 4 data/160826.ped split_gen_ihart phased_test phase/current_params.json
 
@@ -81,9 +80,6 @@ if __name__ == "__main__":
 
 				# backward sweep
 				final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
-
-				## mask messy areas
-				#final_states = mask_states(family_genotypes, mult_factor, final_states, inheritance_states, loss, smooth=1000)
 
 				# write to file
 				write_to_file(famf, statef, fkey, inds, final_states, family_snp_positions)

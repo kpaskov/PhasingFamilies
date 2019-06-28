@@ -18,7 +18,7 @@ with open(pos_file, 'r') as f:
     next(f) # skip header
     for line in f:
         pieces = line.strip().split('\t')
-        if pieces[1] == chrom or (chrom == 'X' and pieces[1] == 23) or (chrom == 'Y' and pieces[1] == 24):
+        if pieces[1] == chrom or (chrom == 'X' and pieces[1] == '23') or (chrom == 'Y' and pieces[1] == '24'):
             pos_of_interest.append(int(pieces[2]))
 print('Positions of interest', len(set(pos_of_interest)))
 
@@ -26,6 +26,7 @@ print('Positions of interest', len(set(pos_of_interest)))
 coordinates = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom))
 indices = (coordinates[:, 2]==1) & np.isin(coordinates[:, 1], pos_of_interest) # must be a snp and in our list
 print('Overlapping positions', np.sum(indices))
+print('Missing positions', len(coordinates)-np.sum(indices))
 
 np.save('%s/chr.%s.gen.coordinates.npy' % (out_dir, chrom), coordinates[indices, :])
 

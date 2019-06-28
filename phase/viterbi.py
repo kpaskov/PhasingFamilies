@@ -14,11 +14,11 @@ def viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult
 	v_cost = np.zeros((p, n), dtype=float)
 
 	# first step, break symmetry
-	# we enforce that the chromosome starts with child1 (0, 0) and no deletions or duplications
+	# we enforce that the chromosome starts with no deletions and a hard to sequence region
 	pos_gen = tuple(family_genotypes[:, 0])
 	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
 
-	disallowed_states = [np.any(s[:4]!=1) or s[-1] == 0 or s[4]==1 or s[5]==1 for s in inheritance_states]
+	disallowed_states = [np.any(s[:4]!=1) or s[-1] == 0 for s in inheritance_states]
 	v_cost[disallowed_states, 0] = np.inf
 
 	# next steps
@@ -50,12 +50,12 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 	final_states = -np.ones((state_len, n), dtype=int)
 	
 	# choose best paths
-	# we enforce that the chromosome ends with no deletions and a hard-to-sequence region
+	# we enforce that the chromosome ends with no deletions and a hard to sequence region
 	num_forks = 0
 	no_delstates = np.all(inheritance_states[:, [0, 1, 2, 3, -1]]==1, axis=1)
 	min_value = np.min(v_cost[no_delstates, -1])
 	paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
-	print('Num solutions', paths.shape, inheritance_states[paths, :])
+	print('Num solutions', paths.shape, min_value, inheritance_states[paths, :])
 
 	final_states[:, -1] = merge_paths(paths, inheritance_states)
 	num_forks += (paths.shape[0] > 1)
@@ -79,53 +79,99 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 	
 	return final_states
 
-def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss):
+def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, outpar_transition_matrix, loss, sex_of_children):
 		
 	# forward sweep
 	prev_time = time.time()
 
 	m, n = family_genotypes.shape
 	p, state_len = inheritance_states.p, inheritance_states.state_len
-	r = transition_matrix.r
-
-	last_in_par1 = np.argmax(family_snp_positions[:, 0] > PAR1X_end)
-	first_in_par2 = np.argmax(family_snp_positions[:, 0] > PAR2X_start)
-	
-	PAR1_v_cost = np.zeros((p, last_in_par1), dtype=int)
-	outPAR_v_cost = np.zeros((r, first_in_par2-last_in_par1), dtype=int)
-	PAR2_v_cost = np.zeros((p, n-first_in_par2), dtype=int)
+	v_cost = np.zeros((p, n), dtype=float)
 
 	# first step, break symmetry
-	# we enforce that the chromosome starts with child1 (0, ) and no deletions or duplications
+	# we enforce that the chromosome starts with no deletions and a hard to sequence region
 	pos_gen = tuple(family_genotypes[:, 0])
-	PAR1_v_cost[:, 0] = mult_factor[0]*loss(pos_gen) + transition_matrix.first_costs
+	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
 
-	# PAR1
-	for j in range(1, last_in_par1): 
+	disallowed_states = [np.any(s[:4]!=1) or s[-1] == 0 for s in inheritance_states]
+	v_cost[disallowed_states, 0] = np.inf
+
+	# certain states aren't allowed in and out of the PAR
+	out_par = (family_snp_positions[:, 0] > PAR1X_end) & (family_snp_positions[:, 0] < PAR2X_start)
+	out_par_disallowed_states, in_par_disallowed_states = inheritance_states.disallowed_states(sex_of_children)
+	print('in PAR1', np.sum(family_snp_positions[:, 0] <= PAR1X_end))
+	print('in PAR2', np.sum(family_snp_positions[:, 0] >= PAR2X_start))
+	print('out PAR', np.sum(out_par))
+
+	# next steps
+	for j in range(1, n): 
 		pos_gen = tuple(family_genotypes[:, j])
-		PAR1_v_cost[:, j] = np.min(PAR1_v_cost[transition_matrix.transitions_inPAR, j-1] + transition_matrix.costs_inPAR, axis=1) + mult_factor[j]*loss(pos_gen)
-
-	# Transition out of PAR
-	pos_gen = tuple(family_genotypes[:, last_in_par1])
-	outPAR_v_cost[:, 0] = np.min(PAR1_v_cost[transition_matrix.transitions_fromPAR, -1] + transition_matrix.costs_fromtoPAR, axis=1) + mult_factor[last_in_par1]*loss(pos_gen)[transition_matrix.out_par_states]
-
-	# Out of PAR
-	for j in range(last_in_par1+1, first_in_par2): 
-		pos_gen = tuple(family_genotypes[:, j])
-		outPAR_v_cost[:, j-last_in_par1] = np.min(outPAR_v_cost[transition_matrix.transitions_outPAR, j-1-last_in_par1] + transition_matrix.costs_outPAR, axis=1) + mult_factor[j]*loss(pos_gen)[transition_matrix.out_par_states]
-
-	# Transition into PAR
-	pos_gen = tuple(family_genotypes[:, first_in_par2])
-	PAR2_v_cost[:, 0] = np.min(outPAR_v_cost[transition_matrix.transitions_toPAR, -1] + transition_matrix.costs_fromtoPAR.T, axis=1) + mult_factor[first_in_par2]*loss(pos_gen)
-
-	# PAR2
-	for j in range(first_in_par2+1, n): 
-		pos_gen = tuple(family_genotypes[:, j])
-		PAR2_v_cost[:, j-first_in_par2] = np.min(PAR2_v_cost[transition_matrix.transitions_inPAR, j-1-first_in_par2] + transition_matrix.costs_inPAR, axis=1) + mult_factor[j]*loss(pos_gen)
+		if out_par[j]:
+			v_cost[:, j] = np.min(v_cost[outpar_transition_matrix.transitions, j-1] + outpar_transition_matrix.costs, axis=1) + mult_factor[j]*loss(pos_gen)
+			v_cost[out_par_disallowed_states, j] = np.inf
+		else:
+			v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(pos_gen)
+			v_cost[in_par_disallowed_states, j] = np.inf
 
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
-	return PAR1_v_cost, outPAR_v_cost, PAR2_v_cost, last_in_par1, first_in_par2
+	return v_cost
+
+# def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss):
+		
+# 	# forward sweep
+# 	prev_time = time.time()
+
+# 	m, n = family_genotypes.shape
+# 	p, state_len = inheritance_states.p, inheritance_states.state_len
+# 	r = transition_matrix.r
+
+# 	last_in_par1 = np.argmax(family_snp_positions[:, 0] > PAR1X_end)
+# 	first_in_par2 = np.argmax(family_snp_positions[:, 0] > PAR2X_start)
+	
+# 	PAR1_v_cost = np.zeros((p, last_in_par1), dtype=int)
+# 	outPAR_v_cost = np.zeros((r, first_in_par2-last_in_par1), dtype=int)
+# 	PAR2_v_cost = np.zeros((p, n-first_in_par2), dtype=int)
+
+# 	# first step, break symmetry
+# 	# we enforce that the chromosome starts with child1 (0, 0) and no deletions or duplications
+# 	pos_gen = tuple(family_genotypes[:, 0])
+# 	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
+
+# 	disallowed_states = [np.any(s[:4]!=1) or s[-1] == 0 or s[4]==1 or s[5]==1 for s in inheritance_states]
+# 	v_cost[disallowed_states, 0] = np.inf
+
+# 	# first step, break symmetry
+# 	# we enforce that the chromosome starts with child1 (0, ) and no deletions or duplications
+# 	pos_gen = tuple(family_genotypes[:, 0])
+# 	PAR1_v_cost[:, 0] = mult_factor[0]*loss(pos_gen) + transition_matrix.first_costs
+
+# 	# PAR1
+# 	for j in range(1, last_in_par1): 
+# 		pos_gen = tuple(family_genotypes[:, j])
+# 		PAR1_v_cost[:, j] = np.min(PAR1_v_cost[transition_matrix.transitions_inPAR, j-1] + transition_matrix.costs_inPAR, axis=1) + mult_factor[j]*loss(pos_gen)
+
+# 	# Transition out of PAR
+# 	pos_gen = tuple(family_genotypes[:, last_in_par1])
+# 	outPAR_v_cost[:, 0] = np.min(PAR1_v_cost[transition_matrix.transitions_fromPAR, -1] + transition_matrix.costs_fromtoPAR, axis=1) + mult_factor[last_in_par1]*loss(pos_gen)[transition_matrix.out_par_states]
+
+# 	# Out of PAR
+# 	for j in range(last_in_par1+1, first_in_par2): 
+# 		pos_gen = tuple(family_genotypes[:, j])
+# 		outPAR_v_cost[:, j-last_in_par1] = np.min(outPAR_v_cost[transition_matrix.transitions_outPAR, j-1-last_in_par1] + transition_matrix.costs_outPAR, axis=1) + mult_factor[j]*loss(pos_gen)[transition_matrix.out_par_states]
+
+# 	# Transition into PAR
+# 	pos_gen = tuple(family_genotypes[:, first_in_par2])
+# 	PAR2_v_cost[:, 0] = np.min(outPAR_v_cost[transition_matrix.transitions_toPAR, -1] + transition_matrix.costs_fromtoPAR.T, axis=1) + mult_factor[first_in_par2]*loss(pos_gen)
+
+# 	# PAR2
+# 	for j in range(first_in_par2+1, n): 
+# 		pos_gen = tuple(family_genotypes[:, j])
+# 		PAR2_v_cost[:, j-first_in_par2] = np.min(PAR2_v_cost[transition_matrix.transitions_inPAR, j-1-first_in_par2] + transition_matrix.costs_inPAR, axis=1) + mult_factor[j]*loss(pos_gen)
+
+# 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
+
+# 	return PAR1_v_cost, outPAR_v_cost, PAR2_v_cost, last_in_par1, first_in_par2
 
 def viterbi_backward_sweep_X(PAR1_v_cost, outPAR_v_cost, PAR2_v_cost, last_in_par1, first_in_par2, inheritance_states, transition_matrix):
 

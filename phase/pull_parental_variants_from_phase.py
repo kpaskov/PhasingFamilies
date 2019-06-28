@@ -2,6 +2,7 @@ import sys
 from os import listdir
 import numpy as np
 import scipy.sparse as sparse
+import json
 
 from inheritance_states import AutosomalInheritanceStates
 from input_output import WGSData, pull_families_from_file, pull_phase, chrom_lengths, convert_to_csr
@@ -9,15 +10,20 @@ from genotypes import Genotypes
 from losses import LazyLoss
 from parental_variants import estimate_parental_variants
 
-# Run locally with python3 phase/phase_chromosome.py 22 3 data/160826.ped split_gen_miss phased
+# Run locally with python3 phase/pull_parental_variants_from_phase.py 22 3 data/v34.vcf.ped split_gen_ihart phased_ihart parameter_estimation/ihart_params.json
 
 if __name__ == "__main__":
 
 	# Read in command line arguments
 	chrom = sys.argv[1]
 	m = int(sys.argv[2])
-	data_dir = sys.argv[3]
-	phase_dir = sys.argv[4]
+	ped_file = sys.argv[3]
+	data_dir = sys.argv[4]
+	phase_dir = sys.argv[5]
+	param_file = sys.argv[6]
+
+	with open(param_file, 'r') as f:
+		params = json.load(f)
 
 	print('Chromosome', chrom)
 	chrom_length = chrom_lengths[chrom]
@@ -39,10 +45,10 @@ if __name__ == "__main__":
 	genotypes = Genotypes(m)
 
 	# create loss function
-	loss = LazyLoss(m, inheritance_states, genotypes)
+	loss = LazyLoss(inheritance_states, genotypes, params)
 
 	# get ready to pull processed WGS data 
-	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, chrom)
+	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, ped_file, chrom)
 
 	# pull variants for each family
 	for fkey, inds in families:
