@@ -40,15 +40,15 @@ def pull_families(sample_file, ped_file, m, batch_size=None, batch_offset=None):
 	families = dict()
 	with open(ped_file, 'r') as f:	
 	    for line in f:
-	        pieces = line.strip().split()
+	        pieces = line.strip().split('\t')
 	        if len(pieces) < 4:
 	        	print('ped parsing error', line)
 	        else:
-	        	_, child_id, f_id, m_id = pieces[0:4]
+	        	fam_id, child_id, f_id, m_id = pieces[0:4]
 
 	        	if pieces[4] == '1' and child_id in sample_ids and f_id in sample_ids and m_id in sample_ids and 'LCL' not in child_id:
-	        		if (m_id, f_id) not in families:
-	        			families[(m_id, f_id)] = [m_id, f_id]
+	        		if (fam_id, m_id, f_id) not in families:
+	        			families[(fam_id, m_id, f_id)] = [m_id, f_id]
 	        		families[(m_id, f_id)].append(child_id)
 
 	# randomly permute children

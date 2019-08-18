@@ -1,1 +1,12 @@
-by_family/
+.DS_Store
+*/__pycache__/
+.ipynb_checkpoints/
+data/
+other_sv_calls/
+maya/bootstrap/
+final_calls/
+*.json
+*.txt
+*.ped
+split_gen*
+phased*
