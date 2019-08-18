@@ -163,6 +163,7 @@ for i, chrom in enumerate(chroms):
 
 print('Families of each size', Counter([len(inds) for fkey, inds in family_to_inds.items()]))
 famkeys = sorted(set([x[0] for x in family_chrom_to_counts.keys()]))
+famkeys = [k for k in famkeys if np.all([ind in sample_id_to_sex for ind in family_to_inds[k]])]
 print('Families', len(famkeys))
 
 
@@ -261,6 +262,7 @@ for famkey in famkeys:
             
             
 def estimate_family_error(X, y, init=None):
+    print('Estimating...', X.shape, y.shape)
     alpha = 1.0/np.max(X)
     
     # cvxpy
@@ -278,7 +280,8 @@ def estimate_family_error(X, y, init=None):
     result = prob.solve(solver='ECOS', max_iters=1000)
     print(prob.status)
     
-    n = np.asarray([v[0, 0] for v in n.value])
+    print(n.value, n.value.shape)
+    n = np.asarray([v for v in n.value])
     
     return prob.status, n, X.dot(n), y
 
