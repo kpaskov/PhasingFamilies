@@ -27,12 +27,12 @@ with open(ped_file, 'r') as f:
         if len(pieces) < 4:
             print('ped parsing error', line)
         else:
-            fam_id, child_id, f_id, m_id = pieces[0:4]
+            _, child_id, f_id, m_id = pieces[0:4]
 
             if child_id in sample_id_to_index and f_id in sample_id_to_index and m_id in sample_id_to_index and 'LCL' not in child_id:
-                if (fam_id, m_id, f_id) not in families:
-                    families[(fam_id, m_id, f_id)] = [m_id, f_id]
-                    families[(fam_id, m_id, f_id)].append(child_id)
+                if (m_id, f_id) not in families:
+                    families[(m_id, f_id)] = [m_id, f_id]
+                    families[(m_id, f_id)].append(child_id)
 print('families %d' % len(families))
 
 with open(out_file, 'w+') as f:	
