@@ -354,6 +354,7 @@ params = {
 	"-log10(P[maternal_crossover])": mat_crossover,
 	"-log10(P[paternal_crossover])": pat_crossover,
 	"-log10(P[hard_to_seq_region_entry_exit])": hts_trans,
+    "-log10(P[low_coverage_region_entry_exit])": hts_trans,
 
 	"-log10(P[obs=./.|true_gen=0/0])": -np.log10(error_estimates[error_to_index[(0, 3)]]),
 	"-log10(P[obs=0/0|true_gen=0/0])": -np.log10(baseline[0]),
