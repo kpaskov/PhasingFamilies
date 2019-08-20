@@ -57,7 +57,7 @@ with gzip.open(vcf_file, 'rt') as f:
                     if ad2 == '' or ',' in ad2:
                         print('parse error')
                     else:
-                        ad[position_to_index[pos], i, :] = int(ad1), int(ad2)
+                        ad[i, position_to_index[pos], :] = int(ad1), int(ad2)
                         
     # Save to file
     np.save('%s/chr.%s.ad.ofinterest' % (out_directory, chrom), ad)
