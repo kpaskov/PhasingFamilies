@@ -109,7 +109,7 @@ class WGSData:
 			sample_ids = [line.strip() for line in f]
 		self.sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
 
-		# use only "cleaned" variants - must be SNPs
+		# use only SNPs, no indels
 		coordinates = np.load(coord_file)
 		self.snp_positions = coordinates[:, 1]
 		self.snp_indices = coordinates[:, 2]==1
@@ -117,63 +117,7 @@ class WGSData:
 		self.snp_positions = self.snp_positions[self.snp_indices]
 		print('chrom shape only SNPs', self.snp_positions.shape)
 
-		# Test Hardy-Weinburg Equilibrium
-		#self.__test_for_hardy_weinburg__(ped_file, chrom)
-		self.pass_hw = np.ones((self.snp_positions.shape[0],), dtype=bool)
-
-
-	def __test_for_hardy_weinburg__(self, ped_file, chrom):
-		# test each position for hardy-weinburg equilibrium in the presence of deletions
-
-		# pull parent_indices
-		parent_indices = set()
-		with open(ped_file, 'r') as f:
-			for line in f:
-				pieces = line.strip().split('\t')
-				if len(pieces) >= 6:
-					fam_id, child_id, f_id, m_id, sex, disease_status = pieces[0:6]
-					if chrom != 'X' and f_id in self.sample_id_to_index:
-						parent_indices.add(self.sample_id_to_index[f_id])
-					if m_id in self.sample_id_to_index:
-						parent_indices.add(self.sample_id_to_index[m_id])
-		parent_indices = list(parent_indices)
-
-		# pull genotype counts for parents
-		parent_gen_counts = []
-		for gen_file in self.gen_files:
-			gen_data = sparse.load_npz('%s/%s' % (self.data_dir, gen_file))
-
-			gen_counts = np.zeros((4, gen_data.shape[1]), dtype=int)
-			gen_counts[1, :] = (gen_data[parent_indices, :]==1).sum(axis=0)
-			gen_counts[2, :] = (gen_data[parent_indices, :]==2).sum(axis=0)
-			gen_counts[3, :] = (gen_data[parent_indices, :]<0).sum(axis=0)
-			gen_counts[0, :] = len(parent_indices) - np.sum(gen_counts, axis=0)
-			gen_counts = gen_counts/len(parent_indices) # normalize
-
-			parent_gen_counts.append(gen_counts)
-		parent_gen_counts = np.hstack(parent_gen_counts)
-		parent_gen_counts = parent_gen_counts[:, self.snp_indices]
-
-		# r = deletion frequency, p = ref allele frequency, q = alt allele frequency
-		# estimate p, q, r based on Hardy-Weinburg Equilibrium
-		r = np.sqrt(parent_gen_counts[3, :])
-		p = -r + np.sqrt(np.power(r, 2) + parent_gen_counts[0, :])
-		q = 1-r-p
-
-		# expected values based on HW
-		exp = np.zeros(parent_gen_counts.shape, dtype=float)
-		exp[0, :] = np.power(p, 2) + 2*p*r
-		exp[1, :] = 2*p*q
-		exp[2, :] = np.power(q, 2) + 2*q*r
-		exp[3, :] = np.power(r, 2)
-
-		# use chi-square test to test for deviations from equilibrium
-		chisq, pvalue = scipy.stats.chisquare(len(parent_indices)*parent_gen_counts[1:3, :], len(parent_indices)*exp[1:3, :])
-
-		self.pass_hw = ~np.isnan(pvalue) & (pvalue>(0.05/parent_gen_counts.shape[1])) & (q > 0.01)
-		print('% positions passing HW for deletions', np.sum(self.pass_hw)/self.pass_hw.shape[0])
-		print('% missing passing HW for deletions', np.sum(parent_gen_counts[3, self.pass_hw])/np.sum(parent_gen_counts[3, :]))
-
+	
 	def pull_data_for_individuals(self, individuals):
 		#load from npz
 		m = len(individuals)
@@ -187,17 +131,12 @@ class WGSData:
 		print('% all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
 		print('% all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
 
-		# -1 indicates a missing value due to hard to sequence region, etc
-		# -2 indicates no information (not in VCF)
-		# -3 indicates a potential double deletion
-		data[np.tile(self.pass_hw, (m, 1)) & (data==-1)] = -3
-
 		n = 2*self.snp_positions.shape[0]+1
-		#family_genotypes = -2*np.ones((m, n), dtype=np.int8)
 		family_genotypes = np.zeros((m, n), dtype=np.int8)
 		family_genotypes[:, np.arange(1, n-1, 2)] = data
+		observed = np.zeros((n,), dtype=bool)
+		observed[np.arange(1, n-1, 2)] = True
 		
-
 		family_snp_positions = np.zeros((n, 2), dtype=np.int)
 		family_snp_positions[0, 0] = 0
 		family_snp_positions[np.arange(0, n-2, 2), 1] = self.snp_positions-1
@@ -210,6 +149,7 @@ class WGSData:
 		haslength = np.where(family_snp_positions[:, 0]!=family_snp_positions[:, 1])[0]
 		family_genotypes = family_genotypes[:, haslength]
 		family_snp_positions = family_snp_positions[haslength, :]
+		observed = observed[haslength]
 
 		# aggregate identical genotypes
 		rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
@@ -217,6 +157,8 @@ class WGSData:
 		print('n', n)
 
 		new_family_genotypes = np.zeros((m, n), dtype=np.int8)
+		mult_factor = np.zeros((n,), dtype=np.int)
+
 		new_family_genotypes[:, :-1] = family_genotypes[:, rep_indices]
 		new_family_genotypes[:, -1] = family_genotypes[:, -1]
 
@@ -226,11 +168,14 @@ class WGSData:
 		new_family_snp_positions[1:, 0] = family_snp_positions[rep_indices+1, 0]
 		new_family_snp_positions[-1, 1] = family_snp_positions[-1, 1]
 
-		family_genotypes, family_snp_positions = new_family_genotypes, new_family_snp_positions
+		c = np.cumsum(observed)
+		mult_factor[0] = c[rep_indices[0]]
+		mult_factor[1:-1] = c[rep_indices[1:]] - c[rep_indices[:-1]]
+		mult_factor[-1] = c[-1] - c[rep_indices[-1]]
 
-		mult_factor = family_snp_positions[:, 1] - family_snp_positions[:, 0]
+		#assert np.all(new_family_genotypes[:, mult_factor>10]==0)
 
-		return family_genotypes, family_snp_positions, mult_factor
+		return new_family_genotypes, new_family_snp_positions, mult_factor
 
 def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_positions):
 	# write family to file

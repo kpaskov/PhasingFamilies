@@ -30,7 +30,7 @@ class LazyLoss:
 
 		# pull params
 		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}
-		obs_value_to_param = {-3: './.', 0: '0/0', 1: '0/1', 2: '1/1'}
+		obs_value_to_param = {-1: './.', 0: '0/0', 1: '0/1', 2: '1/1'}
 		hts_mult = params['x-times higher probability of error in hard-to-sequence region']
 
 		preds = sorted(pred_value_to_param.keys())
@@ -49,60 +49,26 @@ class LazyLoss:
 		# hard-to-sequence region costs
 		self.hts_g_cost = dict()
 
-		for pred, correct_obs in pred_to_correct_obs.items():				
-			c = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[correct_obs], pred_value_to_param[pred])] 
-			old_error_prob = 1-np.power(10, -c)
-			
-			#if pred <= 2:
-			new_error_prob = hts_mult*(1-np.power(10, -c))
-			print(pred, 'old P(E)', old_error_prob, 'new P(E)', new_error_prob)
-
-			if new_error_prob < 0.5:
-				self.hts_g_cost[(pred, correct_obs)] = -np.log10(1-new_error_prob)
-			else:
-				self.hts_g_cost[(pred, correct_obs)] = c
-				print("Couldn't apply hard-to-sequence region factor to %d, would have created P(error)=%0.2f." % (pred, new_error_prob))
-			#else:
-			#	self.hts_g_cost[(pred, correct_obs)] = c
-
 		for pred, obs in product(preds, obss):
 			if pred_to_correct_obs[pred] != obs:
-				c = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])] 
-				#if pred <= 2:
-				self.hts_g_cost[(pred, obs)] = c - np.log10(hts_mult)
-				#else:
-				#	self.hts_g_cost[(pred, obs)] = c
+				c = self.g_cost[(pred, obs)]
+				if c > 2:
+					self.hts_g_cost[(pred, obs)] = self.g_cost[(pred, obs)] - 1
+				else:
+					self.hts_g_cost[(pred, obs)] = self.g_cost[(pred, obs)]
+		for pred, obs in pred_to_correct_obs.items():
+			prob_of_error = sum([10.0**-self.hts_g_cost[(pred, o)] for o in obss if o!=obs])
+			self.hts_g_cost[(pred, obs)] = -np.log10(1-prob_of_error)
 
-
-		for pred in preds:
-			# ignore positions where you don't have information (./. or missing in VCF)
-			self.hts_g_cost[(pred, -2)] = 0 
-			self.g_cost[(pred, -2)] = 0
-
-			self.g_cost[(pred, -1)] = 0
-			self.hts_g_cost[(pred, -1)] = 0
-
-		#self.g_cost[(0, -3)] = self.g_cost[(0, 0)]
-		#self.g_cost[(1, -3)] = self.g_cost[(1, 0)]
-		#self.g_cost[(2, -3)] = self.g_cost[(2, 0)]
-		#self.g_cost[(3, -3)] = self.g_cost[(3, 0)]
-		#self.g_cost[(4, -3)] = self.g_cost[(4, 0)]
-		#self.hts_g_cost[(0, -3)] = self.hts_g_cost[(0, 0)]
-		#self.hts_g_cost[(1, -3)] = self.hts_g_cost[(1, 0)]
-		#self.hts_g_cost[(2, -3)] = self.hts_g_cost[(2, 0)]
-		#self.hts_g_cost[(3, -3)] = self.hts_g_cost[(3, 0)]
-		#self.hts_g_cost[(4, -3)] = self.hts_g_cost[(4, 0)]
-
-
-		self.g_cost[(5, 0)] = self.g_cost[(5, -3)]
-		self.hts_g_cost[(5, 0)] = self.hts_g_cost[(5, -3)]
+		self.g_cost[(5, 0)] = self.g_cost[(5, -1)]
+		self.hts_g_cost[(5, 0)] = self.hts_g_cost[(5, -1)]
 
 		assert np.all(np.asarray(list(self.g_cost.values()))>=0)
 		assert np.all(np.asarray(list(self.hts_g_cost.values()))>=0)
 
-		print('\t' + ('\t\t'.join(map(str, obss + [-1, -2]))))
+		print('\t' + ('\t\t'.join(map(str, obss))))
 		for pred in preds:
-			print(str(pred) + '\t' + '\t'.join(['%0.4f-%0.4f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss + [-1, -2]]))
+			print(str(pred) + '\t' + '\t'.join(['%0.4f-%0.4f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss]))
 
 		self.m = inheritance_states.m
 		self.q, self.state_len = genotypes.q, inheritance_states.state_len
@@ -124,7 +90,6 @@ class LazyLoss:
 		self.s = np.zeros((len(self.perfect_matches)+1, 3), dtype=float)
 
 		self.s[-1, :] = np.inf
-		self.__precompute_loss_for_all_hom_ref__()
 
 	def __call__(self, gen): 
 		gen_index = self.genotypes.index(gen)
@@ -143,14 +108,6 @@ class LazyLoss:
 			self.already_calculated[gen_index] = True
 		return self.losses[self.rep_state_indices, gen_index]
 
-	def __precompute_loss_for_all_hom_ref__(self):
-		# we treat (0, 0, 0, ...) genotype as if it were (-2, -2, -2, ...) to improve performance
-		self.__call__((-2,)*self.m)
-		gen_index2 = self.genotypes.index((-2,)*self.m)
-		gen_index0 = self.genotypes.index((0,)*self.m)
-
-		self.losses[:, gen_index0] = self.losses[:, gen_index2]
-		self.already_calculated[gen_index0] = True
 
 	def __build_loss_equivalence__(self, inheritance_states):
 		# states are equivalent if they have the same cost for every possible genotype

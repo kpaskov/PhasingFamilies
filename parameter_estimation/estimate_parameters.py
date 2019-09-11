@@ -288,13 +288,14 @@ def estimate_family_error(X, y, init=None):
 # ------------------------------------ Estimate Error Rates ------------------------------------
 
 # detect outliers
+sd_cutoff = scipy.stats.norm.isf(0.05/len(famkeys))
 outliers = set()
 for j in range(len(chroms)):
     family_errors = np.array([np.sum(chrom_ys[j][i]) for i in range(len(famkeys))])
     median = np.median(family_errors)
     med_abs_deviation = np.median(np.abs(family_errors-median))
     
-    outlier_indices = family_errors > median+(5*med_abs_deviation)/0.6745
+    outlier_indices = (family_errors > median+(sd_cutoff*med_abs_deviation/0.6745)) | (family_errors < median-(sd_cutoff*med_abs_deviation/0.6745))
     outliers.update(np.where(outlier_indices)[0])
     print('chrom %s outliers %d' % (chroms[j], np.sum(outlier_indices)))
 print('Total outliers removed', len(outliers))
@@ -333,7 +334,8 @@ prob_status, famsum_genome_n, famsum_genome_exp, famsum_genome_obs = estimate_fa
 
 # ------------------------------------ Write to file ------------------------------------
 
-error_estimates = famsum_genome_n.tolist()
+error_estimates = np.maximum(famsum_genome_n.tolist(), 10.0**-10)
+
 baseline = np.ones((7,))
 for e, c in zip(errors, error_estimates):
     #print(e, -np.log10(c))
