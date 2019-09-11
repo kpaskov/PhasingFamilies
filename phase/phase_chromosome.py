@@ -26,6 +26,9 @@ if __name__ == "__main__":
 	batch_num = None if len(sys.argv) < 9 else int(sys.argv[8])
 	batch_offset = None
 
+	if chrom == '23':
+		chrom = 'X'
+
 	with open(param_file, 'r') as f:
 		params = json.load(f)
 
