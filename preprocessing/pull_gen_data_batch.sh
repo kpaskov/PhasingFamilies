@@ -2,8 +2,8 @@
 #
 #
 #SBATCH --job-name=pull
-#SBATCH --output=logs/pull%A_%a.out
-#SBATCH --error=logs/pull%A_%a.err
+#SBATCH --output=logs/pull_%a.out
+#SBATCH --error=logs/pull_%a.err
 #SBATCH --array=1-22
 #SBATCH -p dpwall
 #SBATCH -D /oak/stanford/groups/dpwall/users/kpaskov/PhasingFamilies

@@ -2,8 +2,8 @@
 #
 #
 #SBATCH --job-name=famgen
-#SBATCH --output=logs/famgen%A_%a.out
-#SBATCH --error=logs/famgen%A_%a.err
+#SBATCH --output=logs/famgen_%a.out
+#SBATCH --error=logs/famgen_%a.err
 #SBATCH --array=1-22
 #SBATCH -p dpwall
 #SBATCH -D /oak/stanford/groups/dpwall/users/kpaskov/PhasingFamilies
@@ -25,4 +25,4 @@ echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
 
 #srun python3 preprocessing/pull_famgen_counts.py split_gen_ssc_pilot data/ssc.ped $SLURM_ARRAY_TASK_ID
 
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark /oak/stanford/groups/dpwall/simons_spark/snp/SPARK.pruned.fam $SLURM_ARRAY_TASK_ID
+srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark data/spark.ped $SLURM_ARRAY_TASK_ID
