@@ -26,7 +26,7 @@ from collections import Counter
 
 
 class LazyLoss:
-	def __init__(self, inheritance_states, genotypes, params):
+	def __init__(self, inheritance_states, genotypes, inds, params):
 
 		# pull params
 		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}
@@ -38,37 +38,38 @@ class LazyLoss:
 
 		# typical region costs
 		self.g_cost = dict()
-		for pred, obs in product(preds, obss):
-			self.g_cost[(pred, obs)] = params['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
-
-		pred_to_correct_obs = dict()
-		for pred in preds:
-			pred_to_correct_obs[pred] = sorted(obss, key=lambda x: np.inf if self.g_cost[(pred, x)]==0 else self.g_cost[(pred, x)])[0]
-		print('Prediction to best obs', pred_to_correct_obs)
-
-		# hard-to-sequence region costs
 		self.hts_g_cost = dict()
 
-		for pred, obs in product(preds, obss):
-			if pred_to_correct_obs[pred] != obs:
-				c = self.g_cost[(pred, obs)]
-				if c > 2:
-					self.hts_g_cost[(pred, obs)] = self.g_cost[(pred, obs)] - 1
-				else:
-					self.hts_g_cost[(pred, obs)] = self.g_cost[(pred, obs)]
-		for pred, obs in pred_to_correct_obs.items():
-			prob_of_error = sum([10.0**-self.hts_g_cost[(pred, o)] for o in obss if o!=obs])
-			self.hts_g_cost[(pred, obs)] = -np.log10(1-prob_of_error)
+		for j, ind in enumerate(inds):
+			for pred, obs in product(preds, obss):
+				self.g_cost[(j, pred, obs)] = params[ind]['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
 
-		self.g_cost[(5, 0)] = self.g_cost[(5, -1)]
-		self.hts_g_cost[(5, 0)] = self.hts_g_cost[(5, -1)]
+			pred_to_correct_obs = dict()
+			for pred in preds:
+				pred_to_correct_obs[pred] = sorted(obss, key=lambda x: np.inf if self.g_cost[(j, pred, x)]==0 else self.g_cost[(j, pred, x)])[0]
+			print('Prediction to best obs', pred_to_correct_obs)
+
+			# hard-to-sequence region costs
+			for pred, obs in product(preds, obss):
+				if pred_to_correct_obs[pred] != obs:
+					c = self.g_cost[(j, pred, obs)]
+					if c > 2:
+						self.hts_g_cost[(j, pred, obs)] = self.g_cost[(j, pred, obs)] - 1
+					else:
+						self.hts_g_cost[(j, pred, obs)] = self.g_cost[(j, pred, obs)]
+			for pred, obs in pred_to_correct_obs.items():
+				prob_of_error = sum([10.0**-self.hts_g_cost[(j, pred, o)] for o in obss if o!=obs])
+				self.hts_g_cost[(j, pred, obs)] = -np.log10(1-prob_of_error)
+
+			self.g_cost[(j, 5, 0)] = self.g_cost[(j, 5, -1)]
+			self.hts_g_cost[(j, 5, 0)] = self.hts_g_cost[(j, 5, -1)]
+
+			print(ind + '\t' + ('\t\t'.join(map(str, obss))))
+			for pred in preds:
+				print(str(pred) + '\t' + '\t'.join(['%0.4f-%0.4f' % (self.g_cost[(j, pred, obs)], self.hts_g_cost[(j, pred, obs)]) for obs in obss]))
 
 		assert np.all(np.asarray(list(self.g_cost.values()))>=0)
 		assert np.all(np.asarray(list(self.hts_g_cost.values()))>=0)
-
-		print('\t' + ('\t\t'.join(map(str, obss))))
-		for pred in preds:
-			print(str(pred) + '\t' + '\t'.join(['%0.4f-%0.4f' % (self.g_cost[(pred, obs)], self.hts_g_cost[pred, obs]) for obs in obss]))
 
 		self.m = inheritance_states.m
 		self.q, self.state_len = genotypes.q, inheritance_states.state_len
@@ -95,8 +96,8 @@ class LazyLoss:
 		gen_index = self.genotypes.index(gen)
 		if not self.already_calculated[gen_index]:
 			for i, pm in enumerate(self.perfect_matches):
-				self.s[i, 0] = sum([self.g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
-				self.s[i, 1] = sum([self.hts_g_cost[(pred, obs)] for pred, obs in zip(pm, gen)])
+				self.s[i, 0] = sum([self.g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen))])
+				self.s[i, 1] = sum([self.hts_g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen))])
 				    
 			values = np.min(self.s[self.perfect_match_indices, 0], axis=1)
 			hts_values = np.min(self.s[self.perfect_match_indices[self.is_hts, :], 1], axis=1)
