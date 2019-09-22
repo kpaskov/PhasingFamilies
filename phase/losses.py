@@ -61,8 +61,8 @@ class LazyLoss:
 				prob_of_error = sum([10.0**-self.hts_g_cost[(j, pred, o)] for o in obss if o!=obs])
 				self.hts_g_cost[(j, pred, obs)] = -np.log10(1-prob_of_error)
 
-			self.g_cost[(j, 5, 0)] = self.g_cost[(j, 5, -1)]
-			self.hts_g_cost[(j, 5, 0)] = self.hts_g_cost[(j, 5, -1)]
+			#self.g_cost[(j, 5, 0)] = self.g_cost[(j, 5, -1)]
+			#self.hts_g_cost[(j, 5, 0)] = self.hts_g_cost[(j, 5, -1)]
 
 			print(ind + '\t' + ('\t\t'.join(map(str, obss))))
 			for pred in preds:
