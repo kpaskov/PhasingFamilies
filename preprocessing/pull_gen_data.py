@@ -13,6 +13,15 @@ vcf_file = sys.argv[1]
 out_directory = sys.argv[2]
 chrom = sys.argv[3]
 
+if chrom == '23':
+    chrom = 'X'
+if chrom == '24':
+    chrom = 'Y'
+if chrom == '25':
+    chrom = 'MT'
+
+chrom_int = 23 if chrom == 'X' else 24 if chrom == 'Y' else 25 if chrom == 'MT' else int(chrom)
+
 # Pull data from vcf
 with gzip.open(vcf_file, 'rt') as f, \
     open('%s/chr.%s.gen.samples.txt' % (out_directory, chrom), 'w+') as sample_f, \
@@ -40,7 +49,7 @@ with gzip.open(vcf_file, 'rt') as f, \
     for j, line in enumerate(f):
         pieces = line.split('\t')
 
-        if pieces[0] == chrom or (chrom == 'X' and pieces[0] == '23') or (chrom == 'Y' and pieces[0] == '24'):
+        if pieces[0] == chrom or (chrom == 'X' and pieces[0] == '23') or (chrom == 'Y' and pieces[0] == '24') or (chrom == 'MT' and pieces[0] == '25'):
 
             format = pieces[8].strip().split(':')
 
@@ -50,7 +59,7 @@ with gzip.open(vcf_file, 'rt') as f, \
             pos, _, ref, alt = pieces[1:5]
             is_biallelic_snp = 1 if len(ref) == 1 and len(alt) == 1 and ref != '.' and alt != '.' else 0
             is_pass = pieces[6] == 'PASS'
-            chrom_coord.append((0, int(pos), is_biallelic_snp, is_pass))
+            chrom_coord.append((chrom_int, int(pos), is_biallelic_snp, is_pass))
 
             # Pull out genotypes
             gen_index = format.index('GT')
