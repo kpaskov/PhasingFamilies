@@ -20,7 +20,8 @@ for chrom in chroms:
             	passes.append(True)
             else:
             	passes.append(pieces[6] == 'PASS')
-            
-    np.save('%s/chr.%s.pass' % (data_dir, chrom), np.asarray(passes))
+
+    pos_data = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom))
+    np.save('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom), np.hstack((pos_data, np.array(passes)[:, np.newaxis])))
                 
                 

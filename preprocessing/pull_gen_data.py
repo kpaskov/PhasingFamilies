@@ -49,7 +49,8 @@ with gzip.open(vcf_file, 'rt') as f, \
 
             pos, _, ref, alt = pieces[1:5]
             is_biallelic_snp = 1 if len(ref) == 1 and len(alt) == 1 and ref != '.' and alt != '.' else 0
-            chrom_coord.append((0, int(pos), is_biallelic_snp))
+            is_pass = pieces[6] == 'PASS'
+            chrom_coord.append((0, int(pos), is_biallelic_snp, is_pass))
 
             # Pull out genotypes
             gen_index = format.index('GT')

@@ -38,8 +38,7 @@ class AutosomalTransitionMatrix:
 						transitions[i].append(new_index)
 						transition_costs[i].append(self.shift_costs[j])
 
-			# allow a transition into or out of a hard_to_sequence region (if we're not in a deletion)
-			#if np.all(state[:4]==1):
+			# allow a transition into or out of a hard_to_sequence region
 			for o, n in [(0, 1), (1, 0)]:
 				if state[-1] == o:
 					new_state = tuple(state[:-1]) + (n,)
@@ -49,8 +48,7 @@ class AutosomalTransitionMatrix:
 						transitions[i].append(new_index)
 						transition_costs[i].append(self.hard_to_sequence_cost)
 
-			# allow a transition into or out of a low coverage region (if we're not in a deletion)
-			#if np.all(state[:4]==1):
+			# allow a transition into or out of a low coverage region
 			for o, n in [(0, 2), (2, 0)]:
 				if state[-1] == o:
 					new_state = tuple(state[:-1]) + (n,)
@@ -59,6 +57,10 @@ class AutosomalTransitionMatrix:
 						new_index = inheritance_states.index(new_state)
 						transitions[i].append(new_index)
 						transition_costs[i].append(self.low_coverage_cost)
+
+			# update cost of not transitioning (it will be close to 0, but not exactly)
+			p_transition = np.sum([10**(-x) for x in transition_costs[i][1:]])
+			transition_costs[i][0] = -np.log10(1-p_transition)
 		            
 		# transitions is a ragged matrix - square it off
 		max_trans = max([len(x) for x in transitions])
@@ -69,6 +71,7 @@ class AutosomalTransitionMatrix:
 
 		self.transitions = np.array(transitions)
 		self.costs = np.array(transition_costs)
+		assert np.all(self.costs>0)
 
 		
 		print('transitions', self.transitions.shape)
