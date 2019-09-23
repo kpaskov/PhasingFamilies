@@ -9,6 +9,13 @@ data_dir = sys.argv[1]
 ped_file = sys.argv[2]
 chrom = sys.argv[3]
 
+if chrom == '23':
+    chrom = 'X'
+if chrom == '24':
+    chrom = 'Y'
+if chrom == '25':
+    chrom = 'MT'
+
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 out_file = '%s/chr.%s.famgen.counts.txt' % (data_dir, chrom)
 
@@ -29,7 +36,7 @@ with open(ped_file, 'r') as f:
         else:
             fam_id, child_id, f_id, m_id = pieces[0:4]
 
-            if child_id in sample_id_to_index and f_id in sample_id_to_index and m_id in sample_id_to_index and 'LCL' not in child_id:
+            if child_id in sample_id_to_index and f_id in sample_id_to_index and m_id in sample_id_to_index:
                 if (fam_id, m_id, f_id) not in families:
                     families[(fam_id, m_id, f_id)] = [m_id, f_id]
                 families[(fam_id, m_id, f_id)].append(child_id)
@@ -41,12 +48,13 @@ with open(out_file, 'w+') as f:
     # pull snp positions
     pos_data = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom))
     is_snp = pos_data[:, 2].astype(bool)
+    is_pass = pos_data[:, 3].astype(bool)
 
     # Pull data together
     A = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
 
     # filter out snps
-    A = A[:, is_snp]
+    A = A[:, is_snp & is_pass]
     print('genotype matrix prepared', A.shape)
 
     for famkey, inds in families.items():
@@ -56,8 +64,8 @@ with open(out_file, 'w+') as f:
         family_genotypes = A[indices, :].A
         
         # remove positions where whole family is homref
-        ok_indices = np.any(family_genotypes!=0, axis=0)
-        family_genotypes = family_genotypes[:, ok_indices]
+        all_hom_ref = np.all(family_genotypes==0, axis=0)
+        family_genotypes = family_genotypes[:, ~all_hom_ref]
         #print(famkey, family_genotypes.shape)
 
         # recode missing values
@@ -67,7 +75,7 @@ with open(out_file, 'w+') as f:
         unique_gens, counts = np.unique(family_genotypes, return_counts=True, axis=1)
         for g, c in zip(unique_gens.T, counts):
             genotype_to_counts[tuple(g)] += c
-        genotype_to_counts[(0,)*m] = A.shape[1]-np.sum(genotype_to_counts)
+        genotype_to_counts[(0,)*m] = np.sum(all_hom_ref)
 
         # write to file
         f.write('\t'.join(['.'.join(famkey), '.'.join(inds)] + \

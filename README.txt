@@ -1,4 +1,4 @@
-This directory contains code for simultaneously phasing and detecting deletions in nuclear families.
+This project contains code for simultaneously phasing and detecting deletions in nuclear families.
 
 1. Preprocessing
 You need to get your genomic data into numpy format. If your data is currently in VCF format, split by chromosome, this can be done by running
