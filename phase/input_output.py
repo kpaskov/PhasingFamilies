@@ -110,9 +110,11 @@ class WGSData:
 		self.sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
 
 		# use only SNPs, no indels
+		# use only variants that PASS GATK
 		coordinates = np.load(coord_file)
 		self.snp_positions = coordinates[:, 1]
-		self.snp_indices = coordinates[:, 2]==1
+		self.is_snp = coordinates[:, 2]==1
+		self.is_pass = coordinates[:, 3]==1
 
 		self.snp_positions = self.snp_positions[self.snp_indices]
 		print('chrom shape only SNPs', self.snp_positions.shape)
@@ -124,7 +126,7 @@ class WGSData:
 		ind_indices = [self.sample_id_to_index[x] for x in individuals]
 		
 		data = sparse.hstack([sparse.load_npz('%s/%s' % (self.data_dir, gen_file))[ind_indices, :] for gen_file in self.gen_files]).A
-		data = data[:, self.snp_indices]
+		data = data[:, self.is_snp & self.is_pass]
 
 		data[data<0] = -1
 
