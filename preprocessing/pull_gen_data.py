@@ -58,7 +58,7 @@ with gzip.open(vcf_file, 'rt') as f, \
             gen_index = format.index('GT')
             for i, piece in enumerate(pieces[9:]):
                 segment = piece.split(':', maxsplit=gen_index+1)
-                gt = gen_mapping.get(segment[gen_index], default='-1') # For now we mark multi-base loci as unknown
+                gt = gen_mapping.get(segment[gen_index], -1) # For now we mark multi-base loci as unknown
 
                 if gt != 0:
                     indices.append(i)
