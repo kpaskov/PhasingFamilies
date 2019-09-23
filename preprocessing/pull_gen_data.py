@@ -13,13 +13,6 @@ vcf_file = sys.argv[1]
 out_directory = sys.argv[2]
 chrom = sys.argv[3]
 
-if chrom == '23':
-    chrom = 'X'
-if chrom == '24':
-    chrom = 'Y'
-if chrom == '25':
-    chrom = 'MT'
-
 chrom_int = 23 if chrom == 'X' else 24 if chrom == 'Y' else 25 if chrom == 'MT' else int(chrom)
 
 # Pull data from vcf
@@ -65,18 +58,7 @@ with gzip.open(vcf_file, 'rt') as f, \
             gen_index = format.index('GT')
             for i, piece in enumerate(pieces[9:]):
                 segment = piece.split(':', maxsplit=gen_index+1)
-                if segment[gen_index] in gen_mapping:
-                    gt = gen_mapping[segment[gen_index]]
-                    if gt == -1:
-                        if 'DP' in format:
-                            dp_index = format.index('DP')
-                            segment = piece.split(':', maxsplit=dp_index+1)
-                            if dp_index < len(segment) and (segment[dp_index] == '0' or segment[dp_index] == '1'):
-                                # very low coverage is marked double deletion rather than unknown
-                                gt = -2
-                else:
-                    # For now we mark multi-base loci as unknown
-                    gt = -1
+                gt = gen_mapping.get(segment[gen_index], default='-1') # For now we mark multi-base loci as unknown
 
                 if gt != 0:
                     indices.append(i)
