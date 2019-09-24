@@ -116,7 +116,7 @@ class WGSData:
 		self.is_snp = coordinates[:, 2]==1
 		self.is_pass = coordinates[:, 3]==1
 
-		self.snp_positions = self.snp_positions[self.snp_indices]
+		self.snp_positions = self.snp_positions[self.is_snp & self.is_pass]
 		print('chrom shape only SNPs', self.snp_positions.shape)
 
 	
