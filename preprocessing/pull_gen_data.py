@@ -79,7 +79,7 @@ with gzip.open(vcf_file, 'rt') as f, \
                 # Start fresh
                 subfile += 1
                 num_lines = 0
-                dindptr, index = [0], 0
+                indptr, index = [0], 0
                 data[:] = 0
                 indices[:] = 0
 
