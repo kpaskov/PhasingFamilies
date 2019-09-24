@@ -12,6 +12,7 @@ t0 = time.time()
 vcf_file = sys.argv[1]
 out_directory = sys.argv[2]
 chrom = sys.argv[3]
+maxsize = 500000000
 
 chrom_int = 23 if chrom == 'X' else 24 if chrom == 'Y' else 25 if chrom == 'MT' else int(chrom)
 
@@ -32,7 +33,7 @@ with gzip.open(vcf_file, 'rt') as f, \
 
     # Pull genotypes from vcf
     m = len(sample_ids)
-    data, indices, indptr = [], [], [0]
+    data, indices, indptr, index = np.zeros((maxsize,), dtype=np.int8), np.zeros((maxsize,), dtype=int), [0], 0
     gen_mapping = {'./.': -1, '0/0': 0, '0|0': 0, '0/1': 1, '0|1': 1, '1/0': 1, '1|0': 1, '1/1': 2, '1|1': 2}
     
     line = next(f)
@@ -61,14 +62,15 @@ with gzip.open(vcf_file, 'rt') as f, \
                 gt = gen_mapping.get(segment[gen_index], -1) # For now we mark multi-base loci as unknown
 
                 if gt != 0:
-                    indices.append(i)
-                    data.append(gt)
+                    indices[index] = i
+                    data[index] = gt
+                    index += 1
             indptr.append(len(data))
             num_lines += 1
 
             # If file has gotten really big, write subfile to disk
-            if len(data) > 500000000:
-                gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+            if index+m >= maxsize:
+                gen = csc_matrix((data[:index], indices[:index], indptr), shape=(m, num_lines), dtype=np.int8)
                 print('Sub dataset', gen.shape)
 
                 # Save to file
@@ -77,10 +79,12 @@ with gzip.open(vcf_file, 'rt') as f, \
                 # Start fresh
                 subfile += 1
                 num_lines = 0
-                data, indices, indptr = [], [], [0]
-           
+                dindptr, index = [0], 0
+                data[:] = 0
+                indices[:] = 0
 
-gen = csc_matrix((data, indices, indptr), shape=(m, num_lines), dtype=np.int8)
+
+gen = csc_matrix((data[:index], indices[:index], indptr), shape=(m, num_lines), dtype=np.int8)
     
 # Save to file
 if subfile == 0:
