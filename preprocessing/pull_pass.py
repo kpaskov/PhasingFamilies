@@ -20,7 +20,7 @@ for chrom in chroms:
     pos_data = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom))  
     
     if pass_from_gen:
-        if chrom == 'Y':
+        if chrom == 'X' or chrom == 'Y':
             is_pass = np.ones((pos_data.shape[0],), dtype=bool)
         else:
             # load genotypes
