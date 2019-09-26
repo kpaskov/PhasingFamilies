@@ -38,7 +38,6 @@ for chrom in chroms:
             for line in f:
                 pieces = line.strip().split('\t')
                 is_pass.append(pieces[6] == 'PASS')
-                print(pieces[:9])
         is_pass = np.array(is_pass)
             
     # pull snp positions
