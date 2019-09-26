@@ -50,6 +50,8 @@ with open(out_file, 'w+') as f:
     is_snp = pos_data[:, 2].astype(bool)
     is_pass = pos_data[:, 3].astype(bool)
 
+    print(np.sum(~is_snp))
+    print(np.sum(~is_pass))
     # Pull data together
     A = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
 

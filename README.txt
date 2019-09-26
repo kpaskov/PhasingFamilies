@@ -18,3 +18,6 @@ python parameter_estimation/estimate_parameters.py [data_dir] [ped_file] [param_
 Now we're ready to run using
 
 python phase/phase_chromosome.py [chrom] [family_size] [ped_file] [data_dir] [phase_dir] [param_file]
+
+Memory
+WGS: families of size 3/4 need 8GB, families of size 5 need 16GB, families of size 6 need 64GB
