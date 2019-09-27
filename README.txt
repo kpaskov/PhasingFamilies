@@ -21,3 +21,4 @@ python phase/phase_chromosome.py [chrom] [family_size] [ped_file] [data_dir] [ph
 
 Memory
 WGS: families of size 3/4 need 8GB, families of size 5 need 16GB, families of size 6 need 64GB
+Exome: families of size 3/4/5/6/7 need 8GB

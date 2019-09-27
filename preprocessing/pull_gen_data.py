@@ -65,7 +65,7 @@ with gzip.open(vcf_file, 'rt') as f, \
                     indices[index] = i
                     data[index] = gt
                     index += 1
-            indptr.append(len(data))
+            indptr.append(index)
             num_lines += 1
 
             # If file has gotten really big, write subfile to disk
