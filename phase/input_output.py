@@ -55,14 +55,13 @@ def pull_families(sample_file, ped_file, m, batch_size=None, batch_offset=None):
 	families = dict([(k, x[:2]+random.sample(x[2:], len(x)-2)) for k, x in families.items()])
 	print('families with sequence data', len(families))
 
-	families_of_this_size = [(fkey, inds) for fkey, inds in families.items() if len(inds) == m]
+	families_of_this_size = sorted([(fkey, inds) for fkey, inds in families.items() if len(inds) == m], key=lambda x: x[0])
 	print('families of size %d: %d' % (m, len(families_of_this_size)))
 
 	# limit to batch
 	if batch_size is not None:
-		family_keys = set(sorted([x[0] for x in families_of_this_size])[batch_offset:(batch_size+batch_offset)])
-		families_of_this_size = [(k, v) for k, v in families_of_this_size if k in family_keys]
-	
+		families_of_this_size = families_of_this_size[batch_offset:(batch_size+batch_offset)]
+		
 	print('families pulled %d: %d' % (m, len(families_of_this_size)))
 	return families_of_this_size
 

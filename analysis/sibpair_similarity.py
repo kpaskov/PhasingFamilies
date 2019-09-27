@@ -7,14 +7,14 @@ from itertools import combinations, product
 import scipy.stats as stats
 
 
-ihart_family_sizes = [3, 4, 5, 6, 7]
-ihart_phase_dir = 'phased_ihart_9.10'
+ihart_family_sizes = [3, 4, 5, 6]
+ihart_phase_dir = 'phased_ihart'
 
 ssc_family_sizes = [3, 4]
-ssc_phase_dir = 'phased_ssc_9.10'
+ssc_phase_dir = 'phased_ssc'
 
-spark_family_sizes = [3, 4, 5, 6, 7]
-spark_phase_dir = 'phased_spark_9.10'
+spark_family_sizes = [4, 5, 6, 7]
+spark_phase_dir = 'phased_spark'
 
 # need affected/unaffected information
 # these files can be found on sherlock
