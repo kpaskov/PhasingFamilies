@@ -14,7 +14,6 @@ for filename in os.listdir(phase_dir):
 			batch_num = int(batch_num)
 			file_to_batches[os.path.join(phase_dir, filename[:batch_start] + filename[batch_end:])].append((batch_num, os.path.join(phase_dir, filename)))
 
-
 for filename, batches in file_to_batches.items():
 	print(filename)
 	batches = sorted(batches, key=lambda x: x[0])

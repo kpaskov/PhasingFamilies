@@ -101,16 +101,16 @@ def load_phase_data(chroms, phase_dir, family_sizes, ignore_mask=False):
 def find_outliers(mat_match, mat_mismatch, pat_match, pat_mismatch, is_X=False):
 	# very naive method - could use some work
 	if is_X:
-		m = max(np.max(mat_match+mat_mismatch), np.max(pat_match+pat_mismatch))
+		m = np.median(np.vstack((mat_match+mat_mismatch, pat_match+pat_mismatch)))
 		pat_ok = (pat_match < 0.1*m) | (pat_mismatch < 0.1*m)
-		return ~pat_ok | (mat_match+mat_mismatch < 0.5*m) 
+		return ~pat_ok | (mat_match+mat_mismatch < 0.8*m) 
 	else:
-		m = max(np.max(mat_match+mat_mismatch), np.max(pat_match+pat_mismatch))
-		return (mat_match+mat_mismatch < 0.5*m) | (pat_match+pat_mismatch < 0.5*m) 
+		m = np.median(np.vstack((mat_match+mat_mismatch, pat_match+pat_mismatch)))
+		return (mat_match+mat_mismatch < 0.8*m) | (pat_match+pat_mismatch < 0.8*m) 
 
 def calculate_sibpair_similarity(chroms, phase_dir, family_sizes):
 	print(phase_dir)
-	sibpair_to_mat_match, sibpair_to_mat_mismatch, sibpair_to_pat_match, sibpair_to_pat_mismatch = load_phase_data(chroms, phase_dir, family_sizes, ignore_mask=True)
+	sibpair_to_mat_match, sibpair_to_mat_mismatch, sibpair_to_pat_match, sibpair_to_pat_mismatch = load_phase_data(chroms, phase_dir, family_sizes)
 
 	sibpairs = sorted(set(sibpair_to_mat_match.keys()))
 	mat_match = np.array([sibpair_to_mat_match[k] for k in sibpairs])
@@ -137,7 +137,7 @@ def calculate_sibpair_similarity(chroms, phase_dir, family_sizes):
 # Individual chroms
 sibpair_to_chrom_count = defaultdict(int)
 for chrom in [str(x) for x in range(1, 23)] + ['X']:
-	with open('sibpair_similarity/sibpair_similarity_scores%s_full_genome.txt' % chrom, 'w+') as f:
+	with open('sibpair_similarity/sibpair_similarity_scores%s_full_genome_10.2.19.txt' % chrom, 'w+') as f:
 		f.write('Sibling1\tSibling2\tDataset\tMaternal-Similarity\tPaternal-Similarity\tMat-Bases-Match\tMat-Bases-Mismatch\tPat-Bases-Match\tPat-Bases-Mismatch\n')
 
 		# iHART
@@ -163,7 +163,7 @@ for chrom in [str(x) for x in range(1, 23)] + ['X']:
 
 # All chroms
 chroms = [str(x) for x in range(1, 23)] 
-with open('sibpair_similarity/sibpair_similarity_scores_full_genome.txt', 'w+') as f:
+with open('sibpair_similarity/sibpair_similarity_scores_full_genome_10.2.19.txt', 'w+') as f:
 	f.write('Sibling1\tSibling2\tDataset\tMaternal-Similarity\tPaternal-Similarity\tMat-Bases-Match\tMat-Bases-Mismatch\tPat-Bases-Match\tPat-Bases-Mismatch\n')
 
 	# iHART

@@ -163,7 +163,18 @@ for i, chrom in enumerate(chroms):
                 family_chrom_to_counts[(famkey, chrom)] = counts
 
 print('Families of each size', Counter([len(inds) for fkey, inds in family_to_inds.items()]))
-famkeys = sorted(set([x[0] for x in family_chrom_to_counts.keys()]))
+
+# filter families that have all chroms
+famkeys = []
+for famkey in set([x[0] for x in family_chrom_to_counts.keys()]):
+    has_chrom = np.array([(famkey, chrom) in family_chrom_to_counts for chrom in chroms])
+    if np.sum(has_chrom) == len(chroms):
+        famkeys.append(famkey)
+    else:
+        print('Missing chromosome counts', famkey, [chrom[i] for i in np.where(~has_chrom)[0]])
+famkeys = sorted(famkeys)
+
+# filter our families without sex
 famkeys = [k for k in famkeys if np.all([ind in sample_id_to_sex for ind in family_to_inds[k]])]
 print('Families', len(famkeys))
 
