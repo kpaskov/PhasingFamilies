@@ -76,7 +76,7 @@ if __name__ == "__main__":
 				family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(inds)
 
 				# create loss function for this family
-				loss = LazyLoss(inheritance_states, genotypes, inds, params)
+				loss = LazyLoss(inheritance_states, genotypes, '.'.join(fkey), inds, params)
 
 				# forward sweep
 				v_cost = viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)

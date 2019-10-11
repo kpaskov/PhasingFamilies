@@ -26,7 +26,7 @@ from collections import Counter
 
 
 class LazyLoss:
-	def __init__(self, inheritance_states, genotypes, inds, params):
+	def __init__(self, inheritance_states, genotypes, famkey, inds, params):
 
 		# pull params
 		pred_value_to_param = {0: '0/0', 1: '0/1', 2: '1/1', 3: '-/0', 4: '-/1', 5: '-/-'}
@@ -42,7 +42,7 @@ class LazyLoss:
 
 		for j, ind in enumerate(inds):
 			for pred, obs in product(preds, obss):
-				self.g_cost[(j, pred, obs)] = params[ind]['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
+				self.g_cost[(j, pred, obs)] = params[famkey + '.' + ind]['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
 
 			pred_to_correct_obs = dict()
 			for pred in preds:

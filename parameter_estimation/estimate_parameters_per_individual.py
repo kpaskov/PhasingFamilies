@@ -369,7 +369,7 @@ for i, famkey in enumerate(famkeys):
             error_estimates[k, np.isnan(error_estimates[k, :])] = 10.0**np.nanmean(np.log10(error_estimates[k, :]))
 
         for j in range(len(inds)):
-            params[inds[j]] = {}
+            params[famkey + '.' + inds[j]] = {}
             baseline = np.ones((7,))
             for e, c in zip(errors, error_estimates[:, j]):
                 #print(e, -np.log10(c))
@@ -378,9 +378,9 @@ for i, famkey in enumerate(famkeys):
             for a, a_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (4, '-/0'), (5, '-/1'), (6, '-/-')]:
                 for o, o_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (3, './.')]:
                     if (a, o) in baseline_match:
-                        params[inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(baseline[a])
+                        params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(baseline[a])
                     else:
-                        params[inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(error_estimates[error_to_index[(a, o)], j])
+                        params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(error_estimates[error_to_index[(a, o)], j])
     except:
         num_error_families += 1
         print('ERROR')
