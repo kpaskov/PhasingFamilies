@@ -41,10 +41,11 @@ with gzip.open(vcf_file, 'rt') as f, \
     num_lines = 0
     chrom_coord = []
     for j, line in enumerate(f):
-        pieces = line.split('\t')
+        pieces = line.split('\t', maxsplit=1)
 
         if pieces[0] == chrom or (chrom == 'X' and pieces[0] == '23') or (chrom == 'Y' and pieces[0] == '24') or (chrom == 'MT' and pieces[0] == '25'):
 
+            pieces = line.strip().split('\t')
             format = pieces[8].strip().split(':')
 
             # Write variant to file
