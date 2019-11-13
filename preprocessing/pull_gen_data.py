@@ -18,7 +18,6 @@ chrom_int = 23 if chrom == 'X' else 24 if chrom == 'Y' else 25 if chrom == 'MT' 
 
 # Pull data from vcf
 with gzip.open(vcf_file, 'rt') as f, \
-    open('%s/chr.%s.gen.samples.txt' % (out_directory, chrom), 'w+') as sample_f, \
     gzip.open('%s/chr.%s.gen.variants.txt.gz' % (out_directory, chrom), 'wt') as variant_f:
 
     # Skip header
@@ -26,10 +25,11 @@ with gzip.open(vcf_file, 'rt') as f, \
     while line.startswith('##'):
         line = next(f)
 
-    # Pull sample_ids and write to file
-    sample_ids = line.strip().split('\t')[9:]
-    sample_f.write('\n'.join(sample_ids))
-    print('Num individuals with genomic data', len(sample_ids))
+    with open('%s/chr.%s.gen.samples.txt' % (out_directory, chrom), 'w+') as sample_f:
+        # Pull sample_ids and write to file
+        sample_ids = line.strip().split('\t')[9:]
+        sample_f.write('\n'.join(sample_ids))
+        print('Num individuals with genomic data', len(sample_ids))
 
     # Pull genotypes from vcf
     m = len(sample_ids)
