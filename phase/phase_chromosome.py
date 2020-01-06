@@ -20,10 +20,11 @@ if __name__ == "__main__":
 	m = int(sys.argv[2])
 	ped_file = sys.argv[3]
 	data_dir = sys.argv[4]
-	out_dir = sys.argv[5]
-	param_file = sys.argv[6]
-	batch_size = None if len(sys.argv) < 9 else int(sys.argv[7])
-	batch_num = None if len(sys.argv) < 9 else int(sys.argv[8])
+	assembly = sys.argv[5]
+	out_dir = sys.argv[6]
+	param_file = sys.argv[7]
+	batch_size = None if len(sys.argv) < 10 else int(sys.argv[8])
+	batch_num = None if len(sys.argv) < 10 else int(sys.argv[9])
 	batch_offset = None
 
 	if chrom == '23':
@@ -58,13 +59,14 @@ if __name__ == "__main__":
 	genotypes = Genotypes(m)
 
 	# get ready to pull processed WGS data 
-	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, ped_file, chrom)
+	wgs_data = WGSData(data_dir, gen_files, coord_file, sample_file, ped_file, chrom, assembly)
 
 	with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as statef:
 		# write headers
 		famf.write('family_id\tmother_id\tfather_id\t' + '\t'.join(['child%d_id' % i for i in range(1, m-1)]) + '\n')
 		statef.write('\t'.join(['family_id', 'm1_del', 'm2_del', 'p1_del', 'p2_del',
 			'\t'.join(['child%d_%s_state' % ((i+1), c) for i, c in product(range(m-2), ['m', 'p'])]),
+			'\t'.join(['child%d_%s_denovo' % ((i+1), c) for i, c in product(range(m-2), ['m', 'p'])]),
 			'is_masked', 'start_pos', 'end_pos', 'start_family_index', 'end_family_index' 'pos_length', 'family_index_length']) + '\n')
 
 		# phase each family

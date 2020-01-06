@@ -6,12 +6,13 @@ class AutosomalTransitionMatrix:
 	def __init__(self, inheritance_states, params):
 
 		self.shift_costs = 	[params['-log10(P[deletion_entry_exit])']]*4 + \
-			[params['-log10(P[maternal_crossover])'] if i%2==0 else params['-log10(P[paternal_crossover])'] for i in range(2*(inheritance_states.m-2))]
-
+			[params['-log10(P[maternal_crossover])'] if i%2==0 else params['-log10(P[paternal_crossover])'] for i in range(2*(inheritance_states.m-2))] + \
+			[9.15 for i in range(2*(inheritance_states.m-2))]
 		self.hard_to_sequence_cost = params['-log10(P[hard_to_seq_region_entry_exit])']
 		self.low_coverage_cost = params['-log10(P[low_coverage_region_entry_exit])']
 
-		p, state_len = inheritance_states.p, inheritance_states.state_len
+		print(len(self.shift_costs))
+		p = inheritance_states.p
 
 		# transition matrix
 		transitions = [[] for i in range(p)]
@@ -29,14 +30,22 @@ class AutosomalTransitionMatrix:
 					transitions[i].append(new_index)
 					transition_costs[i].append(np.sum([self.shift_costs[j] for j, (old_s, new_s) in enumerate(zip(state[:4], delstate)) if old_s != new_s]))
 
-			# allow a single recombination event (if we're not in a deletion)
-			for j in range(4, inheritance_states.state_len-1):
-				if (j%2==0 and np.all(state[:2]==1)) or (j%2==1 and np.all(state[2:4]==1)):
+			# allow a single recombination event (if we're not in a deletion, including de novo)
+			for j in range(4, 2*inheritance_states.m):
+				if (j%2==0 and np.all(state[:2]==1) and np.all(state[np.arange(2*inheritance_states.m, 2*inheritance_states.m + 2*(inheritance_states.m -2), 2)]==0)) or (j%2==1 and np.all(state[2:4]==1) and np.all(state[np.arange(2*inheritance_states.m+1, 2*inheritance_states.m + 2*(inheritance_states.m -2), 2)]==0)):
 					new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
 					if new_state in inheritance_states:
 						new_index = inheritance_states.index(new_state)
 						transitions[i].append(new_index)
 						transition_costs[i].append(self.shift_costs[j])
+
+			# allow a single de novo event
+			for j in range(2*inheritance_states.m, 2*inheritance_states.m + 2*(inheritance_states.m-2)):
+				new_state = tuple(1-x if k == j else x for k, x in enumerate(state))
+				if new_state in inheritance_states:
+					new_index = inheritance_states.index(new_state)
+					transitions[i].append(new_index)
+					transition_costs[i].append(self.shift_costs[j])
 
 			# allow a transition into or out of a hard_to_sequence region
 			for o, n in [(0, 1), (1, 0)]:

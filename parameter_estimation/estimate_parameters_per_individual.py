@@ -39,7 +39,7 @@ chrom_lengths = {
 }
 
 
-chroms = [str(x) for x in range(1, 23)] + ['X', 'Y'] 
+chroms = [str(x) for x in range(1, 23)] #+ ['X', 'Y'] 
 
 # 0 = 0/0
 # 1 = 0/1
@@ -174,8 +174,13 @@ for famkey in set([x[0] for x in family_chrom_to_counts.keys()]):
         print('Missing chromosome counts', famkey, [chrom[i] for i in np.where(~has_chrom)[0]])
 famkeys = sorted(famkeys)
 
-# filter our families without sex
-famkeys = [k for k in famkeys if np.all([ind in sample_id_to_sex for ind in family_to_inds[k]])]
+## filter our families without sex
+#famkeys = [k for k in famkeys if np.all([ind in sample_id_to_sex for ind in family_to_inds[k]])]
+#print('Families', len(famkeys))
+#
+## filter out families 6 or larger
+#famkeys = [k for k in famkeys if len(family_to_inds[k])>=6]
+
 print('Families', len(famkeys))
 
 
@@ -220,8 +225,7 @@ def build_family_chrom_X_and_y(counts, nonmendelian_famgens, error_to_fg_pairs):
         for famgen, neighbor in fg_pairs: # nmfg, mfg
             famgen_index = nm_famgen_to_index[famgen]
             
-            if counts[neighbor]>0:
-                X[famgen_index, error_index] += counts[neighbor]
+            X[famgen_index, error_index] += counts[neighbor]+1
                 
     y = np.asarray([counts[x] for x in nonmendelian_famgens])
     
@@ -362,11 +366,27 @@ for i, famkey in enumerate(famkeys):
         error_estimates[:] = np.nan
         for k in range(len(errors)*len(inds)):
             if k in old_col_index_to_new:
-                error_estimates[k%len(errors), int(np.floor(k/len(errors)))] = np.maximum(famsum_genome_n[old_col_index_to_new[k]], 10.0**-10)
+                error_estimates[k%len(errors), int(np.floor(k/len(errors)))] = famsum_genome_n[old_col_index_to_new[k]]
 
         # if we can't estimate an error rate, use the mean value for everyone else
         for k in range(len(errors)):
             error_estimates[k, np.isnan(error_estimates[k, :])] = 10.0**np.nanmean(np.log10(error_estimates[k, :]))
+
+        # estimate error rates for deletion errors
+        error_estimates[errors.index((4, 1)), :] = error_estimates[errors.index((0, 1)), :]
+        error_estimates[errors.index((4, 2)), :] = error_estimates[errors.index((0, 2)), :]
+        error_estimates[errors.index((4, 3)), :] = error_estimates[errors.index((0, 3)), :]
+
+        error_estimates[errors.index((5, 0)), :] = error_estimates[errors.index((2, 0)), :]
+        error_estimates[errors.index((5, 1)), :] = error_estimates[errors.index((2, 1)), :]
+        error_estimates[errors.index((5, 3)), :] = error_estimates[errors.index((2, 3)), :]
+
+        error_estimates[errors.index((6, 0)), :] = error_estimates[errors.index((2, 1)), :]
+        error_estimates[errors.index((6, 1)), :] = error_estimates[errors.index((2, 1)), :]*error_estimates[errors.index((0, 1)), :]
+        error_estimates[errors.index((6, 2)), :] = error_estimates[errors.index((0, 1)), :]
+
+        print(-np.log10(error_estimates))
+        assert np.all(~np.isnan(error_estimates))
 
         for j in range(len(inds)):
             params[famkey + '.' + inds[j]] = {}

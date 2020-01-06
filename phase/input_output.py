@@ -4,7 +4,7 @@ import scipy.stats
 import random
 
 # From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
-chrom_lengths = {
+chrom_lengths37 = {
 	'1': 249250621,
 	'2': 243199373,
 	'3': 198022430,
@@ -29,6 +29,34 @@ chrom_lengths = {
 	'22': 51304566,
 	'X': 155270560,
 	'Y': 59373566
+}
+
+# From GRCh38.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh38.p13
+chrom_lengths38 = {
+	'1': 248956422,
+	'2': 242193529,
+	'3': 198295559,
+	'4': 190214555,
+	'5': 181538259,
+	'6': 170805979,
+	'7': 159345973,
+	'8': 145138636,
+	'9': 138394717,
+	'10': 133797422,
+	'11': 135086622,
+	'12': 133275309,
+	'13': 114364328,
+	'14': 107043718,
+	'15': 101991189,
+	'16': 90338345,
+	'17': 83257441,
+	'18': 80373285,
+	'19': 58617616,
+	'20': 64444167,
+	'21': 46709983,
+	'22': 50818468,
+	'X': 156040895,
+	'Y': 57227415
 }
 
 def pull_families(sample_file, ped_file, m, batch_size=None, batch_offset=None):
@@ -98,9 +126,15 @@ def pull_sex(ped_file):
 	return sample_id_to_sex
 
 class WGSData:
-	def __init__(self, data_dir, gen_files, coord_file, sample_file, ped_file, chrom):
+	def __init__(self, data_dir, gen_files, coord_file, sample_file, ped_file, chrom, assembly):
 
-		self.chrom_length = chrom_lengths[chrom]
+		if assembly == '37':
+			self.chrom_length = chrom_lengths37[chrom]
+		elif assembly == '38':
+			self.chrom_length = chrom_lengths38[chrom]
+		else:
+			self.chrom_length = None
+			
 		self.data_dir = data_dir
 		self.gen_files = gen_files
 
@@ -116,6 +150,7 @@ class WGSData:
 		self.is_pass = coordinates[:, 3]==1
 
 		self.snp_positions = self.snp_positions[self.is_snp & self.is_pass]
+		assert np.all(self.snp_positions <= self.chrom_length)
 		print('chrom shape only SNPs', self.snp_positions.shape)
 
 	
@@ -128,6 +163,9 @@ class WGSData:
 		data = data[:, self.is_snp & self.is_pass]
 
 		data[data<0] = -1
+
+		# if a position has only 0s and -1s in the family, assume it's homref for everyone
+		data[:, np.all(data<=0, axis=0)] = 0
 
 		print('% all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
 		print('% all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])

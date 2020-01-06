@@ -88,9 +88,30 @@ class LazyLoss:
 		self.lc_equiv_indices = [self.loss_state_to_index[(0, 0, 0, 0) + tuple(s[4:-1]) + (1,)] for s in np.array(self.loss_states)[np.where(self.is_lc)[0], :]]
 		print('lc loss states', np.sum(self.is_lc))
 		
-		self.s = np.zeros((len(self.perfect_matches)+1, 3), dtype=float)
+		self.s = np.zeros((len(self.perfect_matches)+1, 2), dtype=float)
 
-		self.s[-1, :] = np.inf
+		self.__setup_ref_cost__()
+
+
+	def __setup_ref_cost__(self):
+		gen = (0,)*self.m
+		gen_index = self.genotypes.index(gen)
+
+		for i, pm in enumerate(self.perfect_matches):
+			for gen in list(product(*[[0, -1]]*self.m)):
+				self.s[i, 0] += 10**-sum([self.g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen))])
+				self.s[i, 1] += 10**-sum([self.hts_g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen))])
+		assert np.all(self.s<=1) and np.all(self.s>=0)
+		self.s = -np.log10(self.s)
+
+		values = np.min(self.s[self.perfect_match_indices, 0], axis=1)
+		hts_values = np.min(self.s[self.perfect_match_indices[self.is_hts, :], 1], axis=1)
+			
+		self.losses[~self.is_hts & ~self.is_lc, gen_index] += values[~self.is_hts & ~self.is_lc]
+		self.losses[self.is_hts, gen_index] += hts_values
+		self.losses[self.is_lc, gen_index] += values[self.lc_equiv_indices]
+
+		self.already_calculated[gen_index] = True
 
 	def __call__(self, gen): 
 		gen_index = self.genotypes.index(gen)
@@ -102,9 +123,9 @@ class LazyLoss:
 			values = np.min(self.s[self.perfect_match_indices, 0], axis=1)
 			hts_values = np.min(self.s[self.perfect_match_indices[self.is_hts, :], 1], axis=1)
 			
-			self.losses[~self.is_hts & ~self.is_lc, gen_index] = values[~self.is_hts & ~self.is_lc]
-			self.losses[self.is_hts, gen_index] = hts_values
-			self.losses[self.is_lc, gen_index] = values[self.lc_equiv_indices]
+			self.losses[~self.is_hts & ~self.is_lc, gen_index] += values[~self.is_hts & ~self.is_lc]
+			self.losses[self.is_hts, gen_index] += hts_values
+			self.losses[self.is_lc, gen_index] += values[self.lc_equiv_indices]
 
 			self.already_calculated[gen_index] = True
 		return self.losses[self.rep_state_indices, gen_index]
@@ -166,19 +187,12 @@ class LazyLoss:
 		# 3 = -/0 (hemizygous ref)
 		# 4 = -/1 (hemizygous alt)
 		# 5 = -/- (double deletion)
-		# 6 = 0/0/0
-		# 7 = 0/0/1
-		# 8 = 0/1/1
-		# 9 = 1/1/1
 
 		state_to_perfect_matches = dict()
 		mat_pat_to_gen = {
-			('-', '-'): 5, ('-', '0'): 3, ('-', '1'): 4, #('-', '00'): 0, ('-', '01'): 1, ('-', '11'): 2,
-			('0', '-'): 3, ('0', '0'): 0, ('0', '1'): 1, #('0', '00'): 6, ('0', '01'): 7, ('0', '11'): 8,
-			('1', '-'): 4, ('1', '0'): 1, ('1', '1'): 2, #('1', '00'): 7, ('1', '01'): 8, ('1', '11'): 9,
-			#('00', '-'): 0, ('00', '0'): 6, ('00', '1'): 7,
-			#('01', '-'): 1, ('01', '0'): 7, ('01', '1'): 8,
-			#('11', '-'): 2, ('11', '0'): 8, ('11', '1'): 9
+			('-', '-'): 5, ('-', '0'): 3, ('-', '1'): 4,
+			('0', '-'): 3, ('0', '0'): 0, ('0', '1'): 1,
+			('1', '-'): 4, ('1', '0'): 1, ('1', '1'): 2,
 			('-', '2'): 1, ('2', '-'): 1,
 			('0', '2'): 1, ('2', '0'): 1,
 			('1', '2'): 1, ('2', '1'): 1,
@@ -196,7 +210,8 @@ class LazyLoss:
 				pm = [mat_pat_to_gen[tuple(av[:2])], mat_pat_to_gen[tuple(av[2:4])]] # parents
 				for i in range(self.m-2): # children
 					mat, pat = s[(4+(2*i)):(6+(2*i))]
-					pm.append(mat_pat_to_gen[(av[mat], av[2+pat])])
+					mat_d, pat_d = s[(2*self.m + 2*i):(2*self.m + 2*i + 2)]
+					pm.append(mat_pat_to_gen[('-' if mat_d==1 else av[mat], '-' if pat_d==1 else av[2+pat])])
 				state_to_perfect_matches[s].append(tuple(pm))
 
 		self.perfect_matches = sorted(set(sum(state_to_perfect_matches.values(), [])))

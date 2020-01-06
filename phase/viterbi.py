@@ -12,10 +12,11 @@ def viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult
 
 	# first step, break symmetry
 	# we enforce that the chromosome starts with no deletions and a hard to sequence region
+	# also, no de novo deletions
 	pos_gen = tuple(family_genotypes[:, 0])
 	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
 
-	no_delstates = np.all(inheritance_states[:, [0, 1, 2, 3, -1]]==1, axis=1)
+	no_delstates = np.all(inheritance_states[:, [0, 1, 2, 3, -1]]==1, axis=1) & np.all(inheritance_states[:, np.arange(2*inheritance_states.m, 2*inheritance_states.m + 2*(inheritance_states.m - 2))]==0, axis=1)
 	v_cost[~no_delstates, 0] = np.inf
 
 	# next steps
@@ -48,8 +49,9 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 	
 	# choose best paths
 	# we enforce that the chromosome ends with no deletions and a hard to sequence region
+	# also, no de novo deletions
 	num_forks = 0
-	no_delstates = np.all(inheritance_states[:, [0, 1, 2, 3, -1]]==1, axis=1)
+	no_delstates = np.all(inheritance_states[:, [0, 1, 2, 3, -1]]==1, axis=1) & np.all(inheritance_states[:, np.arange(2*inheritance_states.m, 2*inheritance_states.m + 2*(inheritance_states.m - 2))]==0, axis=1)
 	min_value = np.min(v_cost[no_delstates, -1])
 	paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
 	print('Num solutions', paths.shape, min_value, inheritance_states[paths, :])
