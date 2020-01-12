@@ -37,28 +37,31 @@ class AutosomalInheritanceStates:
 		# family can have only a single de novo deletion
 		states = [x for x in states if np.sum(x[(2*m):(2*m + 2*(m-2))]) <= 1]
 
-		# can't have a de novo deletion if we already have an inherited deletion
-		def has_de_novo_and_inh(s):
-			# find de novo
-			child_index, is_mat = None, None
-			for i in range(m-2):
-				if s[2*m + 2*i] == 1:
-					child_index = i
-					is_mat = True
-				elif s[2*m + 2*i + 1] == 1:
-					child_index = i
-					is_pat = True
-			
-			# check if this child is already inheriting a deletion
-			if child_index is not None and s[-1]==2:
-				return True
-			elif child_index is not None and is_mat:
-				return s[s[4 + 2*child_index]]==0
-			elif child_index is not None and is_pat:
-				return s[2+s[5 + 2*child_index]]==0
-			else:
-				return False
-		states = [x for x in states if not has_de_novo_and_inh(x)]
+		# can't have a de novo deletion AND an inherited deletion
+		states = [x for x in states if (np.sum(x[(2*m):(2*m + 2*(m-2))])==0) or (x[0]==1 and x[1]==1 and x[2]==1 and x[3]==1)]
+
+		## can't have a de novo deletion if we already have an inherited deletion
+		#def has_de_novo_and_inh(s):
+		#	# find de novo
+		#	child_index, is_mat = None, None
+		#	for i in range(m-2):
+		#		if s[2*m + 2*i] == 1:
+		#			child_index = i
+		#			is_mat = True
+		#		elif s[2*m + 2*i + 1] == 1:
+		#			child_index = i
+		#			is_pat = True
+		#	
+		#	# check if this child is already inheriting a deletion
+		#	if child_index is not None and s[-1]==2:
+		#		return True
+		#	elif child_index is not None and is_mat:
+		#		return s[s[4 + 2*child_index]]==0
+		#	elif child_index is not None and is_pat:
+		#		return s[2+s[5 + 2*child_index]]==0
+		#	else:
+		#		return False
+		#states = [x for x in states if not has_de_novo_and_inh(x)]
 
 		# can't have a state where a parent has a deletion that isn't inherited unless it's a double deletion
 		states = [x for x in states if x[0]==1 or (x[0]==0 and x[1]==0) or len([i for i in range(4, 2*m, 2) if x[i] == 0])>0]
