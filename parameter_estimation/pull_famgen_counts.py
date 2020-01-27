@@ -18,6 +18,34 @@ if chrom == '25':
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 out_file = '%s/chr.%s.famgen.counts.txt' % (data_dir, chrom)
+regions, include = None, None
+if len(sys.argv) > 4:
+    if sys.argv[4] == '--include':
+        include = True
+    elif sys.argv[4] == '--exclude':
+        include = False
+    else:
+        raise Exception('Bad arguments.')
+    bed_file = sys.argv[5] 
+
+    regions = []
+    with open(bed_file, 'r') as f:
+        for line in f:
+            pieces = line.strip().split('\t')
+            if pieces[0] == chrom:
+                regions.append(int(pieces[1]))
+                regions.append(int(pieces[2])+1)
+    regions = np.array(regions)
+
+    if include:
+        print('including %d regions' % int(len(regions)/2))
+    else:
+        print('excluding %d regions' % int(len(regions)/2))
+
+    out_dir = sys.argv[6]
+    out_file = '%s/chr.%s.famgen.counts.txt' % (out_dir, chrom)
+    print('saving to %s' % out_file)
+
 
 # pull families with sequence data
 with open(sample_file, 'r') as f:
@@ -50,13 +78,25 @@ with open(out_file, 'w+') as f:
     is_snp = pos_data[:, 2].astype(bool)
     is_pass = pos_data[:, 3].astype(bool)
 
+    if regions is not None:
+        insert_loc = np.searchsorted(regions, pos_data[:, 1])
+        if include:
+            is_ok_region = np.remainder(insert_loc, 2)==1
+        else:
+            is_ok_region = np.remainder(insert_loc, 2)==0
+    else:
+        is_ok_region = np.ones(is_snp.shape, dtype=bool)
+
+
     print(np.sum(~is_snp))
     print(np.sum(~is_pass))
+    print(np.sum(~is_ok_region))
+
     # Pull data together
     A = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
 
     # filter out snps
-    A = A[:, is_snp & is_pass]
+    A = A[:, is_snp & is_pass & is_ok_region]
     print('genotype matrix prepared', A.shape)
 
     for famkey, inds in families.items():
