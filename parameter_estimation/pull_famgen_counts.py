@@ -8,6 +8,7 @@ import scipy.sparse as sparse
 data_dir = sys.argv[1]
 ped_file = sys.argv[2]
 chrom = sys.argv[3]
+out_dir = sys.argv[4]
 
 if chrom == '23':
     chrom = 'X'
@@ -17,16 +18,16 @@ if chrom == '25':
     chrom = 'MT'
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
-out_file = '%s/chr.%s.famgen.counts.txt' % (data_dir, chrom)
-regions, include = None, None
-if len(sys.argv) > 4:
-    if sys.argv[4] == '--include':
+regions, include, af_cutoff = None, None, None
+
+if len(sys.argv) > 5:
+    if sys.argv[5] == '--include':
         include = True
-    elif sys.argv[4] == '--exclude':
+    elif sys.argv[5] == '--exclude':
         include = False
     else:
         raise Exception('Bad arguments.')
-    bed_file = sys.argv[5] 
+    bed_file = sys.argv[6] 
 
     regions = []
     with open(bed_file, 'r') as f:
@@ -42,9 +43,12 @@ if len(sys.argv) > 4:
     else:
         print('excluding %d regions' % int(len(regions)/2))
 
-    out_dir = sys.argv[6]
-    out_file = '%s/chr.%s.famgen.counts.txt' % (out_dir, chrom)
-    print('saving to %s' % out_file)
+    if len(sys.argv) > 7 and sys.argv[7] == '--af':
+        af_cutoff = float(sys.argv[8])
+
+
+out_file = '%s/chr.%s.famgen.counts.txt' % (out_dir, chrom)
+print('saving to %s' % out_file)
 
 
 # pull families with sequence data
@@ -88,26 +92,35 @@ with open(out_file, 'w+') as f:
         is_ok_region = np.ones(is_snp.shape, dtype=bool)
 
 
-    print(np.sum(~is_snp))
-    print(np.sum(~is_pass))
-    print(np.sum(~is_ok_region))
+    print('not SNP', np.sum(~is_snp))
+    print('not PASS', np.sum(~is_pass))
+    print('not in region', np.sum(~is_ok_region))
+
 
     # Pull data together
     A = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
 
+    if af_cutoff is not None:
+        is_af_ok = (A.sum(axis=0)/A.shape[0]).A.flatten() <= af_cutoff
+    else:
+        is_af_ok = np.ones(is_snp.shape, dtype=bool)
+
+    print('bad AF', np.sum(~is_af_ok))
+
     # filter out snps
-    A = A[:, is_snp & is_pass & is_ok_region]
+    A = A[:, is_snp & is_pass & is_ok_region & is_af_ok]
     print('genotype matrix prepared', A.shape)
 
     for famkey, inds in families.items():
         m = len(inds)
         genotype_to_counts = np.zeros((4,)*m, dtype=int)
         indices = [sample_id_to_index[ind] for ind in inds]
-        family_genotypes = A[indices, :].A
+        family_genotypes = A[indices, :]
         
         # remove positions where whole family is homref
-        all_hom_ref = np.all(family_genotypes==0, axis=0)
-        family_genotypes = family_genotypes[:, ~all_hom_ref]
+        has_data = sorted(set(family_genotypes.nonzero()[1]))
+        num_hom_ref = family_genotypes.shape[1] - len(has_data)
+        family_genotypes = family_genotypes[:, has_data].A
         #print(famkey, family_genotypes.shape)
 
         # recode missing values
@@ -117,7 +130,7 @@ with open(out_file, 'w+') as f:
         unique_gens, counts = np.unique(family_genotypes, return_counts=True, axis=1)
         for g, c in zip(unique_gens.T, counts):
             genotype_to_counts[tuple(g)] += c
-        genotype_to_counts[(0,)*m] = np.sum(all_hom_ref)
+        genotype_to_counts[(0,)*m] = num_hom_ref
 
         # write to file
         f.write('\t'.join(['.'.join(famkey), '.'.join(inds)] + \
