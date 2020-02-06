@@ -4,7 +4,7 @@
 #SBATCH --job-name=famgen
 #SBATCH --output=logs/famgen_%a.out
 #SBATCH --error=logs/famgen_%a.err
-#SBATCH --array=1-22
+#SBATCH --array=1-24
 #SBATCH -p dpwall
 #SBATCH -D /oak/stanford/groups/dpwall/users/kpaskov/PhasingFamilies
 #SBATCH --mem=32G

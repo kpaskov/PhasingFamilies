@@ -221,10 +221,22 @@ baseline_match = {(0, 0), (1, 1), (2, 2), (4, 0), (5, 2), (6, 3)}
 
 # ------------------------------------ Estimate Error Rates ------------------------------------
 num_error_families = 0
-for i, famkey in enumerate(famkeys):
-    print(famkey)
-    try:
+
+famgroup_to_famkeys = defaultdict(set)
+for famkey in famkeys:
+    famgroup_to_famkeys[famkey.split('.')[0]].add(famkey)
+
+for i, (famgroup, group_famkeys) in enumerate(famgroup_to_famkeys.items()):
+
+    all_inds = family_to_inds[list(group_famkeys)[0]][:2] # parents
+    all_inds = all_inds + sorted(sum([family_to_inds[famkey][2:] for famkey in group_famkeys], []))
+    child_to_index = dict([(x, i) for i, x in enumerate(all_inds[2:])])
+    print(famgroup, all_inds)
+        
+    big_X, big_y = [], []
+    for famkey in group_famkeys:
         inds = family_to_inds[famkey]
+        print(inds)
         m = len(inds)
             
         is_mendelian = get_mendelian([None, None] + ([mendelian_check]*(m-2)))
@@ -232,74 +244,80 @@ for i, famkey in enumerate(famkeys):
         famsum_genome_X, famsum_genome_y, nonmendelian_famgens = construct_problem(is_mendelian, 
             [allowable_errors_parent]*2 + [allowable_errors_child]*(m-2), 
             [family_chrom_to_counts[(famkey, chrom)] for chrom in chroms])
+
+        num_errors = len(errors)
+        new_indices = list(range(2*num_errors)) # parents stay in their spots
+        for x in inds[2:]:
+            new_child_index = child_to_index[x]
+            new_indices.extend(list(range((new_child_index+2)*num_errors, (new_child_index+3)*num_errors)))
+
+        print(new_indices)
+        reordered_X = np.zeros((famsum_genome_X.shape[0], len(all_inds)*num_errors))
+        reordered_X[:, new_indices] = famsum_genome_X
+        big_X.append(reordered_X)
+        big_y.append(famsum_genome_y)
+
+    famsum_genome_X = np.vstack(big_X)
+    famsum_genome_y = np.hstack(big_y)
+
+    is_zero = np.sum(famsum_genome_X, axis=0)==0
+    print('Removing zero cols:', [(np.floor(i/len(errors)), errors[i % len(errors)]) for i in np.where(is_zero)[0]])
+    famsum_genome_X = famsum_genome_X[:, ~is_zero]
+    old_col_index_to_new = dict([(old_index, new_index) for new_index, old_index in enumerate(np.where(~is_zero)[0])])
+
+    print('Removing zero rows:', np.sum(np.sum(famsum_genome_X, axis=1)==0))
+    indices = np.where(np.sum(famsum_genome_X, axis=1) != 0)[0]
+    famsum_genome_X = famsum_genome_X[indices, :]
+    famsum_genome_y = famsum_genome_y[indices]
+
+    print(famsum_genome_X.shape, famsum_genome_y.shape)
             
-        is_zero = np.sum(famsum_genome_X, axis=0)==0
-        print('Removing zero cols:', [(np.floor(i/len(errors)), errors[i % len(errors)]) for i in np.where(is_zero)[0]])
-        famsum_genome_X = famsum_genome_X[:, ~is_zero]
-        old_col_index_to_new = dict([(old_index, new_index) for new_index, old_index in enumerate(np.where(~is_zero)[0])])
+    prob_status, famsum_genome_n, famsum_genome_exp, famsum_genome_obs = poisson_regression(famsum_genome_X, famsum_genome_y)
 
-        print('Removing zero rows:', np.sum(np.sum(famsum_genome_X, axis=1)==0))
-        indices = np.where(np.sum(famsum_genome_X, axis=1) != 0)[0]
-        famsum_genome_X = famsum_genome_X[indices, :]
-        famsum_genome_y = famsum_genome_y[indices]
+    if prob_status != 'optimal' and prob_status != 'optimal_inaccurate':
+        raise Error('Parameters not fully estimated.')
 
-        #print('Removing rows with y=0:', np.sum(famsum_genome_y==0))
-        #indices = np.where(famsum_genome_y > 0)[0]
-        #famsum_genome_X = famsum_genome_X[indices, :]
-        #famsum_genome_y = famsum_genome_y[indices]
+    err = famsum_genome_X.dot(famsum_genome_n)-famsum_genome_y
 
-        print(famsum_genome_X.shape, famsum_genome_y.shape)
-                
-        prob_status, famsum_genome_n, famsum_genome_exp, famsum_genome_obs = poisson_regression(famsum_genome_X, famsum_genome_y)
+    error_estimates = np.zeros((len(errors), len(all_inds)))
+    error_estimates[:] = np.nan
+    for k in range(len(errors)*len(all_inds)):
+        if k in old_col_index_to_new:
+            error_estimates[k%len(errors), int(np.floor(k/len(errors)))] = famsum_genome_n[old_col_index_to_new[k]]
 
-        if prob_status != 'optimal' and prob_status != 'optimal_inaccurate':
-            raise Error('Parameters not fully estimated.')
+    # if we can't estimate an error rate, use the mean value for everyone else
+    #for k in range(len(errors)):
+    #    error_estimates[k, np.isnan(error_estimates[k, :])] = 10.0**np.nanmean(np.log10(error_estimates[k, :]))
 
-        err = famsum_genome_X.dot(famsum_genome_n)-famsum_genome_y
-        print([(nonmendelian_famgens[i], err[i]) for i in np.argsort(np.abs(err))[-10:]])
+    # estimate error rates for deletion errors
+    error_estimates[errors.index((4, 1)), :] = error_estimates[errors.index((0, 1)), :]
+    error_estimates[errors.index((4, 2)), :] = error_estimates[errors.index((0, 2)), :]
+    error_estimates[errors.index((4, 3)), :] = error_estimates[errors.index((0, 3)), :]
 
-        error_estimates = np.zeros((len(errors), len(inds)))
-        error_estimates[:] = np.nan
-        for k in range(len(errors)*len(inds)):
-            if k in old_col_index_to_new:
-                error_estimates[k%len(errors), int(np.floor(k/len(errors)))] = famsum_genome_n[old_col_index_to_new[k]]
+    error_estimates[errors.index((5, 0)), :] = error_estimates[errors.index((2, 0)), :]
+    error_estimates[errors.index((5, 1)), :] = error_estimates[errors.index((2, 1)), :]
+    error_estimates[errors.index((5, 3)), :] = error_estimates[errors.index((2, 3)), :]
 
-        # if we can't estimate an error rate, use the mean value for everyone else
-        #for k in range(len(errors)):
-        #    error_estimates[k, np.isnan(error_estimates[k, :])] = 10.0**np.nanmean(np.log10(error_estimates[k, :]))
+    error_estimates[errors.index((6, 0)), :] = error_estimates[errors.index((2, 1)), :]
+    error_estimates[errors.index((6, 1)), :] = error_estimates[errors.index((0, 2)), :]
+    error_estimates[errors.index((6, 2)), :] = error_estimates[errors.index((0, 1)), :]
 
-        # estimate error rates for deletion errors
-        error_estimates[errors.index((4, 1)), :] = error_estimates[errors.index((0, 1)), :]
-        error_estimates[errors.index((4, 2)), :] = error_estimates[errors.index((0, 2)), :]
-        error_estimates[errors.index((4, 3)), :] = error_estimates[errors.index((0, 3)), :]
+    print(-np.log10(error_estimates))
+    #assert np.all(~np.isnan(error_estimates))
 
-        error_estimates[errors.index((5, 0)), :] = error_estimates[errors.index((2, 0)), :]
-        error_estimates[errors.index((5, 1)), :] = error_estimates[errors.index((2, 1)), :]
-        error_estimates[errors.index((5, 3)), :] = error_estimates[errors.index((2, 3)), :]
+    for j in range(len(all_inds)):
+        params[famgroup + '.' + all_inds[j]] = {}
+        baseline = np.ones((7,))
+        for e, c in zip(errors, error_estimates[:, j]):
+            #print(e, -np.log10(c))
+            baseline[e[0]] -= c
 
-        error_estimates[errors.index((6, 0)), :] = error_estimates[errors.index((2, 1)), :]
-        error_estimates[errors.index((6, 1)), :] = error_estimates[errors.index((0, 2)), :]
-        error_estimates[errors.index((6, 2)), :] = error_estimates[errors.index((0, 1)), :]
-
-        print(-np.log10(error_estimates))
-        #assert np.all(~np.isnan(error_estimates))
-
-        for j in range(len(inds)):
-            params[famkey + '.' + inds[j]] = {}
-            baseline = np.ones((7,))
-            for e, c in zip(errors, error_estimates[:, j]):
-                #print(e, -np.log10(c))
-                baseline[e[0]] -= c
-
-            for a, a_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (4, '-/0'), (5, '-/1'), (6, '-/-')]:
-                for o, o_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (3, './.')]:
-                    if (a, o) in baseline_match:
-                        params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(baseline[a])
-                    else:
-                        params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(error_estimates[error_to_index[(a, o)], j])
-    except:
-        num_error_families += 1
-        print('ERROR')
+        for a, a_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (4, '-/0'), (5, '-/1'), (6, '-/-')]:
+            for o, o_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (3, './.')]:
+                if (a, o) in baseline_match:
+                    params[famgroup + '.' + all_inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(baseline[a])
+                else:
+                    params[famgroup + '.' + all_inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(error_estimates[error_to_index[(a, o)], j])
 
 print('Total errors', num_error_families)
 
