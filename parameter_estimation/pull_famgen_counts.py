@@ -33,7 +33,7 @@ if len(sys.argv) > 5:
     with open(bed_file, 'r') as f:
         for line in f:
             pieces = line.strip().split('\t')
-            if pieces[0] == chrom:
+            if pieces[0] == chrom or pieces[0] == 'chr%s' % chrom:
                 regions.append(int(pieces[1]))
                 regions.append(int(pieces[2])+1)
     regions = np.array(regions)
