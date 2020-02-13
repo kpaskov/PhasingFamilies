@@ -7,10 +7,19 @@ from os import listdir
 data_dir = sys.argv[1]
 
 pass_from_gen = False
+pass_all = False
+pass_from_qual = False
 if len(sys.argv)>2 and sys.argv[2] == '--pass_from_gen':
     pass_from_gen = True
     ped_file = sys.argv[3]
     print('Generate PASS from genotypes.')
+elif len(sys.argv)>2 and sys.argv[2] == '--pass_all':
+    pass_all = True
+    print('All positions PASS.')
+elif len(sys.argv)>2 and sys.argv[2] == '--pass_from_qual':
+    pass_from_qual = True
+    cutoff = int(sys.argv[3])
+    print('Generate PASS from QUAL with cutoff %d' % cutoff)
 
 chroms = [str(x) for x in range(1, 23)] + ['X', 'Y']
 
@@ -70,7 +79,15 @@ for chrom in chroms:
         else:
             af, percent_miss = calculate_af_and_percent_miss(chrom)
             is_pass = (percent_miss < 0.1)
-
+    elif pass_all:
+        is_pass = np.ones((pos_data.shape[0],), dtype=bool)
+    elif pass_from_qual:
+        is_pass = []
+        with gzip.open('%s/chr.%s.gen.variants.txt.gz' % (data_dir, chrom), 'rt') as f:
+            for line in f:
+                pieces = line.strip().split('\t')
+                is_pass.append(int(pieces[5]) >= cutoff)
+        is_pass = np.array(is_pass)
     else:
         is_pass = []
         with gzip.open('%s/chr.%s.gen.variants.txt.gz' % (data_dir, chrom), 'rt') as f:
@@ -79,7 +96,7 @@ for chrom in chroms:
                 is_pass.append(pieces[6] == 'PASS')
         is_pass = np.array(is_pass)
             
-      
+    print(np.sum(is_pass), np.sum(is_pass)/is_pass.shape[0])
 
     chrom_int = 23 if chrom == 'X' else 24 if chrom == 'Y' else int(chrom)
     np.save('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom), np.hstack((chrom_int*np.ones((pos_data.shape[0], 1), dtype=int), pos_data[:, 1:3], is_pass[:, np.newaxis])))

@@ -61,7 +61,7 @@ class LazyLoss:
 
 			for pred, obs in pred_to_correct_obs.items():
 				prob_of_error = sum([10.0**-self.g_cost[(j, pred, o)] for o in obss if o!=obs])
-				self._cost[(j, pred, obs)] = -np.log10(1-prob_of_error)
+				self.g_cost[(j, pred, obs)] = -np.log10(1-prob_of_error)
 
 			# hard-to-sequence region costs
 			for pred, obs in product(preds, obss):

@@ -5,14 +5,16 @@ You need to get your genomic data into numpy format. If your data is currently i
 
 python preprocessing/pull_gen_data.py [vcf_file] [data_dir] [chrom]
 
+If your vcf files don't have filters applied (for example no variant is PASS) or you'd like to apply a different type of filter, use preprocessing/pull_pass.py
+
 2. Tune parameters
-The phasing/deletion detection code needs estimates of different types of sequencing error rates. These parameters can be estimated automatically from the data. First, we pull out counts for joint family genotypes (be sure to do X and Y as well as the autosomes)
+The phasing/deletion detection code needs estimates of different types of sequencing error rates. These parameters can be estimated automatically from the data. First, we pull out counts for joint family genotypes.
 
 python parameter_estimation/pull_famgen_counts.py [data_dir] [ped_file] [chrom]
 
 Then we estimate parameters using
 
-python parameter_estimation/estimate_parameters.py [data_dir] [ped_file] [param_file]
+python parameter_estimation/estimate_parameters_per_individual.py [data_dir] [param_file]
 
 3. Run Phasing/Deletion Detection
 Now we're ready to run using
