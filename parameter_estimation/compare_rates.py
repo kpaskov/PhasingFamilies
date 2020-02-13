@@ -5,8 +5,8 @@ import scipy.stats
 import json
 
 BaselineCounts = namedtuple('BaselineCounts', ['counts', 'samples', 'families', 'family_sizes', 'is_child', 'is_mom', 'is_dad'])
-
 Samples = namedtuple('Samples', ['sample_ids', 'families', 'family_sizes', 'is_child', 'is_mom', 'is_dad'])
+PrecisionRecall = namedtuple('PrecisionRecall', ['precision1', 'recall1', 'precision2', 'recall2'])
 
 def pull_samples(data_dir, chroms):
     sample_to_chroms = defaultdict(set)
@@ -117,3 +117,27 @@ def estimate_error_counts(baseline_counts, error_rates, chroms, gens, obss):
         for gen_index, obs_index in product(range(len(gens)), range(len(obss))):
             expected_error_counts[i, gen_index, obs_index] = ground_truth[gen_index]*(10**-error_rates[i, gen_index, obs_index])
     return expected_error_counts
+
+def calculate_precision_recall(error_rates, baseline_counts, gens, obss):
+    # precision: TP/(TP + FP)
+    # let n_0 = # of times the real genotype is 0/0
+    # E[TP] = n_1 * p_11
+    # E[FP] = n_0 * p_01
+
+    # figure out true baselines
+    ns = baseline_counts[:, :3]
+
+    precisions = []
+    recalls = []
+    for gen_index, gen in enumerate(gens):
+        error_counts = ns*(10.0**-error_rates[:, :, obss.index(gen)])
+        TP = error_counts[:, gen_index]
+        FP = np.sum(error_counts, axis=1)-TP
+        FN = ns[:, gen_index]*(1-(10.00**-error_rates[:, gen_index, obss.index(gen)]))
+ 
+        precisions.append(TP/(TP+FP))
+        recalls.append(TP/(TP+FN))
+        
+    return PrecisionRecall(precisions[1], recalls[1], precisions[2], recalls[2])
+
+
