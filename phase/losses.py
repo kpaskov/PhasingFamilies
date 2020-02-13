@@ -40,14 +40,28 @@ class LazyLoss:
 		self.g_cost = dict()
 		self.hts_g_cost = dict()
 
+		emission_params = np.zeros((len(inds), len(preds)*len(obss)))
+		for i, (pred, obs) in enumerate(product(preds, obss)):
+			for j, ind in enumerate(inds):
+				emission_params[j, i] = params[famkey + '.' + ind]['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
+
+		# if we can't estimate an error rate, use the mean value for everyone else
+		for k in range(emission_params.shape[1]):
+			emission_params[np.isnan(emission_params[:, k]), k] = 10.0**np.nanmedian(np.log10(emission_params[:, k]))
+
 		for j, ind in enumerate(inds):
-			for pred, obs in product(preds, obss):
-				self.g_cost[(j, pred, obs)] = params[famkey + '.' + ind]['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
+			# normal regions costs
+			for i, (pred, obs) in enumerate(product(preds, obss)):
+				self.g_cost[(j, pred, obs)] = emission_params[j, i]
 
 			pred_to_correct_obs = dict()
 			for pred in preds:
 				pred_to_correct_obs[pred] = sorted(obss, key=lambda x: np.inf if self.g_cost[(j, pred, x)]==0 else self.g_cost[(j, pred, x)])[0]
 			print('Prediction to best obs', pred_to_correct_obs)
+
+			for pred, obs in pred_to_correct_obs.items():
+				prob_of_error = sum([10.0**-self.g_cost[(j, pred, o)] for o in obss if o!=obs])
+				self._cost[(j, pred, obs)] = -np.log10(1-prob_of_error)
 
 			# hard-to-sequence region costs
 			for pred, obs in product(preds, obss):

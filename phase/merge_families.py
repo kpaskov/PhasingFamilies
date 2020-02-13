@@ -18,13 +18,16 @@ for filename, batches in file_to_batches.items():
 	print(filename)
 	batches = sorted(batches, key=lambda x: x[0])
 
-	with open(filename, 'w+') as f:
-		for i, (_, subfile) in enumerate(batches):
-			with open(subfile, 'r') as sf:
-				if i!=0:
-					next(sf) # skip header on subsequent files
-				for line in sf:
-					f.write(line)
+	try:
+		with open(filename, 'w+') as f:
+			for i, (_, subfile) in enumerate(batches):
+				with open(subfile, 'r') as sf:
+					if i!=0:
+						next(sf) # skip header on subsequent files
+					for line in sf:
+						f.write(line)
+	except:
+		print('Error', filename)
 
 # phased files
 file_to_batches = defaultdict(list)
@@ -41,11 +44,14 @@ for filename, batches in file_to_batches.items():
 	print(filename)
 	batches = sorted(batches, key=lambda x: x[0])
 
-	with open(filename, 'w+') as f:
-		for i, (_, subfile) in enumerate(batches):
-			with open(subfile, 'r') as sf:
-				if i!=0:
-					next(sf) # skip header on subsequent files
-				for line in sf:
-					f.write(line)
+	try:
+		with open(filename, 'w+') as f:
+			for i, (_, subfile) in enumerate(batches):
+				with open(subfile, 'r') as sf:
+					if i!=0:
+						next(sf) # skip header on subsequent files
+					for line in sf:
+						f.write(line)
+	except:
+		print('Error', filename)
 

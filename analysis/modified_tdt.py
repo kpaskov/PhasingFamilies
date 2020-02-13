@@ -30,7 +30,8 @@ with open('%s/chr.%s.collections.json' % (deletion_dir, chrom), 'r') as f:
 print('collections loaded', len(collections))
 
 # pull familysizes
-family_sizes = [3, 4, 5, 6, 7]
+#family_sizes = [3, 4, 5, 6, 7]
+family_sizes = [3, 4, 5]
 familysize_to_index = dict([(x, i) for i, x in enumerate(family_sizes)])
 print('family sizes', family_sizes)
 
@@ -46,7 +47,8 @@ print('positions complete')
 def remove_double_deletions(deletions):
     doublekey_to_deletions = defaultdict(list)
     for d in deletions:
-        doublekey = (d['family'], d['is_mat'])
+        #doublekey = (d['family'], d['is_mat'])
+        doublekey = (d['family'],)
         doublekey_to_deletions[doublekey].append(d)
         
     return [ds[0] for ds in doublekey_to_deletions.values() if len(ds) == 1]
@@ -104,43 +106,58 @@ def estimate_transmission(vs, counts, max_iters=5, l1_convergence_cutoff=np.powe
     num_iters = 0
     
     while diff>l1_convergence_cutoff and num_iters<max_iters:
+        # start with our prior
         posteriors = np.array([np.log(prior) for _ in range(vs.shape[1])]).T
         
-        # for each transmission probability
-        for index in range(vs.shape[1]):
-
-            for i in range(vs.shape[0]):
+        # for each deletion
+        for i in range(vs.shape[0]):
+            # if the deletion is transmitted
+            if np.sum(vs[i, :, 1]) > 0:# and np.sum(vs[i, :, 0]) > 0:
                 ns = np.sum(vs[i, :, :], axis=1)
+                has_data = ns > 0
 
-                p_nt = np.ones(grid.shape)
-                for j, (p, n) in enumerate(zip(ps, ns)):
-                    if j==index:
-                        p_nt = p_nt * np.power(1-grid, n)
-                    else:
-                        p_nt = p_nt * np.power(1-p, n)
+                # form p_nt
+                p_nt = np.ones(posteriors.shape)
+                p_at = np.ones(posteriors.shape)
+                for index1 in np.where(has_data)[0]:
+                    for index2 in np.where(has_data)[0]:
+                        if index1 == index2:
+                            p_nt[:, index1] = p_nt[:, index1] * np.power(1-grid, ns[index2])
+                            p_at[:, index1] = p_at[:, index1] * np.power(grid, ns[index2])
+                        else:
+                            p_nt[:, index1] = p_nt[:, index1] * np.power(1-ps[index2], ns[index2])
+                            p_at[:, index1] = p_at[:, index1] * np.power(ps[index2], ns[index2])
 
-                for j in np.where(ns > 0)[0]:
-                    if j==index:
-                        qs = grid
-                    else:
-                        qs = ps[j]
+                assert np.all(p_nt[:, has_data] < 1)
+                assert np.all(p_nt[:, has_data] > 0)
+                assert np.all(p_at[:, has_data] < 1)
+                assert np.all(p_at[:, has_data] > 0)
+                posteriors[:, has_data] -= counts[i] * np.log(1-p_nt[:, has_data])
 
-                    posteriors[:, index] += counts[i] * ((vs[i, j, 1] * np.log(qs)) + (vs[i, j, 0] * np.log(1-qs)) - np.log(1-p_nt))
+                # now form likelihood
+                for index1 in np.where(has_data)[0]:
+                    for index2 in np.where(has_data)[0]:
+                        if index1==index2:
+                            posteriors[:, index1] += counts[i] * ((vs[i, index2, 1] * np.log(grid)) + (vs[i, index2, 0] * np.log(1-grid)))
+                        else:
+                            posteriors[:, index1] += counts[i] * ((vs[i, index2, 1] * np.log(ps[index2])) + (vs[i, index2, 0] * np.log(1-ps[index2])))
 
-            # switch back to probability space
+        # switch back to probability space
+        for index in range(vs.shape[1]):
             posteriors[:, index] = np.exp(posteriors[:, index] - np.max(posteriors[:, index]))
             posteriors[:, index] = posteriors[:, index]/np.sum(posteriors[:, index])
          
         # check convergence
         ps = np.array([np.mean(grid.shape[0]*grid*posteriors[:, i]) for i in range(vs.shape[1])])
+        assert np.all(ps>0) & np.all(ps<1)
         diff = 1 if prev_ps is None else np.sum(np.abs(ps-prev_ps))
         prev_ps = ps
         num_iters += 1
 
     #if diff>l1_convergence_cutoff:
-    #	print('did not converge')
-    #	#posteriors[:] = np.nan
-    #	#ps = [np.nan, np.nan, np.nan, np.nan]
+    #   print('did not converge')
+    #   #posteriors[:] = np.nan
+    #   #ps = [np.nan, np.nan, np.nan, np.nan]
 
     return posteriors, ps, diff
 
@@ -155,22 +172,25 @@ all_posteriors_mf = np.zeros((len(collections), grid.shape[0], 4))
 all_transrates_mf = np.zeros((len(collections), 4))
 
 for i, collection in enumerate(collections):
-	deletions = remove_double_deletions(collection['matches'])
-	
-	# all
-	vs, cs = create_transmission_table(deletions)
-	posteriors, trs, conf = estimate_transmission(vs, cs)
-	all_posteriors[i, :, :] = posteriors
-	all_transrates[i, :] = trs
+    deletions = [x for x in remove_double_deletions(collection['matches']) if not x['is_denovo']]
 
-	# m/f
-	vs, cs = create_transmission_table_mf(deletions)
-	posteriors, trs, conf = estimate_transmission(vs, cs)
-	all_posteriors_mf[i, :, :] = posteriors
-	all_transrates_mf[i, :] = trs
+    if chrom == 'X':
+        deletions = [d for d in deletions if d['is_mat'] and not d['is_denovo']]
+    
+    # all
+    vs, cs = create_transmission_table(deletions)
+    posteriors, trs, conf = estimate_transmission(vs, cs)
+    all_posteriors[i, :, :] = posteriors
+    all_transrates[i, :] = trs
 
-	if i%100 == 0:
-		print(i, '/', len(collections))
+    # m/f
+    vs, cs = create_transmission_table_mf(deletions)
+    posteriors, trs, conf = estimate_transmission(vs, cs)
+    all_posteriors_mf[i, :, :] = posteriors
+    all_transrates_mf[i, :] = trs
+
+    if i%100 == 0:
+        print(i, '/', len(collections))
 
 np.savez('%s/chr.%s.transrates' % (deletion_dir, chrom), 
 	aff=all_transrates[:, 0], unaff=all_transrates[:, 1],

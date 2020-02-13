@@ -103,7 +103,7 @@ for i, chrom in enumerate(chroms):
 
             m = len(inds)
 
-            if m<=7:
+            if m<=8:
                 if famkey not in family_to_inds:
                     family_to_inds[famkey] = inds
                 else:
@@ -184,7 +184,9 @@ def poisson_regression(X, y, init=None):
     mu = np.sum(alpha*X, axis=0)
     objective = cp.Minimize(mu*n - alpha*y*cp.log(alpha*X*n))
 
-    constraints = [n >= 0, n<=1]
+    # rule of 3 so that if we don't observe any errors, then we take the 95% confidence interval
+    z = 1.96
+    constraints = [n>= ((z*z)/2)/(np.sum(X, axis=0)+(z*z)), n<=1]
     prob = cp.Problem(objective, constraints)
     
     result = prob.solve(solver='ECOS', max_iters=1000)
