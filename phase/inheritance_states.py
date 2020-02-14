@@ -27,9 +27,13 @@ from itertools import product
 
 class AutosomalInheritanceStates:
 
-	def __init__(self, m):
+	def __init__(self, m, detect_denovos):
 		self.m = m
-		states = [x for x in product(*([[0, 1]]*4 + [[0, 1]]*(2*m-4) + [[0, 1]]*(2*m-4) + [[0, 1]]))]
+
+		if detect_denovos:
+			states = [x for x in product(*([[0, 1]]*4 + [[0, 1]]*(2*m-4) + [[0, 1]]*(2*m-4) + [[0, 1]]))]
+		else:
+			states = [x for x in product(*([[0, 1]]*4 + [[0, 1]]*(2*m-4) + [[0]]*(2*m-4) + [[0, 1]]))]
 
 		# child1 inherits (0, 0)
 		states = [x for x in states if x[4]==0 and x[5]==0]

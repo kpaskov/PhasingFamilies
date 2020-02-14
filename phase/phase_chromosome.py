@@ -23,9 +23,13 @@ if __name__ == "__main__":
 	assembly = sys.argv[5]
 	out_dir = sys.argv[6]
 	param_file = sys.argv[7]
-	batch_size = None if len(sys.argv) < 10 else int(sys.argv[8])
-	batch_num = None if len(sys.argv) < 10 else int(sys.argv[9])
+	detect_denovos = bool(sys.argv[8])
+	batch_size = None if len(sys.argv) < 11 else int(sys.argv[9])
+	batch_num = None if len(sys.argv) < 11 else int(sys.argv[10])
 	batch_offset = None
+
+	if detect_denovos:
+		print('Detecting de novos...')
 
 	if chrom == '23':
 		chrom = 'X'
@@ -50,7 +54,7 @@ if __name__ == "__main__":
 	families_of_this_size = pull_families(sample_file, ped_file, m, batch_size, batch_offset)
 
 	# create inheritance states
-	inheritance_states = AutosomalInheritanceStates(m)
+	inheritance_states = AutosomalInheritanceStates(m, detect_denovos)
 	
 	# create transition matrix
 	transition_matrix = AutosomalTransitionMatrix(inheritance_states, params)

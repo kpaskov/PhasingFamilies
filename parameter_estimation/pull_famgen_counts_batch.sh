@@ -18,10 +18,10 @@ echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
 # ------------------------ For parameter estimation paper -----------------------
 
 # ihart
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart
+#srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart
 
 # ihart HCR
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_HCR --exclude data/btu356-suppl_data/btu356_LCR-hs37d5.bed/btu356_LCR-hs37d5.bed
+#srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_HCR --exclude data/btu356-suppl_data/btu356_LCR-hs37d5.bed/btu356_LCR-hs37d5.bed
 
 # ihart LCR
 # srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_LCR --include data/btu356-suppl_data/btu356_LCR-hs37d5.bed/btu356_LCR-hs37d5.bed
@@ -33,31 +33,31 @@ srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34
 # srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart3.2 data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_EX --include data/VCRome_2_1_hg19_primary_targets.bed
 
 # ihart identicals
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart_identicals data/ihart_identicals.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_identicals
+srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/ihart_identicals.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_identicals
 
 # spark exome EX
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX --include data/VCRome_2_1_hg38_primary_targets_liftover_ordered.bed 
+# srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX --include data/VCRome_2_1_hg38_primary_targets_liftover_ordered.bed 
 
 # spark exome EX25
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX25 --include data/VCRome_2_1_hg38_primary_targets_liftover_0_25.bed
+# srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX25 --include data/VCRome_2_1_hg38_primary_targets_liftover_0_25.bed
 
 # spark exome EX50
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX50 --include data/VCRome_2_1_hg38_primary_targets_liftover_25_50.bed
+# srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX50 --include data/VCRome_2_1_hg38_primary_targets_liftover_25_50.bed
 
 # spark exome EX75
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX75 --include data/VCRome_2_1_hg38_primary_targets_liftover_50_75.bed
+#srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX75 --include data/VCRome_2_1_hg38_primary_targets_liftover_50_75.bed
 
 # spark exome EX1000
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX1000 --include data/VCRome_2_1_hg38_primary_targets_liftover_75_1000.bed
+#srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX1000 --include data/VCRome_2_1_hg38_primary_targets_liftover_75_1000.bed
 
 # spark exome identicals
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark_exome_identicals.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX_identicals --include data/VCRome_2_1_hg38_primary_targets_liftover_ordered.bed
+#srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark_exome data/spark_exome_identicals.ped $SLURM_ARRAY_TASK_ID split_gen_spark_exome_EX_identicals --include data/VCRome_2_1_hg38_primary_targets_liftover_ordered.bed
 
 # spark
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark
+#srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark data/spark.ped $SLURM_ARRAY_TASK_ID split_gen_spark
 
 # spark identicals
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark data/spark_identicals.ped $SLURM_ARRAY_TASK_ID split_gen_spark_identicals
+#srun python3 parameter_estimation/pull_famgen_counts.py split_gen_spark data/spark_identicals.ped $SLURM_ARRAY_TASK_ID split_gen_spark_identicals
 
 # ------------------------ For deletions paper -----------------------    
 
