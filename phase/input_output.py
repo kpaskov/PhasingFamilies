@@ -167,22 +167,32 @@ class WGSData:
 		# if a position has only 0s and -1s in the family, assume it's homref for everyone
 		data[:, np.all(data<=0, axis=0)] = 0
 
-		print('% all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
-		print('% all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
+		print('all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
+		print('all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
 
-		n = 2*self.snp_positions.shape[0]+1
+		# remove multiallelic sites
+		is_multiallelic = np.zeros((self.snp_positions.shape[0],), dtype=bool)
+		indices = np.where(self.snp_positions[:-1] == self.snp_positions[1:])[0]
+		is_multiallelic[indices] = True
+		is_multiallelic[indices+1] = True
+
+		n = 2*np.sum(~is_multiallelic)+1
 		family_genotypes = np.zeros((m, n), dtype=np.int8)
-		family_genotypes[:, np.arange(1, n-1, 2)] = data
+		family_genotypes[:, np.arange(1, n-1, 2)] = data[:, ~is_multiallelic]
+		
 		observed = np.zeros((n,), dtype=bool)
 		observed[np.arange(1, n-1, 2)] = True
 		
 		family_snp_positions = np.zeros((n, 2), dtype=np.int)
-		family_snp_positions[0, 0] = 0
-		family_snp_positions[np.arange(0, n-2, 2), 1] = self.snp_positions-1
-		family_snp_positions[np.arange(1, n-1, 2), 0] = self.snp_positions-1
-		family_snp_positions[np.arange(1, n-1, 2), 1] = self.snp_positions
-		family_snp_positions[np.arange(2, n, 2), 0] = self.snp_positions
+		family_snp_positions[np.arange(1, n-1, 2), 0] = self.snp_positions[~is_multiallelic]
+		family_snp_positions[np.arange(1, n-1, 2), 1] = self.snp_positions[~is_multiallelic]+1
+
+		family_snp_positions[np.arange(0, n-2, 2), 1] = self.snp_positions[~is_multiallelic]
+		family_snp_positions[np.arange(2, n, 2), 0] = self.snp_positions[~is_multiallelic]+1
+		family_snp_positions[0, 0] = 1
 		family_snp_positions[-1, 1] = self.chrom_length
+
+		assert np.all(family_snp_positions[:, 1] >= family_snp_positions[:, 0])
 
 		# remove unnecessary intervals
 		haslength = np.where(family_snp_positions[:, 0]!=family_snp_positions[:, 1])[0]
@@ -212,7 +222,8 @@ class WGSData:
 		mult_factor[1:-1] = c[rep_indices[1:]] - c[rep_indices[:-1]]
 		mult_factor[-1] = c[-1] - c[rep_indices[-1]]
 
-		#assert np.all(new_family_genotypes[:, mult_factor>10]==0)
+		print(new_family_snp_positions)
+		print(mult_factor)
 
 		return new_family_genotypes, new_family_snp_positions, mult_factor
 
@@ -229,9 +240,9 @@ def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_posi
 		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
 					'.'.join(fkey), 
 					'\t'.join(map(str, final_states[:, s_start])), 
-					family_snp_positions[s_start, 0]+1, family_snp_positions[s_end, 1],
+					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
 					s_start, s_end, 
-					family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0], 
+					family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
 					s_end-s_start+1))
 
 	# last entry

@@ -24,13 +24,13 @@ srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34
 srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_HCR --exclude data/btu356-suppl_data/btu356_LCR-hs37d5.bed/btu356_LCR-hs37d5.bed
 
 # ihart LCR
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_LCR --include data/btu356-suppl_data/btu356_LCR-hs37d5.bed/btu356_LCR-hs37d5.bed
+# srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_LCR --include data/btu356-suppl_data/btu356_LCR-hs37d5.bed/btu356_LCR-hs37d5.bed
 
 # ihart (GATK 3.2)
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart3.2 data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart3.2
+# srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart3.2 data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart3.2
 
 # ihart EX
-srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart3.2 data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_EX --include data/VCRome_2_1_hg19_primary_targets.bed
+# srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart3.2 data/v34.vcf.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_EX --include data/VCRome_2_1_hg19_primary_targets.bed
 
 # ihart identicals
 srun python3 parameter_estimation/pull_famgen_counts.py split_gen_ihart_identicals data/ihart_identicals.ped $SLURM_ARRAY_TASK_ID split_gen_ihart_identicals

@@ -10,8 +10,9 @@ identicals_file = sys.argv[3] #'../sibpair_similarity/identicals.txt'
 chrom = sys.argv[4]
 outdir = sys.argv[5] # ../deletions_ihart
 
-is_asym = (len(sys.argv) > 6) and sys.argv[6] == '--asym'
-print('is asymetric', is_asym)
+is_asym = True
+#is_asym = (len(sys.argv) > 6) and sys.argv[6] == '--asym'
+#print('is asymetric', is_asym)
 
 deletion_share_cutoff=0.9
 print('deletion share cutoff', deletion_share_cutoff)
@@ -67,6 +68,7 @@ for j in family_sizes:
 			state = [int(x) for x in pieces[1:(2+2*j+2*(j-2))]]
 			start_pos, end_pos = [int(x) for x in pieces[(2+2*j+2*(j-2)):(4+2*j+2*(j-2))]]
 			start_index, end_index = [int(x) for x in pieces[(4+2*j+2*(j-2)):(6+2*j+2*(j-2))]]
+			#print(start_pos, end_pos)
 			assert end_pos >= start_pos
 
 			family_to_states[family_key].append(state)
