@@ -192,7 +192,7 @@ class WGSData:
 		family_snp_positions[0, 0] = 1
 		family_snp_positions[-1, 1] = self.chrom_length
 
-		assert np.all(family_snp_positions[:, 1] >= family_snp_positions[:, 0])
+		#assert np.all(family_snp_positions[:, 1] >= family_snp_positions[:, 0])
 
 		# remove unnecessary intervals
 		haslength = np.where(family_snp_positions[:, 0]!=family_snp_positions[:, 1])[0]
