@@ -169,12 +169,14 @@ def construct_problem(is_mendelian, allowable_errors, chrom_counts):
                     X[k, error_index] += counts[mfg]
         y[k] = counts[nmfg]
     #print(np.log10(np.sum(X, axis=0)))
+
+    print('homref', counts[(0,)*m])
     
     return X, y, nonmendelian_famgens
 
 def poisson_regression(X, y, init=None):
     print('Estimating...', X.shape, y.shape)
-    alpha = 1.0/np.max(y)
+    alpha = 1.0/np.max(X)
     
     # cvxpy
     n = cp.Variable(X.shape[1])
@@ -299,9 +301,9 @@ for i, famkey in enumerate(famkeys):
                         params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(baseline[a])
                     else:
                         params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(error_estimates[error_to_index[(a, o)], j])
-    except:
+    except Exception as err:
         num_error_families += 1
-        print('ERROR')
+        print('ERROR', err)
 
 print('Total errors', num_error_families)
 

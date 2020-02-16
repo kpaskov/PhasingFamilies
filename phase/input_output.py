@@ -192,7 +192,7 @@ class WGSData:
 		family_snp_positions[0, 0] = 1
 		family_snp_positions[-1, 1] = self.chrom_length
 
-		#assert np.all(family_snp_positions[:, 1] >= family_snp_positions[:, 0])
+		assert np.all(family_snp_positions[:, 1] >= family_snp_positions[:, 0])
 
 		# remove unnecessary intervals
 		haslength = np.where(family_snp_positions[:, 0]!=family_snp_positions[:, 1])[0]
@@ -216,6 +216,8 @@ class WGSData:
 		new_family_snp_positions[:-1, 1] = family_snp_positions[rep_indices, 1]
 		new_family_snp_positions[1:, 0] = family_snp_positions[rep_indices+1, 0]
 		new_family_snp_positions[-1, 1] = family_snp_positions[-1, 1]
+
+		print(new_family_snp_positions)
 
 		c = np.cumsum(observed)
 		mult_factor[0] = c[rep_indices[0]]

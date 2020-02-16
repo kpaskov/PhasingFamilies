@@ -14,7 +14,7 @@ outdir = sys.argv[5] # ../deletions_ihart
 is_asym = (len(sys.argv) > 6) and sys.argv[6] == '--asym'
 print('is asymetric', is_asym)
 
-deletion_share_cutoff=0.9
+deletion_share_cutoff=0.5
 print('deletion share cutoff', deletion_share_cutoff)
 
 # pull twins

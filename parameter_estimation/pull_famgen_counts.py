@@ -3,53 +3,51 @@ from itertools import product
 from os import listdir
 import numpy as np
 import scipy.sparse as sparse
+import argparse
+
+parser = argparse.ArgumentParser(description='Pull family genotype counts.')
+parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
+parser.add_argument('ped_file', type=str, help='Pedigree file (.ped).')
+parser.add_argument('chrom', type=str, help='Chromosome.')
+parser.add_argument('out_dir', type=str, help='Directory to write counts.')
+parser.add_argument('--include', type=str, default=None, help='Regions to include (.bed).')
+parser.add_argument('--exclude', type=str, default=None, help='Regions to exclude (.bed).')
+parser.add_argument('--af_cutoff', type=float, default=None, help='Only include variants with allele frequency less than this cutoff.')
+parser.add_argument('--homref', type=str, default=None, help='If variants in these regions dont appear in the genotype data, then they are homref for all samples (.bed).')
+args = parser.parse_args()
 
 
-data_dir = sys.argv[1]
-ped_file = sys.argv[2]
-chrom = sys.argv[3]
-out_dir = sys.argv[4]
+if args.chrom == '23':
+    args.chrom = 'X'
+if args.chrom == '24':
+    args.chrom = 'Y'
+if args.chrom == '25':
+    args.chrom = 'MT'
 
-if chrom == '23':
-    chrom = 'X'
-if chrom == '24':
-    chrom = 'Y'
-if chrom == '25':
-    chrom = 'MT'
+sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, args.chrom)
 
-sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
-regions, include, af_cutoff = None, None, None
-
-if len(sys.argv) > 5:
-    if sys.argv[5] == '--include':
-        include = True
-    elif sys.argv[5] == '--exclude':
-        include = False
-    else:
-        raise Exception('Bad arguments.')
-    bed_file = sys.argv[6] 
-
+def process_bedfile(bed_file):
     regions = []
+    coverage = 0
     with open(bed_file, 'r') as f:
         for line in f:
             pieces = line.strip().split('\t')
-            if pieces[0] == chrom or pieces[0] == 'chr%s' % chrom:
+            if pieces[0] == args.chrom or pieces[0] == 'chr%s' % args.chrom:
                 regions.append(int(pieces[1]))
                 regions.append(int(pieces[2])+1)
-    regions = np.array(regions)
+                coverage += (int(pieces[2])+1 - int(pieces[1]))
+    return np.array(regions), coverage
 
-    if include:
-        print('including %d regions' % int(len(regions)/2))
-    else:
-        print('excluding %d regions' % int(len(regions)/2))
+include_regions, include_coverage = (None, 0) if args.include is None else process_bedfile(args.include)
+exclude_regions, exclude_coverage = (None, 0) if args.exclude is None else process_bedfile(args.exclude)
+homref_regions, homref_coverage = (None, 0) if args.homref is None else process_bedfile(args.homref)
 
-    if len(sys.argv) > 7 and sys.argv[7] == '--af':
-        af_cutoff = float(sys.argv[8])
+print('including %s bp' % ('all' if include_regions is None else str(include_coverage)))
+print('excluding %s bp' % ('no' if exclude_regions is None else str(exclude_coverage)))
+print('using %s homref bp' % ('no' if homref_regions is None else str(homref_coverage)))
 
-
-out_file = '%s/chr.%s.famgen.counts.txt' % (out_dir, chrom)
+out_file = '%s/chr.%s.famgen.counts.txt' % (args.out_dir, args.chrom)
 print('saving to %s' % out_file)
-
 
 # pull families with sequence data
 with open(sample_file, 'r') as f:
@@ -60,7 +58,7 @@ with open(sample_file, 'r') as f:
 # pull families from ped file
 families = dict()
 
-with open(ped_file, 'r') as f:	
+with open(args.ped_file, 'r') as f:	
     for line in f:
         pieces = line.strip().split('\t')
         if len(pieces) < 4:
@@ -75,40 +73,45 @@ with open(ped_file, 'r') as f:
 print('families %d' % len(families))
 
 with open(out_file, 'w+') as f:	
-    gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
+    gen_files = sorted([f for f in listdir(args.data_dir) if ('chr.%s.' % args.chrom) in f and 'gen.npz' in f])
 
     # pull snp positions
-    pos_data = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom))
+    pos_data = np.load('%s/chr.%s.gen.coordinates.npy' % (args.data_dir, args.chrom))
     is_snp = pos_data[:, 2].astype(bool)
     is_pass = pos_data[:, 3].astype(bool)
 
-    if regions is not None:
-        insert_loc = np.searchsorted(regions, pos_data[:, 1])
-        if include:
-            is_ok_region = np.remainder(insert_loc, 2)==1
-        else:
-            is_ok_region = np.remainder(insert_loc, 2)==0
-    else:
-        is_ok_region = np.ones(is_snp.shape, dtype=bool)
+    is_ok_include = np.ones(is_snp.shape, dtype=bool)
+    if include_regions is not None:
+        insert_loc = np.searchsorted(include_regions, pos_data[:, 1])
+        is_ok_include = np.remainder(insert_loc, 2)==1
+
+    is_ok_exclude = np.ones(is_snp.shape, dtype=bool)
+    if exclude_regions is not None:
+        insert_loc = np.searchsorted(exclude_regions, pos_data[:, 1])
+        is_ok_exclude = np.remainder(insert_loc, 2)==0
+        
+    if homref_regions is not None:
+        insert_loc = np.searchsorted(homref_regions, pos_data[:, 1])
+        is_in_homref = np.remainder(insert_loc, 2)==1
 
 
     print('not SNP', np.sum(~is_snp))
     print('not PASS', np.sum(~is_pass))
-    print('not in region', np.sum(~is_ok_region))
-
+    print('filtered by include', np.sum(~is_ok_include))
+    print('filtered by exclude', np.sum(~is_ok_exclude))
 
     # Pull data together
-    A = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
+    A = sparse.hstack([sparse.load_npz('%s/%s' % (args.data_dir, gen_file)) for gen_file in gen_files])
 
-    if af_cutoff is not None:
-        is_af_ok = (A.sum(axis=0)/A.shape[0]).A.flatten() <= af_cutoff
+    if args.af_cutoff is not None:
+        is_af_ok = (A.sum(axis=0)/A.shape[0]).A.flatten() <= args.af_cutoff
     else:
         is_af_ok = np.ones(is_snp.shape, dtype=bool)
 
     print('bad AF', np.sum(~is_af_ok))
 
     # filter out snps
-    A = A[:, is_snp & is_pass & is_ok_region & is_af_ok]
+    A = A[:, is_snp & is_pass & is_ok_include & is_ok_exclude & is_af_ok]
     print('genotype matrix prepared', A.shape)
 
     for famkey, inds in families.items():
@@ -120,6 +123,11 @@ with open(out_file, 'w+') as f:
         # remove positions where whole family is homref
         has_data = sorted(set(family_genotypes.nonzero()[1]))
         num_hom_ref = family_genotypes.shape[1] - len(has_data)
+
+        # also count the number of homref sites we don't observe
+        if homref_regions is not None:
+            num_hom_ref += (homref_coverage - np.sum(is_in_homref))
+
         family_genotypes = family_genotypes[:, has_data].A
         #print(famkey, family_genotypes.shape)
 

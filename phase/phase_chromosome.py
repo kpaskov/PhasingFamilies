@@ -23,7 +23,7 @@ if __name__ == "__main__":
 	assembly = sys.argv[5]
 	out_dir = sys.argv[6]
 	param_file = sys.argv[7]
-	detect_denovos = bool(sys.argv[8])
+	detect_denovos = sys.argv[8] == 'True'
 	batch_size = None if len(sys.argv) < 11 else int(sys.argv[9])
 	batch_num = None if len(sys.argv) < 11 else int(sys.argv[10])
 	batch_offset = None
@@ -75,8 +75,8 @@ if __name__ == "__main__":
 
 		# phase each family
 		for fkey, inds in families_of_this_size:
+			print('family', fkey)
 			try:
-				print('family', fkey)
 
 				# pull genotype data for this family
 				family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(inds)
