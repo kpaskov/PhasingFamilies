@@ -80,17 +80,23 @@ if __name__ == "__main__":
 
 				# pull genotype data for this family
 				family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(inds)
+				print('data pulled')
 
 				# create loss function for this family
 				loss = LazyLoss(inheritance_states, genotypes, '.'.join(fkey), inds, params)
+				print('loss created')
 
 				# forward sweep
 				v_cost = viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+				print('forward sweep complete')
 
 				# backward sweep
 				final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
+				print('backward sweep complete')
 
 				# write to file
 				write_to_file(famf, statef, fkey, inds, final_states, family_snp_positions)
+				print('Done!')
+				
 			except Exception as e:
 				print(fkey, e)

@@ -44,10 +44,13 @@ class LazyLoss:
 		for i, (pred, obs) in enumerate(product(preds, obss)):
 			for j, ind in enumerate(inds):
 				emission_params[j, i] = params[famkey + '.' + ind]['-log10(P[obs=%s|true_gen=%s])' % (obs_value_to_param[obs], pred_value_to_param[pred])]
-
-		# if we can't estimate an error rate, use the mean value for everyone else
+		
 		for k in range(emission_params.shape[1]):
-			emission_params[np.isnan(emission_params[:, k]), k] = 10.0**np.nanmedian(np.log10(emission_params[:, k]))
+			# if we can't estimate an error rate, use the mean value for everyone else
+			emission_params[np.isnan(emission_params[:, k]), k] = np.nanmedian(emission_params[:, k])
+
+			# if we can't estimate an error rate for anyone, use 10
+			emission_params[np.isnan(emission_params[:, k]), k] = 10
 
 		for j, ind in enumerate(inds):
 			# normal regions costs
