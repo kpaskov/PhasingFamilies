@@ -108,9 +108,7 @@ def pull_error_rates(samples, param_file, chroms, gens, obss):
 def estimate_error_counts(baseline_counts, error_rates, chroms, gens, obss):
     m = error_rates.shape[0]
     expected_error_counts = np.zeros((m, len(gens), len(obss)))
-    
-    fill_in_values = np.nanmedian(10.0**-error_rates, axis=0).T
-    
+        
     for i in range(m):
         ground_truth = baseline_counts[i, :3]
         

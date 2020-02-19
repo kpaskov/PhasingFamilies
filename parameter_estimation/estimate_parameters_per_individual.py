@@ -6,8 +6,15 @@ import cvxpy as cp
 from collections import Counter, defaultdict
 import json
 
-data_dir = sys.argv[1] #'../split_gen_ihart_23andme'
-out_file = sys.argv[2] # ../parameter_estimation/23andme_params.json
+import argparse
+
+parser = argparse.ArgumentParser(description='Estimate parameters.')
+parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
+parser.add_argument('out_file', type=str, help='Output file.')
+parser.add_argument('--total_sites', type=int, default=None, help='The total number of sites genotyped. We assume that any sites not included in the counts files are homozygous reference for all individuals.')
+parser.add_argument('--is_ngs', action='store_true', default=False, help='True if this data is NGS. The important point is whether or not sites where all individuals are homozygous reference are sometimes dropped from the VCF. If this happens, use flag --is_ngs')
+parser.add_argument('--sample_names_have_period', action='store_true', default=False, help='If sample names include periods, we have to do a special parse.')
+args = parser.parse_args()
 
 # ------------------------------------ Basic Info ------------------------------------
 chrom_lengths = {
@@ -44,16 +51,13 @@ chroms = [str(x) for x in range(1, 23)] #+ ['X', 'Y']
 # 1 = 0/1
 # 2 = 1/1
 # 3 = ./.
-# 4 = -/0 (hemizygous ref)
-# 5 = -/1 (hemizygous alt)
-# 6 = -/- (double deletion)
+
+gens = ['0/0', '0/1', '1/1']
+obss = ['0/0', '0/1', '1/1', './.']
 
 errors = [(0, 1), (0, 2), (0, 3), 
           (1, 0), (1, 2), (1, 3), 
-          (2, 0), (2, 1), (2, 3), 
-          (4, 1), (4, 2), (4, 3),
-          (5, 0), (5, 1), (5, 3),
-          (6, 0), (6, 1), (6, 2)]
+          (2, 0), (2, 1), (2, 3)]
 error_to_index = dict([(x, i) for i, x in enumerate(errors)])
 print('num error types', len(errors))
 
@@ -89,12 +93,12 @@ family_to_inds = dict()
 for i, chrom in enumerate(chroms):
     print(chrom, end=' ')
     
-    with open('%s/chr.%s.famgen.counts.txt' % (data_dir, chrom), 'r') as f:
+    with open('%s/chr.%s.famgen.counts.txt' % (args.data_dir, chrom), 'r') as f:
         for line in f:
             pieces = line.strip().split('\t')
             famkey, inds = pieces[:2]
             
-            if 'ssc' in data_dir:
+            if args.sample_names_have_period:
             	# unfortunately, ssc uses . in their sample names
                 inds = inds.split('.')
                 inds = ['%s.%s' % (inds[i], inds[i+1]) for i in range(0, len(inds), 2)]
@@ -149,81 +153,154 @@ def get_mendelian(ind_is_mendelian):
         is_mendelian[famgen] = is_mend
     return is_mendelian
 
-def construct_problem(is_mendelian, allowable_errors, chrom_counts):
+def has_variant(x):
+    return len([y for y in x if y>0])>0
+
+def estimate_error_rates(is_mendelian, allowable_errors, counts):
+    
+    # -------------------- set up problem --------------------
     nonmendelian_famgens = [x for x in zip(*np.where(~is_mendelian))]
     print('Mendelian', np.sum(is_mendelian), 'Nonmendelian', len(nonmendelian_famgens))
+    
+    if args.is_ngs:
+        # if we're working with NGS data, we don't know the real counts of famgens without variants
+        # because they may have been excluded from the vcf
+        nonmendelian_famgens = [x for x in nonmendelian_famgens if has_variant(x)]
 
-    m = len(chrom_counts[0].shape)
-    X = np.zeros((len(nonmendelian_famgens), len(errors)*m))
-    y = np.zeros((len(nonmendelian_famgens),))
-
-    counts = np.sum(np.array(chrom_counts), axis=0)
+    m = len(counts.shape)
+    X = np.zeros((len(nonmendelian_famgens), len(errors)*m), dtype=int)
+    y = np.zeros((len(nonmendelian_famgens),), dtype=int)
 
     for k, nmfg in enumerate(nonmendelian_famgens):
         for i, j in product(range(4), range(m)):
             error = (i, nmfg[j])
             if error in allowable_errors[j]:
-                mfg = tuple(i if k==j else nmfg[k] for k in range(m))
-                if is_mendelian[mfg]:
+                neighbor = tuple(i if k==j else nmfg[k] for k in range(m))
+                if is_mendelian[neighbor]:
                     error_index = error_to_index[error] + j*len(errors)
-                    X[k, error_index] += counts[mfg]
+                    X[k, error_index] += counts[neighbor]
         y[k] = counts[nmfg]
-    #print(np.log10(np.sum(X, axis=0)))
 
-    print('homref', counts[(0,)*m])
+        
+    is_zero = np.sum(X, axis=0)==0
+    print('Removing zero cols:', [(np.floor(i/len(errors)), errors[i % len(errors)]) for i in np.where(is_zero)[0]])
+    X = X[:, ~is_zero]
+    old_col_index_to_new = dict([(old_index, new_index) for new_index, old_index in enumerate(np.where(~is_zero)[0])])
+
+    print('Removing zero rows:', np.sum(np.sum(X, axis=1)==0))
+    indices = np.where(np.sum(X, axis=1) != 0)[0]
+    X = X[indices, :]
+    y = y[indices]
     
-    return X, y, nonmendelian_famgens
-
-def poisson_regression(X, y, init=None):
+    print(X.shape, y.shape)
+    
+    # -------------------- solve problem --------------------
+    
     print('Estimating...', X.shape, y.shape)
     alpha = 1.0/np.max(X)
     
     # cvxpy
     n = cp.Variable(X.shape[1])
-    if init is not None:
-        n.value = init
-
-    mu = np.sum(alpha*X, axis=0)
-    objective = cp.Minimize(mu*n - alpha*y*cp.log(alpha*X*n))
+    mu = np.sum(X, axis=0)
+    objective = cp.Minimize(alpha*mu*n - alpha*y*cp.log(X*n))
 
     # rule of 3 so that if we don't observe any errors, then we take the 95% confidence interval
     z = 1.96
-    constraints = [n>= ((z*z)/2)/(np.sum(X, axis=0)+(z*z)), n<=1]
+    constraints = [n>= ((z*z)/2)/(mu+(z*z)), n<=1]
     prob = cp.Problem(objective, constraints)
     
-    result = prob.solve(solver='ECOS', max_iters=1000)
+    result = prob.solve(solver='ECOS', max_iters=10000)
     print(prob.status)
     
     #print(n.value, n.value.shape)
-    n = np.asarray([v for v in n.value])
+    ns = np.asarray([v for v in n.value])
     
-    return prob.status, n, X.dot(n), y            
+    if prob.status != 'optimal' and prob.status != 'optimal_inaccurate':
+        raise Error('Parameters not fully estimated.')
+        
+    # -------------------- reformat solution --------------------
+
+    error_rates = np.zeros((len(inds), len(gens), len(obss)), dtype=float)
+    error_rates[:] = np.nan
+    for k in range(len(errors)*len(inds)):
+        if k in old_col_index_to_new:
+            error = errors[k%len(errors)]
+            ind_index = int(np.floor(k/len(errors)))
+            error_rates[ind_index, error[0], error[1]] = ns[old_col_index_to_new[k]]
+
+    # now fill in P(obs=true_gen)
+    for i, gen in enumerate(gens):
+        error_rates[:, i, i] = 1-np.sum(error_rates[:, i, [k for k in range(len(obss)) if k != i]], axis=1)
+    
+    return error_rates         
 
 
-# ------------------------------------ Estimate Rates of Other Events ------------------------------------
+## ------------------------------------ Estimate Rates of Other Events ------------------------------------
+#
+## estimate probability of recombination
+#mat_crossover = -(np.log10(22.8)-np.log10(sum(chrom_lengths.values())))
+#pat_crossover = -(np.log10(1.7*22.8)-np.log10(sum(chrom_lengths.values())))
+#
+#num_deletions = 100
+#del_trans = -(np.log10(2*num_deletions)-np.log10(sum(chrom_lengths.values())))
+#
+#num_hts = 1000
+#hts_trans = -(np.log10(2*num_hts)-np.log10(sum(chrom_lengths.values())))
+#
+#params = {
+#    "-log10(P[deletion_entry_exit])": del_trans,
+#    "-log10(P[maternal_crossover])": mat_crossover,
+#    "-log10(P[paternal_crossover])": pat_crossover,
+#    "-log10(P[hard_to_seq_region_entry_exit])": hts_trans,
+#    "-log10(P[low_coverage_region_entry_exit])": hts_trans,
+#    "x-times higher probability of error in hard-to-sequence region": 10
+#    }
 
-# estimate probability of recombination
-mat_crossover = -(np.log10(22.8)-np.log10(sum(chrom_lengths.values())))
-pat_crossover = -(np.log10(1.7*22.8)-np.log10(sum(chrom_lengths.values())))
+## ------------------------------------ Calculate Various Metrics ------------------------------------
 
-num_deletions = 100
-del_trans = -(np.log10(2*num_deletions)-np.log10(sum(chrom_lengths.values())))
+def add_observed_counts(params, counts, j, m):
+    params['observed_0/0'] = int(np.sum(counts[tuple(0 if x==j else slice(None, None, None) for x in range(m))]))
+    params['observed_0/1'] = int(np.sum(counts[tuple(1 if x==j else slice(None, None, None) for x in range(m))]))
+    params['observed_1/1'] = int(np.sum(counts[tuple(2 if x==j else slice(None, None, None) for x in range(m))]))
+    params['observed_./.'] = int(np.sum(counts[tuple(3 if x==j else slice(None, None, None) for x in range(m))]))
 
-num_hts = 1000
-hts_trans = -(np.log10(2*num_hts)-np.log10(sum(chrom_lengths.values())))
+def add_estimated_error_rates(params, error_rates, j):
+    for gen_index, gen in enumerate(gens):
+        for obs_index, obs in enumerate(obss):
+            params['-log10(P[obs=%s|true_gen=%s])' % (obs, gen)] = float(-np.log10(error_rates[j, gen_index, obs_index]))
 
-params = {
-    "-log10(P[deletion_entry_exit])": del_trans,
-    "-log10(P[maternal_crossover])": mat_crossover,
-    "-log10(P[paternal_crossover])": pat_crossover,
-    "-log10(P[hard_to_seq_region_entry_exit])": hts_trans,
-    "-log10(P[low_coverage_region_entry_exit])": hts_trans,
-    "x-times higher probability of error in hard-to-sequence region": 10
-    }
+def add_expected_counts(params):
+    # we assume error rates are low, so the number of times we observe a genotype is a good estimate of the number of times this genotype actually occurs.
+    for gen_index, gen in enumerate(gens):
+        for obs_index, obs in enumerate(obss):
+            params['E[obs=%s, true_gen=%s]' % (obs, gen)] = params['observed_%s' % gen] * (10.0**-params['-log10(P[obs=%s|true_gen=%s])' % (obs, gen)])
 
-baseline_match = {(0, 0), (1, 1), (2, 2), (4, 0), (5, 2), (6, 3)}
+def add_precision_recall(params):
+    # precision: TP/(TP + FP)
+    # let n_0 = # of times the real genotype is 0/0
+    # E[TP] = n_1 * p_11
+    # E[FP] = n_0 * p_01
+
+    # we again assume error rates are low, so the number of times we observe a genotype is a good estimate of the number of times this genotype actually occurs.
+
+    precisions = []
+    recalls = []
+    for var in gens:
+        TP = params['E[obs=%s, true_gen=%s]' % (var, var)]
+        FP = np.sum([params['E[obs=%s, true_gen=%s]' % (var, gen)] for gen in gens if var != gen])
+        FN = np.sum([params['E[obs=%s, true_gen=%s]' % (obs, var)] for obs in obss if var != obs])
+
+        params['precision_%s' % var] = TP/(TP+FP)
+        params['recall_%s' % var] = TP/(TP+FN)
+ 
+        precisions.append(TP/(TP+FP))
+        recalls.append(TP/(TP+FN))
 
 # ------------------------------------ Estimate Error Rates ------------------------------------
+
+params = {}
+baseline_match = {(0, 0), (1, 1), (2, 2)}
+
 num_error_families = 0
 for i, famkey in enumerate(famkeys):
     print(famkey)
@@ -232,75 +309,29 @@ for i, famkey in enumerate(famkeys):
         m = len(inds)
             
         is_mendelian = get_mendelian([None, None] + ([mendelian_check]*(m-2)))
+        allowable_errors = [allowable_errors_parent]*2 + [allowable_errors_child]*(m-2)
+        counts = np.sum(np.array([family_chrom_to_counts[(famkey, chrom)] for chrom in chroms]), axis=0)
 
-        famsum_genome_X, famsum_genome_y, nonmendelian_famgens = construct_problem(is_mendelian, 
-            [allowable_errors_parent]*2 + [allowable_errors_child]*(m-2), 
-            [family_chrom_to_counts[(famkey, chrom)] for chrom in chroms])
-            
-        is_zero = np.sum(famsum_genome_X, axis=0)==0
-        print('Removing zero cols:', [(np.floor(i/len(errors)), errors[i % len(errors)]) for i in np.where(is_zero)[0]])
-        famsum_genome_X = famsum_genome_X[:, ~is_zero]
-        old_col_index_to_new = dict([(old_index, new_index) for new_index, old_index in enumerate(np.where(~is_zero)[0])])
+        if args.total_sites is not None:
+            accounted_for = np.sum(counts)
+            if accounted_for > args.total_sites:
+                raise Exception('There are more sites in the VCF than you claim. Please adjust --total_sites.')
+            counts[(0,)*m] = args.total_sites - accounted_for
 
-        print('Removing zero rows:', np.sum(np.sum(famsum_genome_X, axis=1)==0))
-        indices = np.where(np.sum(famsum_genome_X, axis=1) != 0)[0]
-        famsum_genome_X = famsum_genome_X[indices, :]
-        famsum_genome_y = famsum_genome_y[indices]
+        error_rates = estimate_error_rates(is_mendelian, allowable_errors, counts)
 
-        #print('Removing rows with y=0:', np.sum(famsum_genome_y==0))
-        #indices = np.where(famsum_genome_y > 0)[0]
-        #famsum_genome_X = famsum_genome_X[indices, :]
-        #famsum_genome_y = famsum_genome_y[indices]
-
-        print(famsum_genome_X.shape, famsum_genome_y.shape)
-                
-        prob_status, famsum_genome_n, famsum_genome_exp, famsum_genome_obs = poisson_regression(famsum_genome_X, famsum_genome_y)
-
-        if prob_status != 'optimal' and prob_status != 'optimal_inaccurate':
-            raise Error('Parameters not fully estimated.')
-
-        err = famsum_genome_X.dot(famsum_genome_n)-famsum_genome_y
-        print([(nonmendelian_famgens[i], err[i]) for i in np.argsort(np.abs(err))[-10:]])
-
-        error_estimates = np.zeros((len(errors), len(inds)))
-        error_estimates[:] = np.nan
-        for k in range(len(errors)*len(inds)):
-            if k in old_col_index_to_new:
-                error_estimates[k%len(errors), int(np.floor(k/len(errors)))] = famsum_genome_n[old_col_index_to_new[k]]
-
-        # if we can't estimate an error rate, use the mean value for everyone else
-        #for k in range(len(errors)):
-        #    error_estimates[k, np.isnan(error_estimates[k, :])] = 10.0**np.nanmean(np.log10(error_estimates[k, :]))
-
-        # estimate error rates for deletion errors
-        error_estimates[errors.index((4, 1)), :] = error_estimates[errors.index((0, 1)), :]
-        error_estimates[errors.index((4, 2)), :] = error_estimates[errors.index((0, 2)), :]
-        error_estimates[errors.index((4, 3)), :] = error_estimates[errors.index((0, 3)), :]
-
-        error_estimates[errors.index((5, 0)), :] = error_estimates[errors.index((2, 0)), :]
-        error_estimates[errors.index((5, 1)), :] = error_estimates[errors.index((2, 1)), :]
-        error_estimates[errors.index((5, 3)), :] = error_estimates[errors.index((2, 3)), :]
-
-        error_estimates[errors.index((6, 0)), :] = error_estimates[errors.index((2, 1)), :]
-        error_estimates[errors.index((6, 1)), :] = error_estimates[errors.index((0, 2)), :]
-        error_estimates[errors.index((6, 2)), :] = error_estimates[errors.index((0, 1)), :]
-
-        print(-np.log10(error_estimates))
-        #assert np.all(~np.isnan(error_estimates))
+        print(-np.log10(error_rates))
 
         for j in range(len(inds)):
-            params[famkey + '.' + inds[j]] = {}
-            baseline = np.ones((7,))
-            for e, c in zip(errors, error_estimates[:, j]):
-                #print(e, -np.log10(c))
-                baseline[e[0]] -= c
+            # observed counts
+            ind_params = {}
+            add_observed_counts(ind_params, counts, j, m)
+            add_estimated_error_rates(ind_params, error_rates, j)
+            add_expected_counts(ind_params)
+            add_precision_recall(ind_params)
 
-            for a, a_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (4, '-/0'), (5, '-/1'), (6, '-/-')]:
-                for o, o_name in [(0, '0/0'), (1, '0/1'), (2, '1/1'), (3, './.')]:
-                    if (a, o) in baseline_match:
-                        params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(baseline[a])
-                    else:
-                        params[famkey + '.' + inds[j]]["-log10(P[obs=%s|true_gen=%s])" % (o_name, a_name)] = -np.log10(error_estimates[error_to_index[(a, o)], j])
+            params[famkey + '.' + inds[j]] = ind_params
+
     except Exception as err:
         num_error_families += 1
         print('ERROR', err)
@@ -309,5 +340,5 @@ print('Total errors', num_error_families)
 
 # ------------------------------------ Write to file ------------------------------------
 
-with open(out_file, 'w+') as f:
+with open(args.out_file, 'w+') as f:
     json.dump(params, f, indent=4)
