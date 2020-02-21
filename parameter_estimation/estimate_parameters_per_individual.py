@@ -204,7 +204,7 @@ def estimate_error_rates(is_mendelian, allowable_errors, counts):
     mu = np.sum(X, axis=0)
     objective = cp.Minimize(alpha*mu*n - alpha*y*cp.log(X*n))
 
-    # rule of 3 so that if we don't observe any errors, then we take the 95% confidence interval
+    # Wilson score interval so that if we don't observe any errors, then we take the 95% confidence interval
     z = 1.96
     constraints = [n>= ((z*z)/2)/(mu+(z*z)), n<=1]
     prob = cp.Problem(objective, constraints)
