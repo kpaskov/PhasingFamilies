@@ -31,7 +31,12 @@ def process_bedfile(bed_file):
     coverage = 0
     with open(bed_file, 'r') as f:
         for line in f:
-            pieces = line.strip().split('\t')
+            if '\t' in line.strip():
+                pieces = line.strip().split('\t')
+            else:
+                pieces = line.strip().split(':')
+                pieces = [pieces[0]] + pieces[1].strip().split('-')
+
             if pieces[0] == args.chrom or pieces[0] == 'chr%s' % args.chrom:
                 regions.append(int(pieces[1]))
                 regions.append(int(pieces[2])+1)
