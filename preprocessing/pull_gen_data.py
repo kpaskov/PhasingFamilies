@@ -112,5 +112,5 @@ if vcf_file.endswith('.gz'):
         process_vcf(f)
 else:
     with open(vcf_file, 'r') as f:
-        processing_vcf(f)
+        process_vcf(f)
 
