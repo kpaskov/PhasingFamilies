@@ -35,6 +35,15 @@ with gzip.open(vcf_file, 'rt') as f, \
     m = len(sample_ids)
     data, indices, indptr, index = np.zeros((maxsize,), dtype=np.int8), np.zeros((maxsize,), dtype=int), [0], 0
     gen_mapping = {'./.': -1, '0/0': 0, '0|0': 0, '0/1': 1, '0|1': 1, '1/0': 1, '1|0': 1, '1/1': 2, '1|1': 2}
+
+    # enumerate all chrom options
+    chrom_options = [chrom, 'chr'+chrom]
+    if chrom == 'X':
+        chrom_options = chrom_options + ['23', 'chr23']
+    if chrom == 'Y':
+        chrom_options = chrom_options + ['24', 'chr24']
+    if chrom == 'MT':
+        chrom_options = chrom_options + ['25', 'chr25']
     
     line = next(f)
     subfile = 0
@@ -43,7 +52,7 @@ with gzip.open(vcf_file, 'rt') as f, \
     for j, line in enumerate(f):
         pieces = line.split('\t', maxsplit=1)
 
-        if pieces[0] == chrom or (chrom == 'X' and pieces[0] == '23') or (chrom == 'Y' and pieces[0] == '24') or (chrom == 'MT' and pieces[0] == '25'):
+        if pieces[0] in chrom_options:
 
             pieces = line.strip().split('\t')
             format = pieces[8].strip().split(':')
