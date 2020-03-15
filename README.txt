@@ -19,7 +19,7 @@ python parameter_estimation/estimate_parameters_per_individual.py [data_dir] [pa
 3. Run Phasing/Deletion Detection
 Now we're ready to run using
 
-python phase/phase_chromosome.py [chrom] [family_size] [ped_file] [data_dir] [phase_dir] [param_file]
+python phase/phase_chromosome.py [chrom] [family_size] [ped_file] [data_dir] [assembly version] [phase_dir] [param_file] [detect denovos]
 
 Memory
 WGS: families of size 3/4 need 8GB, families of size 5 need 16GB, families of size 6 need 64GB

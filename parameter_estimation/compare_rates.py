@@ -6,9 +6,10 @@ import json
 
 BaselineCounts = namedtuple('BaselineCounts', ['counts', 'samples', 'families', 'family_sizes', 'is_child', 'is_mom', 'is_dad'])
 Samples = namedtuple('Samples', ['sample_ids', 'families', 'family_sizes', 'is_child', 'is_mom', 'is_dad'])
-PrecisionRecall = namedtuple('PrecisionRecall', ['precision1', 'recall1', 'precision2', 'recall2'])
+PrecisionRecall = namedtuple('PrecisionRecall', ['precision1', 'recall1', 'precision2', 'recall2',
+                    'precision1_upper_bound', 'recall1_upper_bound', 'precision2_upper_bound', 'recall2_upper_bound'])
 
-def pull_samples(data_dir, chroms):
+def pull_samples(data_dir, chroms, dot_in_name=False):
     sample_to_chroms = defaultdict(set)
     sample_to_family = dict()
     family_to_size = dict()
@@ -24,7 +25,7 @@ def pull_samples(data_dir, chroms):
                 famkey, inds = pieces[:2]
                 #famkey = famkey.split('.')[0]
 
-                if 'ssc' in data_dir:
+                if dot_in_name:
                     # unfortunately, ssc uses . in their sample names
                     inds = inds.split('.')
                     inds = ['%s.%s' % (inds[i], inds[i+1]) for i in range(0, len(inds), 2)]
@@ -90,6 +91,21 @@ def pull_error_counts(samples, param_file, gens, obss):
         
     return counts
 
+def pull_num_sites(samples, param_file):
+
+    with open(param_file, 'r') as f:
+        params = json.load(f)
+    
+    num_sites = np.zeros((len(samples.sample_ids),))
+    num_sites[:] = np.nan
+                
+    for i, (sample_id, family) in enumerate(zip(samples.sample_ids, samples.families)):
+        key = '%s.%s' % (family, sample_id)
+        if key in params:
+            num_sites[i] = sum([params[key]['observed_%s' % g] for g in ['0/0', '0/1', '1/1']])
+        
+    return num_sites
+
 def pull_precision_recall(samples, param_file):
     with open(param_file, 'r') as f:
         params = json.load(f)
@@ -103,6 +119,16 @@ def pull_precision_recall(samples, param_file):
     homalt_precision[:] = np.nan
     homalt_recall = np.zeros((len(samples.sample_ids),))
     homalt_recall[:] = np.nan
+
+    het_precision_upper_bound = np.zeros((len(samples.sample_ids),))
+    het_precision_upper_bound[:] = np.nan
+    het_recall_upper_bound = np.zeros((len(samples.sample_ids),))
+    het_recall_upper_bound[:] = np.nan
+
+    homalt_precision_upper_bound = np.zeros((len(samples.sample_ids),))
+    homalt_precision_upper_bound[:] = np.nan
+    homalt_recall_upper_bound = np.zeros((len(samples.sample_ids),))
+    homalt_recall_upper_bound[:] = np.nan
                 
     for i, (sample_id, family) in enumerate(zip(samples.sample_ids, samples.families)):
         key = '%s.%s' % (family, sample_id)
@@ -111,6 +137,12 @@ def pull_precision_recall(samples, param_file):
             het_recall[i] = params[key]['recall_0/1']
             homalt_precision[i] = params[key]['precision_1/1']
             homalt_recall[i] = params[key]['recall_1/1']
+
+            het_precision_upper_bound[i] = params[key]['upper_bound[precision_0/1]']
+            het_recall_upper_bound[i] = params[key]['upper_bound[recall_0/1]']
+            homalt_precision_upper_bound[i] = params[key]['upper_bound[precision_1/1]']
+            homalt_recall_upper_bound[i] = params[key]['upper_bound[recall_1/1]']
         
-    return PrecisionRecall(het_precision, het_recall, homalt_precision, homalt_recall)
+    return PrecisionRecall(het_precision, het_recall, homalt_precision, homalt_recall,
+        het_precision_upper_bound, het_recall_upper_bound, homalt_precision_upper_bound, homalt_recall_upper_bound)
 

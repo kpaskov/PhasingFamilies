@@ -49,8 +49,9 @@ class LazyLoss:
 			# if we can't estimate an error rate, use the mean value for everyone else
 			emission_params[np.isnan(emission_params[:, k]), k] = np.nanmedian(emission_params[:, k])
 
-			# if we can't estimate an error rate for anyone, use 10
-			emission_params[np.isnan(emission_params[:, k]), k] = 10
+			## if we can't estimate an error rate for anyone,
+			# then an error will be raised
+			#emission_params[np.isnan(emission_params[:, k]), k] = 10
 
 		for j, ind in enumerate(inds):
 			# normal regions costs

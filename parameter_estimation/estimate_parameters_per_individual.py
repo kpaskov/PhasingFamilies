@@ -206,8 +206,8 @@ def estimate_error_rates(is_mendelian, allowable_errors, counts):
 
     # Wilson score interval so that if we don't observe any errors, then we take the 95% confidence interval
     z = 1.96
-    constraints = [n>= ((z*z)/2)/(mu+(z*z)), n<=1]
-    prob = cp.Problem(objective, constraints)
+    lower_bound = ((z*z)/2)/(mu+(z*z))
+    prob = cp.Problem(objective, [n >= lower_bound, n<=1])
     
     result = prob.solve(solver='ECOS', max_iters=10000)
     print(prob.status)
@@ -221,40 +221,24 @@ def estimate_error_rates(is_mendelian, allowable_errors, counts):
     # -------------------- reformat solution --------------------
 
     error_rates = np.zeros((len(inds), len(gens), len(obss)), dtype=float)
+    lower_bounds = np.zeros((len(inds), len(gens), len(obss)), dtype=float)
     error_rates[:] = np.nan
+    lower_bounds[:] = np.nan
     for k in range(len(errors)*len(inds)):
         if k in old_col_index_to_new:
             error = errors[k%len(errors)]
             ind_index = int(np.floor(k/len(errors)))
             error_rates[ind_index, error[0], error[1]] = ns[old_col_index_to_new[k]]
+            lower_bounds[ind_index, error[0], error[1]] = lower_bound[old_col_index_to_new[k]]
 
     # now fill in P(obs=true_gen)
     for i, gen in enumerate(gens):
         error_rates[:, i, i] = 1-np.sum(error_rates[:, i, [k for k in range(len(obss)) if k != i]], axis=1)
     
-    return error_rates         
+    return error_rates, lower_bounds        
 
 
-## ------------------------------------ Estimate Rates of Other Events ------------------------------------
-#
-## estimate probability of recombination
-#mat_crossover = -(np.log10(22.8)-np.log10(sum(chrom_lengths.values())))
-#pat_crossover = -(np.log10(1.7*22.8)-np.log10(sum(chrom_lengths.values())))
-#
-#num_deletions = 100
-#del_trans = -(np.log10(2*num_deletions)-np.log10(sum(chrom_lengths.values())))
-#
-#num_hts = 1000
-#hts_trans = -(np.log10(2*num_hts)-np.log10(sum(chrom_lengths.values())))
-#
-#params = {
-#    "-log10(P[deletion_entry_exit])": del_trans,
-#    "-log10(P[maternal_crossover])": mat_crossover,
-#    "-log10(P[paternal_crossover])": pat_crossover,
-#    "-log10(P[hard_to_seq_region_entry_exit])": hts_trans,
-#    "-log10(P[low_coverage_region_entry_exit])": hts_trans,
-#    "x-times higher probability of error in hard-to-sequence region": 10
-#    }
+
 
 ## ------------------------------------ Calculate Various Metrics ------------------------------------
 
@@ -264,16 +248,18 @@ def add_observed_counts(params, counts, j, m):
     params['observed_1/1'] = int(np.sum(counts[tuple(2 if x==j else slice(None, None, None) for x in range(m))]))
     params['observed_./.'] = int(np.sum(counts[tuple(3 if x==j else slice(None, None, None) for x in range(m))]))
 
-def add_estimated_error_rates(params, error_rates, j):
+def add_estimated_error_rates(params, error_rates, lower_bounds, j):
     for gen_index, gen in enumerate(gens):
         for obs_index, obs in enumerate(obss):
             params['-log10(P[obs=%s|true_gen=%s])' % (obs, gen)] = float(-np.log10(error_rates[j, gen_index, obs_index]))
+            params['lower_bound[-log10(P[obs=%s|true_gen=%s])]' % (obs, gen)] = float(-np.log10(lower_bounds[j, gen_index, obs_index]))
 
 def add_expected_counts(params):
     # we assume error rates are low, so the number of times we observe a genotype is a good estimate of the number of times this genotype actually occurs.
     for gen_index, gen in enumerate(gens):
         for obs_index, obs in enumerate(obss):
             params['E[obs=%s, true_gen=%s]' % (obs, gen)] = params['observed_%s' % gen] * (10.0**-params['-log10(P[obs=%s|true_gen=%s])' % (obs, gen)])
+            params['lower_bound[E[obs=%s, true_gen=%s]]' % (obs, gen)] = params['observed_%s' % gen] * (10.0**-params['lower_bound[-log10(P[obs=%s|true_gen=%s])]' % (obs, gen)])
 
 def add_precision_recall(params):
     # precision: TP/(TP + FP)
@@ -283,18 +269,19 @@ def add_precision_recall(params):
 
     # we again assume error rates are low, so the number of times we observe a genotype is a good estimate of the number of times this genotype actually occurs.
 
-    precisions = []
-    recalls = []
     for var in gens:
         TP = params['E[obs=%s, true_gen=%s]' % (var, var)]
         FP = np.sum([params['E[obs=%s, true_gen=%s]' % (var, gen)] for gen in gens if var != gen])
         FN = np.sum([params['E[obs=%s, true_gen=%s]' % (obs, var)] for obs in obss if var != obs])
 
+        FP_lb = np.sum([params['lower_bound[E[obs=%s, true_gen=%s]]' % (var, gen)] for gen in gens if var != gen])
+        FN_lb = np.sum([params['lower_bound[E[obs=%s, true_gen=%s]]' % (obs, var)] for obs in obss if var != obs])
+
         params['precision_%s' % var] = TP/(TP+FP)
         params['recall_%s' % var] = TP/(TP+FN)
- 
-        precisions.append(TP/(TP+FP))
-        recalls.append(TP/(TP+FN))
+
+        params['upper_bound[precision_%s]' % var] = TP/(TP+FP_lb)
+        params['upper_bound[recall_%s]' % var] = TP/(TP+FN_lb)
 
 # ------------------------------------ Estimate Error Rates ------------------------------------
 
@@ -318,7 +305,7 @@ for i, famkey in enumerate(famkeys):
                 raise Exception('There are more sites in the VCF than you claim. Please adjust --total_sites.')
             counts[(0,)*m] = args.total_sites - accounted_for
 
-        error_rates = estimate_error_rates(is_mendelian, allowable_errors, counts)
+        error_rates, lower_bounds = estimate_error_rates(is_mendelian, allowable_errors, counts)
 
         print(-np.log10(error_rates))
 
@@ -326,7 +313,7 @@ for i, famkey in enumerate(famkeys):
             # observed counts
             ind_params = {}
             add_observed_counts(ind_params, counts, j, m)
-            add_estimated_error_rates(ind_params, error_rates, j)
+            add_estimated_error_rates(ind_params, error_rates, lower_bounds, j)
             add_expected_counts(ind_params)
             add_precision_recall(ind_params)
 

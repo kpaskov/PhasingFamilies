@@ -5,9 +5,9 @@ class AutosomalTransitionMatrix:
 
 	def __init__(self, inheritance_states, params):
 
-		self.shift_costs = 	[params['-log10(P[deletion_entry_exit])']]*4 + \
+		self.shift_costs = 	[params['-log10(P[inherited_deletion_entry_exit])']]*4 + \
 			[params['-log10(P[maternal_crossover])'] if i%2==0 else params['-log10(P[paternal_crossover])'] for i in range(2*(inheritance_states.m-2))] + \
-			[9.15 for i in range(2*(inheritance_states.m-2))]
+			[params['-log10(P[denovo_deletion_entry_exit])'] for i in range(2*(inheritance_states.m-2))]
 		self.hard_to_sequence_cost = params['-log10(P[hard_to_seq_region_entry_exit])']
 		self.low_coverage_cost = params['-log10(P[low_coverage_region_entry_exit])']
 
