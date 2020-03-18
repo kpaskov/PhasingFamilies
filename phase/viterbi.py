@@ -53,7 +53,7 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 	num_forks = 0
 	no_delstates = np.all(inheritance_states[:, [0, 1, 2, 3, -1]]==1, axis=1) & np.all(inheritance_states[:, np.arange(2*inheritance_states.m, 2*inheritance_states.m + 2*(inheritance_states.m - 2))]==0, axis=1)
 	min_value = np.min(v_cost[no_delstates, -1])
-	paths = np.where((v_cost[:, -1]==min_value) & no_delstates)[0]
+	paths = np.where(np.isclose(v_cost[:, -1], min_value) & no_delstates)[0]
 	print('Num solutions', paths.shape, min_value, inheritance_states[paths, :])
 
 	final_states[:, -1] = merge_paths(paths, inheritance_states)
@@ -66,7 +66,7 @@ def viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matr
 		min_value = np.min(total_cost, axis=1)
 		new_paths = set()
 		for i, k in enumerate(paths):
-			min_indices = transition_matrix.transitions[k, np.where(total_cost[i, :] == min_value[i])[0]]	
+			min_indices = transition_matrix.transitions[k, np.where(np.isclose(total_cost[i, :], min_value[i]))[0]]	
 			new_paths.update(min_indices.tolist())
 		
 		paths = np.asarray(list(new_paths), dtype=int)
