@@ -4,12 +4,12 @@ from os import listdir
 from itertools import product
 
 
-from inheritance_states import AutosomalInheritanceStates
+from inheritance_states import InheritanceStates
 from input_output import WGSData, write_to_file, pull_families
-from transition_matrices import AutosomalTransitionMatrix
+from transition_matrices import TransitionMatrix
 from genotypes import Genotypes
 from losses import LazyLoss
-from viterbi import viterbi_forward_sweep_autosomes, viterbi_backward_sweep_autosomes
+from viterbi import viterbi_forward_sweep, viterbi_backward_sweep
 
 # Run locally with python phase/phase_chromosome.py 22 4 data/160826.ped split_gen_ihart phased_test phase/current_params.json
 
@@ -54,10 +54,10 @@ if __name__ == "__main__":
 	families_of_this_size = pull_families(sample_file, ped_file, m, batch_size, batch_offset)
 
 	# create inheritance states
-	inheritance_states = AutosomalInheritanceStates(m, detect_denovos)
+	inheritance_states = InheritanceStates(m, detect_denovos)
 	
 	# create transition matrix
-	transition_matrix = AutosomalTransitionMatrix(inheritance_states, params)
+	transition_matrix = TransitionMatrix(inheritance_states, params)
 
 	# create genotypes
 	genotypes = Genotypes(m)
@@ -87,11 +87,11 @@ if __name__ == "__main__":
 				print('loss created')
 
 				# forward sweep
-				v_cost = viterbi_forward_sweep_autosomes(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+				v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
 				print('forward sweep complete')
 
 				# backward sweep
-				final_states = viterbi_backward_sweep_autosomes(v_cost, inheritance_states, transition_matrix)
+				final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
 				print('backward sweep complete')
 
 				# write to file

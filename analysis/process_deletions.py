@@ -11,13 +11,13 @@ identicals_file = sys.argv[3] #'../sibpair_similarity/identicals.txt'
 outdir = sys.argv[4] # ../deletions_ihart
 
 #is_asym = True
-is_asym = (len(sys.argv) > 5) and sys.argv[5] == '--asym'
-print('is asymetric', is_asym)
+#is_asym = (len(sys.argv) > 5) and sys.argv[5] == '--asym'
+#print('is asymetric', is_asym)
 
-deletion_share_cutoff=0.5
-print('deletion share cutoff', deletion_share_cutoff)
+#deletion_share_cutoff=0.5
+#print('deletion share cutoff', deletion_share_cutoff)
 
-chroms = [str(x) for x in range(1, 23)]
+chroms = [str(x) for x in range(1, 23)] #+ ['X']
 
 # pull twins
 identicals = set()
@@ -28,11 +28,12 @@ with open(identicals_file, 'r') as f:
 print('identicals', len(identicals))
 
 # pull families and figure out how many non-identical kids they have
+family_to_chroms = defaultdict(set)
 family_to_individuals = dict()
-families_left_out = set()
+families_left_out_identicals = set()
 
+# pull families
 for chrom in chroms:
-	print(chrom)
 	for j in family_sizes:
 		with open('%s/chr.%s.familysize.%d.families.txt' % (phase_dir, 'X' if chrom=='PAR1' else chrom, j), 'r') as f:
 			next(f) # skip header
@@ -43,21 +44,29 @@ for chrom in chroms:
 
 				if np.all([x not in identicals for x in individuals[2:]]):
 					family_to_individuals[family_key] = individuals
+					family_to_chroms[family_key].add(chrom)
 				else:
-					families_left_out.add(family_key)
-	print('families', len(family_to_individuals))
-	print('families removed due to identicals', len(families_left_out))
+					families_left_out_identicals.add(family_key)
 
-	individuals = sorted(sum(family_to_individuals.values(), []))
-	children = set(sum([v[2:] for v in family_to_individuals.values()], []))
-	ind_to_index = dict([(x, i) for i, x in enumerate(individuals)])
-	print('individuals', len(individuals))
+families_left_out_chroms = set([k for k, v in family_to_chroms.items() if len(v)!=len(chroms)])
+family_to_individuals = dict([(k, v) for k, v in family_to_individuals.items() if k not in families_left_out_chroms])
+print('families', len(family_to_individuals))
+print('families removed due to identicals', len(families_left_out_identicals))
+print('families removed due to missing chromosomes', len(families_left_out_chroms))
 
-	with open('%s/individuals.txt' % outdir, 'w+') as f:
-		for ind in individuals:
-			f.write('%s\t%s\n' % (ind, 'child' if ind in children else 'parent'))
+individuals = sorted(sum(family_to_individuals.values(), []))
+children = set(sum([v[2:] for v in family_to_individuals.values()], []))
+ind_to_index = dict([(x, i) for i, x in enumerate(individuals)])
+print('individuals', len(individuals))
+
+with open('%s/individuals.txt' % outdir, 'w+') as f:
+	for ind in individuals:
+		f.write('%s\t%s\n' % (ind, 'child' if ind in children else 'parent'))
 
 
+
+for chrom in chroms:
+	print(chrom)
 	# pull phase data for each family
 
 	family_to_states = defaultdict(list)
@@ -115,13 +124,8 @@ for chrom in chroms:
 
 					# check if recombination event occured and that inheritance state is known
 					has_recomb = False
-					if is_mat:
-						indices = np.arange(4, states.shape[1]-1, 2)
-					else:
-						indices = np.arange(5, states.shape[1]-1, 2)
-
+					indices = np.arange(4, 4 + (j-2)*2)
 					inh_known = np.all(states[s_ind:e_ind, indices] != -1)
-
 					for i in range(s_ind, e_ind):
 						if np.any(states[i, indices] != states[s_ind, indices]):
 							has_recomb = True
@@ -171,8 +175,11 @@ for chrom in chroms:
 									notrans.append(child)
 
 						if len(trans) + len(notrans) == j-2:
-							deletions.append(Deletion(family_key, chrom, int(start_pos), int(end_pos), length,
+							deletions.append(Deletion(family_key, chrom,
+								int(start_pos), int(end_pos), length,
 								int(end_phase_index-start_phase_index+1),
+								#int(opt_start_pos), int(opt_end_pos), int(opt_end_pos-opt_start_pos+1),
+								#int(opt_end_index-opt_start_index+1),
 								int(opt_start_pos), int(opt_end_pos), tuple(trans), tuple(notrans),
 								len(inds), is_mat, is_pat, False,
 								inds[0], inds[1]))
@@ -193,13 +200,8 @@ for chrom in chroms:
 
 					# check if recombination event occured and that inheritance state is known
 					has_recomb = False
-					if is_mat:
-						indices = np.arange(4, states.shape[1]-1, 2)
-					else:
-						indices = np.arange(5, states.shape[1]-1, 2)
-
+					indices = np.arange(4, 4 + (j-2)*2)
 					inh_known = np.all(states[s_ind:e_ind, indices] != -1)
-
 					for i in range(s_ind, e_ind):
 						if np.any(states[i, indices] != states[s_ind, indices]):
 							has_recomb = True
@@ -258,8 +260,8 @@ for chrom in chroms:
 
 	collections = []
 	    
-	starts = np.array([d.start_pos for d in deletions])
-	stops = np.array([d.end_pos for d in deletions])
+	starts = np.array([d.opt_start_pos for d in deletions])
+	stops = np.array([d.opt_end_pos for d in deletions])
 
 	ordered_start_indices = np.argsort(starts)
 	ordered_starts = starts[ordered_start_indices]
@@ -281,12 +283,20 @@ for chrom in chroms:
 
 	# prune deletions
 	for c in collections:
-		lengths = np.array([d.length for d in c.matches])
-		overlaps = np.array([min(d.end_pos, c.deletion.end_pos)-max(d.start_pos, c.deletion.start_pos)+1 for d in c.matches])
-		if is_asym:
-			c.matches = set([c.matches[j] for j in np.where((overlaps >= deletion_share_cutoff*c.deletion.length))[0]])
-		else:
-			c.matches = set([c.matches[j] for j in np.where((overlaps >= deletion_share_cutoff*lengths) & (overlaps >= deletion_share_cutoff*c.deletion.length))[0]])
+		# we know all deletions within a collection overlap at least a little bit
+
+		# this method focuses on finding compatible start and stop points
+		start_overlap = np.array([min(d.start_pos, c.deletion.start_pos)-max(d.opt_start_pos, c.deletion.opt_start_pos)+1 for d in c.matches])
+		end_overlap = np.array([min(d.opt_end_pos, c.deletion.opt_end_pos)-max(d.end_pos, c.deletion.end_pos)+1 for d in c.matches])
+		c.matches = set([c.matches[j] for j in np.where((start_overlap > 0) & (end_overlap > 0))[0]])
+
+		# this method focuses on finding deletions which overlap by 50%, either in one direction (is_asym) or both directions
+		#lengths = np.array([d.length for d in c.matches])
+		#overlaps = np.array([min(d.end_pos, c.deletion.end_pos)-max(d.start_pos, c.deletion.start_pos)+1 for d in c.matches])
+		#if is_asym:
+		#	c.matches = set([c.matches[j] for j in np.where((overlaps >= deletion_share_cutoff*c.deletion.length))[0]])
+		#else:
+		#	c.matches = set([c.matches[j] for j in np.where((overlaps >= deletion_share_cutoff*lengths) & (overlaps >= deletion_share_cutoff*c.deletion.length))[0]])
 
 	print('deletions pruned')
 

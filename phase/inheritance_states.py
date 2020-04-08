@@ -1,90 +1,191 @@
 import numpy as np
-from itertools import product
+from itertools import product, combinations
 
 # inheritance states
 #
-# for parents:
+# for inherited deletions:
 # (0, 0) -> deletion on both parental1 and parental2
 # (0, 1) -> deletion on parental1
 # (1, 0) -> deletion on parental2
 # (1, 1) -> normal
 # 
-# for children:
-# (0, 0) -> m1p1
-# (0, 1) -> m1p2
-# (1, 0) -> m2p1
-# (1, 1) -> m2p2
+# for inheritance states:
+# (0, 2) -> m1p1
+# (0, 3) -> m1p2
+# (1, 2) -> m2p1
+# (1, 3) -> m2p2
+# mom is (0, 1) -> m1m2
+# dad is (2, 3) -> p1p2
 # 
-# for de novos:
-# (0, 0) -> child has no de novo deletions
-# (0, 1) -> child has a paternal de novo deletion
-# (1, 0) -> child has a maternal de novo deletion
+# for de novo deletions:
+# (1, 1) -> individual has no de novo deletions
+# (1, 0) -> individual has a paternal de novo deletion
+# (0, 1) -> individual has a maternal de novo deletion
 
-# flags (last bit)
+# for hard to sequence regions
 # 0 -> ok
 # 1 -> hard to sequence
-# 2 -> low coverage
 
-class AutosomalInheritanceStates:
+def inherited_deletion_indices(family_size):
+	return np.arange(4)
 
-	def __init__(self, m, detect_denovos):
-		self.m = m
+def maternal_phase_indices(family_size):
+	return np.arange(4, 4+(2*family_size), 2)
 
-		if detect_denovos:
-			states = [x for x in product(*([[0, 1]]*4 + [[0, 1]]*(2*m-4) + [[0, 1]]*(2*m-4) + [[0, 1]]))]
+def paternal_phase_indices(family_size):
+	return np.arange(5, 4+(2*family_size), 2)
+
+def hard_to_sequence_index(family_size):
+	return 4+(2*family_size)
+
+def preferred_phase_options(family_size):
+	#         mom       dad       child1      other children
+	return [[0], [1], [2], [3], [0], [2]] + [[0, 1], [2, 3]]*(family_size-3)
+
+class State:
+
+	def __init__(self, family_size, data):
+		self._data = data
+		self._family_size = family_size
+
+	def __hash__(self):
+		return hash(tuple(self._data))
+
+	def __str__(self):
+		return str(tuple(self._data))
+
+	def __eq__(self, other_state):
+		return tuple(self._data) == tuple(other_state._data)
+
+	def transition_cost(self, other_state, weights):
+		cost = sum([weights[i] for i, (x, y) in enumerate(zip(self._data, other_state._data)) if x!=y])
+		# preferred phase penalty
+		pref = preferred_phase_options(self._family_size)
+		for i in range(2*self._family_size):
+			if (self._data[4+i] != other_state._data[4+i]) and ((self._data[4+i] not in pref[i]) or (other_state._data[4+i] not in pref[i])):
+				cost += 1
+		return cost
+
+	def has_deletion(self, ancestral_index=None):
+		if ancestral_index is None:
+			return np.any(self._data[inherited_deletion_indices(self._family_size)]==0)
 		else:
-			states = [x for x in product(*([[0, 1]]*4 + [[0, 1]]*(2*m-4) + [[0]]*(2*m-4) + [[0, 1]]))]
+			return self._data[inherited_deletion_indices(self._family_size)[ancestral_index]]==0
 
-		# child1 inherits (0, 0)
-		states = [x for x in states if x[4]==0 and x[5]==0]
+	def is_hard_to_sequence(self):
+		return self._data[hard_to_sequence_index(self._family_size)]==1
 
-		# family can have only a single de novo deletion
-		states = [x for x in states if np.sum(x[(2*m):(2*m + 2*(m-2))]) <= 1]
+	def get_phase(self, individual_index):
+		return self._data[maternal_phase_indices(self._family_size)[individual_index]], self._data[paternal_phase_indices(self._family_size)[individual_index]]
 
-		# can't have a de novo deletion AND an inherited deletion
-		states = [x for x in states if (np.sum(x[(2*m):(2*m + 2*(m-2))])==0) or (x[0]==1 and x[1]==1 and x[2]==1 and x[3]==1)]
+	def add_inherited_deletion(self, ancestral_index):
+		self._data[inherited_deletion_indices(self._family_size)[ancestral_index]] = 0
 
-		## can't have a de novo deletion if we already have an inherited deletion
-		#def has_de_novo_and_inh(s):
-		#	# find de novo
-		#	child_index, is_mat = None, None
-		#	for i in range(m-2):
-		#		if s[2*m + 2*i] == 1:
-		#			child_index = i
-		#			is_mat = True
-		#		elif s[2*m + 2*i + 1] == 1:
-		#			child_index = i
-		#			is_pat = True
-		#	
-		#	# check if this child is already inheriting a deletion
-		#	if child_index is not None and s[-1]==2:
-		#		return True
-		#	elif child_index is not None and is_mat:
-		#		return s[s[4 + 2*child_index]]==0
-		#	elif child_index is not None and is_pat:
-		#		return s[2+s[5 + 2*child_index]]==0
-		#	else:
-		#		return False
-		#states = [x for x in states if not has_de_novo_and_inh(x)]
+	def remove_inherited_deletion(self, ancestral_index):
+		self._data[inherited_deletion_indices(self._family_size)[ancestral_index]] = 1
 
-		# can't have a state where a parent has a deletion that isn't inherited unless it's a double deletion
-		states = [x for x in states if x[0]==1 or (x[0]==0 and x[1]==0) or len([i for i in range(4, 2*m, 2) if x[i] == 0])>0]
-		states = [x for x in states if x[1]==1 or (x[0]==0 and x[1]==0) or len([i for i in range(4, 2*m, 2) if x[i] == 1])>0]
-		states = [x for x in states if x[2]==1 or (x[2]==0 and x[3]==0) or len([i for i in range(5, 2*m, 2) if x[i] == 0])>0]
-		states = [x for x in states if x[3]==1 or (x[2]==0 and x[3]==0) or len([i for i in range(5, 2*m, 2) if x[i] == 1])>0]
+	def remove_all_inherited_deletions(self):
+		self._data[inherited_deletion_indices(self._family_size)] = 1
 
-		self.states = np.asarray(states, dtype=np.int8)
-		print('inheritance states', self.states.shape)
+	def set_maternal_phase(self, individual_index, new_phase):
+		self._data[maternal_phase_indices(self._family_size)[individual_index]] = new_phase
+		
+	def set_paternal_phase(self, individual_index, new_phase):
+		self._data[paternal_phase_indices(self._family_size)[individual_index]] = new_phase
 
-		self.p, self.state_len = self.states.shape
-		self.state_to_index = dict([(tuple(x), i) for i, x in enumerate(self.states)])
+	def toggle_hard_to_sequence(self):
+		self._data[hard_to_sequence_index(self._family_size)] ^= 1
 
-	def __getitem__(self, key):
-		return self.states[key]
+	
 
-	def index(self, s):
-		return self.state_to_index[s]
 
-	def __contains__(self, key):
-		return key in self.state_to_index
+
+class InheritanceStates:
+
+	def __init__(self, family_size, allow_upd):
+		self.family_size = family_size
+
+		if allow_upd:
+			#                mom       dad       child1                  other children
+			phase_options = [[0], [1], [2], [3], [0, 2, 3], [0, 1, 2]] + [[0, 1, 2, 3], [0, 1, 2, 3]]*(family_size-3)
+		else:
+			#                mom       dad       child1      other children
+			phase_options = [[0], [1], [2], [3], [0], [2]] + [[0, 1], [2, 3]]*(family_size-3)
+
+		pref = preferred_phase_options(family_size)
+
+		#                              inherited deletions  phase           hard-to-sequence region  
+		states = [x for x in product(*([[0, 1]]*4 +         phase_options + [[0, 1]]))]
+		states = np.asarray(states, dtype=np.int8)
+
+		# family can only have a single UPD event happening at any given position
+		num_upd = np.zeros((states.shape[0],))
+		for individual_index in range(family_size):
+			mat_phase, pat_phase = states[:, maternal_phase_indices(family_size)[individual_index]], states[:, paternal_phase_indices(family_size)[individual_index]]
+			mat_preferred_phase, pat_preferred_phase = pref[(2*individual_index):(2*individual_index)+2]
+			num_upd += ~np.isin(mat_phase, mat_preferred_phase)
+			num_upd += ~np.isin(pat_phase, pat_preferred_phase)
+
+		states = states[num_upd<=1, :]
+
+		# family can have at most 3 inherited deletions 
+		# (if 4, you'd expect a stretch of ./. for everyone, and these sites won't be included in VCF)
+		states = states[np.sum(states[:, inherited_deletion_indices(family_size)]==0, axis=1)<=3, :]
+
+		# a copy can only have a deletion if it either
+		# has at least two partners OR
+		# has a partner that is also deleted (involved in a double deletion)
+		partners = np.zeros((states.shape[0], 4, 4), dtype=bool)
+		in_dd = np.zeros((states.shape[0], 4), dtype=bool)
+		for individual_index in range(family_size):
+			partners[np.arange(states.shape[0]), states[:, maternal_phase_indices(family_size)[individual_index]], states[:, paternal_phase_indices(family_size)[individual_index]]] = True
+			partners[np.arange(states.shape[0]), states[:, paternal_phase_indices(family_size)[individual_index]], states[:, maternal_phase_indices(family_size)[individual_index]]] = True
+			
+			for i, j in combinations(range(4), 2):
+				indices = (states[:, i]==0) & (states[:, j]==0)
+				in_dd[indices, i] = True
+				in_dd[indices, j] = True
+		num_partners = np.sum(partners, axis=2)
+
+		#m1_has_deletion = states[:, inherited_deletion_indices(family_size)[0]]==0
+		#m2_has_deletion = states[:, inherited_deletion_indices(family_size)[1]]==0
+		#p1_has_deletion = states[:, inherited_deletion_indices(family_size)[2]]==0
+		#p2_has_deletion = states[:, inherited_deletion_indices(family_size)[3]]==0
+
+		#states = states[(~m1_has_deletion | (num_partners[:, 0]>=2) | in_dd[:, 0]) & \
+		#				(~m2_has_deletion | (num_partners[:, 1]>=2) | in_dd[:, 1]) & \
+		#				(~p1_has_deletion | (num_partners[:, 2]>=2) | in_dd[:, 2]) & \
+		#				(~p2_has_deletion | (num_partners[:, 3]>=2) | in_dd[:, 3]), :]
+
+		self._states = states
+		print('inheritance states', self._states.shape)
+
+		self.num_states = self._states.shape[0]
+		self._state_to_index = dict([(State(family_size, x), i) for i, x in enumerate(self._states)])
+
+	def index(self, state):
+		return self._state_to_index[state]
+
+	def __getitem__(self, index):
+		if isinstance(index, int):
+			return State(self.family_size, self._states[index, :])
+		else:
+			return self._states[index, :]
+
+	def __contains__(self, state):
+		return state in self._state_to_index
+
+	def __iter__(self):
+		self.index = 0
+		return self
+
+	def __next__(self):
+		if self.index < self.num_states:
+			self.index += 1
+			return self[self.index-1]
+		else:
+			raise StopIteration
+
+
+
 

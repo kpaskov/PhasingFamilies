@@ -248,7 +248,7 @@ def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_posi
 					s_end-s_start+1))
 
 	# last entry
-	s_start, s_end = change_indices[-1]+1, family_snp_positions.shape[0]-1
+	s_start, s_end = change_indices[-1], family_snp_positions.shape[0]-1
 	#assert np.all(final_states[:, s_start] == final_states[:, s_end])
 	statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
 				'.'.join(fkey), 
