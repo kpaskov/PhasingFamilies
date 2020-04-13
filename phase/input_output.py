@@ -235,7 +235,7 @@ def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_posi
 	famf.flush()
 
 	# write final states to file
-	change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist()
+	change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist() + [family_snp_positions.shape[0]-1]
 	for j in range(1, len(change_indices)):
 		s_start, s_end = change_indices[j-1]+1, change_indices[j]
 		#assert np.all(final_states[:, s_start] == final_states[:, s_end])
@@ -246,17 +246,6 @@ def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_posi
 					s_start, s_end, 
 					family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
 					s_end-s_start+1))
-
-	# last entry
-	s_start, s_end = change_indices[-1], family_snp_positions.shape[0]-1
-	#assert np.all(final_states[:, s_start] == final_states[:, s_end])
-	statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
-				'.'.join(fkey), 
-				'\t'.join(map(str, final_states[:, s_start])), 
-				family_snp_positions[s_start, 0]+1, family_snp_positions[s_end, 1],
-				s_start, s_end, 
-				family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
-				s_end-s_start+1))
 	statef.flush()	
 
 	print('Write to file complete')

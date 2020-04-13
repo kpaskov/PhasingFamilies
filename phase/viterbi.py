@@ -70,6 +70,9 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 		final_states[:, j] = merge_paths(paths, states)
 		num_forks += (paths.shape[0] > 1)
 
+	assert np.all(final_states[[0, 1, 2, 3, -1], 0] == 1)
+	assert np.all(final_states[[0, 1, 2, 3, -1], -1] == 1)
+
 	print('Num positions in fork', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 
 	
