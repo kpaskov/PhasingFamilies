@@ -101,11 +101,7 @@ for chrom in chroms:
 		if family_key in family_to_individuals:
 			states = np.asarray(states)
 			positions = np.asarray(family_to_pos[family_key])
-			
-			print(family_key)
-			print(states)
-			print(positions)
-			
+
 			assert np.all(states[0, :4] != 0)
 			assert np.all(states[-1, :4] != 0)
 
