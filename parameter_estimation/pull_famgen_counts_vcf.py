@@ -213,7 +213,7 @@ with gzip.open(args.vcf_file, 'rt') as f:
         for family_size in args.family_sizes:
             indices = family_size_to_indices[family_size]
             bins = np.hstack((np.arange(indices.shape[0])[:, np.newaxis], gens[indices], dps[indices]))
-            family_size_to_counts[family_size][tuple(bins[np.all(bins>0, axis=1), :].T)] += 1
+            family_size_to_counts[family_size][tuple(bins[np.all(bins>=0, axis=1), :].T)] += 1
 
         if j%10000==0:
             print(j)
