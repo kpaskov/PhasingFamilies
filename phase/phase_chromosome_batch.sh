@@ -8,7 +8,7 @@
 #SBATCH -p dpwall
 #SBATCH -D /oak/stanford/groups/dpwall/users/kpaskov/PhasingFamilies
 #SBATCH -t 5:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=8G
 
 # Print this sub-job's task ID
 echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
@@ -16,9 +16,11 @@ echo "My SLURM_ARRAY_TASK_ID is " $SLURM_ARRAY_TASK_ID
 module load py-numpy/1.14.3_py36
 module load py-scipy/1.1.0_py36
 
+srun python3 phase/phase_chromosome.py $SLURM_ARRAY_TASK_ID $1 data/spark.ped split_gen_spark 38 phased_spark parameter_estimation/params/spark_params_ext.json False
+
 #srun python3 phase/phase_chromosome.py $SLURM_ARRAY_TASK_ID $1 data/v34.vcf.ped split_gen_ihart 37 phased_ihart parameter_estimation/ihart_ind_pass_nodel_params.json $2 $3
 
-srun python3 phase/phase_chromosome.py $SLURM_ARRAY_TASK_ID $1 data/platinum.ped split_gen_platinum 37 phased_platinum parameter_estimation/platinum_params.json $2 $3
+#srun python3 phase/phase_chromosome.py $SLURM_ARRAY_TASK_ID $1 data/platinum.ped split_gen_platinum 37 phased_platinum parameter_estimation/platinum_params.json $2 $3
 
 #srun python3 phase/phase_chromosome.py $SLURM_ARRAY_TASK_ID $1 data/ssc.ped split_gen_ssc 37 phased_ssc parameter_estimation/ssc_ind_pass_nodel_params.json $2 $3 
 

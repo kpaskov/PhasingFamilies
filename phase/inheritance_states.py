@@ -186,6 +186,64 @@ class InheritanceStates:
 		else:
 			raise StopIteration
 
+	def is_ok_start_end(self, state):
+		return not state.has_deletion() and state.is_hard_to_sequence()
+
+class YInheritanceStates:
+
+	def __init__(self, family_size, individual_sex):
+		self.family_size = family_size
+
+		#                 mom      dad
+		phase_options = [[0], [0], [2], [2]]
+
+		is_first_boy = True
+		for sex in individual_sex[2:]:
+			if sex=='1' and is_first_boy:
+				# if child is a boy
+				phase_options.extend([[2], [2]])
+				is_first_boy = False
+			elif sex=='1':
+				phase_options.extend([[2], [2]])
+			else:
+				phase_options.extend([[0], [0]])
+
+		#                              inherited deletions    phase           hard-to-sequence region  
+		states = [x for x in product(*([[0], [0], [1], [1]] + phase_options + [[0, 1]]))]
+		states = np.asarray(states, dtype=np.int8)
+
+		self._states = states
+		print('inheritance states', self._states.shape)
+
+		self.num_states = self._states.shape[0]
+		self._state_to_index = dict([(State(family_size, x), i) for i, x in enumerate(self._states)])
+
+	def index(self, state):
+		return self._state_to_index[state]
+
+	def __getitem__(self, index):
+		if isinstance(index, int):
+			return State(self.family_size, self._states[index, :])
+		else:
+			return self._states[index, :]
+
+	def __contains__(self, state):
+		return state in self._state_to_index
+
+	def __iter__(self):
+		self.index = 0
+		return self
+
+	def __next__(self):
+		if self.index < self.num_states:
+			self.index += 1
+			return self[self.index-1]
+		else:
+			raise StopIteration
+
+	def is_ok_start_end(self, state):
+		return state.is_hard_to_sequence()
+
 
 
 

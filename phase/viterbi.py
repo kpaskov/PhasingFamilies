@@ -15,7 +15,7 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 	pos_gen = tuple(family_genotypes[:, 0])
 	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
 
-	ok_start = np.array([not x.has_deletion() and x.is_hard_to_sequence() for x in states])
+	ok_start = np.array([states.is_ok_start_end(x) for x in states])
 	v_cost[~ok_start, 0] = np.inf
 
 	# next steps
@@ -48,7 +48,7 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 	# choose best paths
 	# we enforce that the chromosome ends with no deletions and a hard to sequence region
 	num_forks = 0
-	ok_end = np.array([not x.has_deletion() and x.is_hard_to_sequence() for x in states])
+	ok_end = np.array([states.is_ok_start_end(x) for x in states])
 	min_value = np.min(v_cost[ok_end, -1])
 	paths = np.where(np.isclose(v_cost[:, -1], min_value) & ok_end)[0]
 	print('Num solutions', paths.shape, min_value, states[paths])
@@ -69,9 +69,6 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 		paths = np.asarray(list(new_paths), dtype=int)
 		final_states[:, j] = merge_paths(paths, states)
 		num_forks += (paths.shape[0] > 1)
-
-	assert np.all(final_states[[0, 1, 2, 3, -1], 0] == 1)
-	assert np.all(final_states[[0, 1, 2, 3, -1], -1] == 1)
 
 	print('Num positions in fork', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 

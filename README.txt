@@ -16,6 +16,8 @@ Then we estimate parameters using
 
 python parameter_estimation/estimate_parameters_per_individual.py [data_dir] [param_file]
 
+python parameter_estimation/extend_params.py [param_dile]
+
 3. Run Phasing/Deletion Detection
 Now we're ready to run using
 
@@ -24,3 +26,10 @@ python phase/phase_chromosome.py [chrom] [family_size] [ped_file] [data_dir] [as
 Memory
 WGS: families of size 3/4 need 8GB, families of size 5 need 16GB, families of size 6 need 64GB
 Exome: families of size 3/4/5/6/7 need 8GB
+
+family batch:
+
+for familysize in 3 4 5 6 7
+do
+   python phase/phase_chromosome.py 2 $familysize data/ancestry.ped split_gen_ancestry 37 phased_ancestry parameter_estimation/params/ancestry_params_ext.json FALSE
+done

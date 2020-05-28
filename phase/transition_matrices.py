@@ -44,16 +44,18 @@ class TransitionMatrix:
 				for i in range(4):
 					# maternal
 					new_state = copy.deepcopy(state)
-					new_state.remove_all_inherited_deletions() # can't have recombination inside a deletion, but we allow a transition into no deletions+recombination
 					new_state.set_maternal_phase(individual_index, i)
+					new_state.remove_all_inherited_deletions() # can't have recombination inside a deletion, but we allow a transition into no deletions+recombination
+					
 					if state != new_state and new_state in states:
 						transitions[state_index].append(states.index(new_state))
 						transition_costs[state_index].append(state.transition_cost(new_state, shift_costs))
 
 					# paternal
 					new_state = copy.deepcopy(state)
-					new_state.remove_all_inherited_deletions() # can't have recombination inside a deletion, but we allow a transition into no deletions+recombination
 					new_state.set_paternal_phase(individual_index, i)
+					new_state.remove_all_inherited_deletions() # can't have recombination inside a deletion, but we allow a transition into no deletions+recombination
+				
 					if state != new_state and new_state in states:
 						transitions[state_index].append(states.index(new_state))
 						transition_costs[state_index].append(state.transition_cost(new_state, shift_costs))

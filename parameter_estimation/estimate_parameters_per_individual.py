@@ -11,79 +11,102 @@ import argparse
 parser = argparse.ArgumentParser(description='Estimate parameters.')
 parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
 parser.add_argument('out_file', type=str, help='Output file.')
-parser.add_argument('--total_sites', type=int, default=None, help='The total number of sites genotyped. We assume that any sites not included in the counts files are homozygous reference for all individuals.')
 parser.add_argument('--is_ngs', action='store_true', default=False, help='True if this data is NGS. The important point is whether or not sites where all individuals are homozygous reference are sometimes dropped from the VCF. If this happens, use flag --is_ngs')
 parser.add_argument('--sample_names_have_period', action='store_true', default=False, help='If sample names include periods, we have to do a special parse.')
+parser.add_argument('--use_bases', action='store_true', default=False, help='Estimate parameters for base errors (ex. AA -> AT) rather than for genotype errors (ex. 0/0 -> 0/1).')
 args = parser.parse_args()
 
-# ------------------------------------ Basic Info ------------------------------------
-chrom_lengths = {
-	'1': 225934550,
-	'2': 238204522,
-	'3': 194797140,
-	'4': 188042934,
-	'5': 177695260,
-	'6': 167395067,
-	'7': 155536559,
-	'8': 142964911,
-	'9': 120626573,
-	'10': 131314747,
-	'11': 131169619,
-	'12': 130481395,
-	'13': 95589878,
-	'14': 88289540,
-	'15': 81694769,
-	'16': 78884753,
-	'17': 78129607,
-	'18': 74661510,
-	'19': 56060841,
-	'20': 59505520,
-	'21': 35134224,
-	'22': 34894566,
-	'X': 151100560,
-	'Y': 25653566
-}
+chroms = [str(x) for x in range(1, 23)]
 
-
-chroms = [str(x) for x in range(1, 23)] #+ ['X', 'Y'] 
-
-# 0 = 0/0
-# 1 = 0/1
-# 2 = 1/1
-# 3 = ./.
 
 gens = ['0/0', '0/1', '1/1']
 obss = ['0/0', '0/1', '1/1', './.']
 
-errors = [(0, 1), (0, 2), (0, 3), 
-          (1, 0), (1, 2), (1, 3), 
-          (2, 0), (2, 1), (2, 3)]
-error_to_index = dict([(x, i) for i, x in enumerate(errors)])
-print('num error types', len(errors))
+errors = [
+    ('0/0', '0/1'), ('0/0', '1/1'), ('0/0', './.'),
+    ('0/1', '0/0'), ('0/1', '1/1'), ('0/1', './.'),
+    ('1/1', '0/0'), ('1/1', '0/1'), ('1/1', './.')
+]
 
 mendelian_trios = {
-    (0, 0, 0), 
-    (0, 1, 0), (0, 1, 1),
-    (0, 2, 1),
-    (1, 0, 0), (1, 0, 1),
-    (1, 1, 0), (1, 1, 1), (1, 1, 2),
-    (1, 2, 1), (1, 2, 2),
-    (2, 0, 1),
-    (2, 1, 1), (2, 1, 2),
-    (2, 2, 2)
+    ('0/0', '0/0', '0/0'),
+    ('0/0', '0/1', '0/0'), ('0/0', '0/1', '0/1'),
+    ('0/0', '1/1', '0/1'),
+    ('0/1', '0/0', '0/0'), ('0/1', '0/0', '0/1'),
+    ('0/1', '0/1', '0/0'), ('0/1', '0/1', '0/1'), ('0/1', '0/1', '1/1'),
+    ('0/1', '1/1', '0/1'), ('0/1', '1/1', '1/1'),
+    ('1/1', '0/0', '0/1'),
+    ('1/1', '0/1', '0/1'), ('1/1', '0/1', '1/1'),
+    ('1/1', '1/1', '1/1')
 }
 
-mendelian_check = lambda x: x in mendelian_trios
 allowable_errors_child = {
-    (0, 1), (0, 2), (0, 3),
-    (1, 0), (1, 2), (1, 3),
-    (2, 0), (2, 1), (2, 3)
+    ('0/0', '0/1'), ('0/0', '1/1'), ('0/0', './.'),
+    ('0/1', '0/0'), ('0/1', '1/1'), ('0/1', './.'),
+    ('1/1', '0/0'), ('1/1', '0/1'), ('1/1', './.')
 }
+
 allowable_errors_parent = {
-    (0, 2), (0, 3),
-    (1, 0), (1, 2), (1, 3),
-    (2, 0), (2, 3)
+    ('0/0', '1/1'), ('0/0', './.'),
+    ('0/1', '0/0'), ('0/1', '1/1'), ('0/1', './.'),
+    ('1/1', '0/0'), ('1/1', './.')
 }
+
+if args.use_bases:
+
+    gens = ['AA', 'AC', 'AG', 'AT', 'CC', 'CG', 'CT', 'GG', 'GT', 'TT']
+    obss = ['AA', 'AC', 'AG', 'AT', 'CC', 'CG', 'CT', 'GG', 'GT', 'TT', './.']
+
+    errors = [
+        ('AA', 'AC'), ('AA', 'AG'), ('AA', 'AT'),
+        ('AC', 'AA'), ('AC', 'AG'), ('AC', 'AT'), ('AC', 'CC'), ('AC', 'CG'), ('AC', 'CT'),
+        ('AG', 'AA'), ('AG', 'AC'), ('AG', 'AT'), ('AG', 'CG'), ('AG', 'GG'), ('AG', 'GT'),
+        ('AT', 'AA'), ('AT', 'AC'), ('AT', 'AG'), ('AT', 'CT'), ('AT', 'GT'), ('AT', 'TT'),
+        ('CC', 'AC'), ('CC', 'CG'), ('CC', 'CT'),
+        ('CG', 'AC'), ('CG', 'CC'), ('CG', 'CT'), ('CG', 'AG'), ('CG', 'CG'), ('CG', 'CT'),
+        ('CT', 'AC'), ('CT', 'CC'), ('CT', 'CG'), ('CT', 'AT'), ('CT', 'GT'), ('CT', 'TT'),
+        ('GG', 'AG'), ('GG', 'CG'), ('GG', 'GT'),
+        ('GT', 'AG'), ('GT', 'CG'), ('GT', 'GG'), ('GT', 'AT'), ('GT', 'CT'), ('GT', 'TT'),
+        ('TT', 'AT'), ('TT', 'CT'), ('TT', 'GT'),
+    ]
+
+    mendelian_trios = set()
+    to_gen = lambda x: ''.join(sorted(x))
+    for parents in product('ACGT', repeat=4):
+        mendelian_trios.add((to_gen(parents[:2]), to_gen(parents[2:]), to_gen([parents[0], parents[2]])))
+        mendelian_trios.add((to_gen(parents[:2]), to_gen(parents[2:]), to_gen([parents[0], parents[3]])))
+        mendelian_trios.add((to_gen(parents[:2]), to_gen(parents[2:]), to_gen([parents[1], parents[2]])))
+        mendelian_trios.add((to_gen(parents[:2]), to_gen(parents[2:]), to_gen([parents[1], parents[3]])))
+    
+    allowable_errors_child = {
+        ('AA', 'AC'), ('AA', 'AG'), ('AA', 'AT'), ('AA', './.'), 
+        ('AC', 'AA'), ('AC', 'CC'), ('AC', './.'), 
+        ('AG', 'AA'), ('AG', 'GG'), ('AG', './.'), 
+        ('AT', 'AA'), ('AT', 'TT'), ('AT', './.'), 
+        ('CC', 'AC'), ('CC', 'CG'), ('CC', 'CT'), ('CC', './.'), 
+        ('CG', 'CC'), ('CG', 'GG'), ('CG', './.'), 
+        ('CT', 'CC'), ('CT', 'TT'), ('CT', './.'),
+        ('GG', 'AG'), ('GG', 'CG'), ('GG', 'GT'), ('GG', './.'), 
+        ('GT', 'GG'), ('GT', 'TT'), ('GT', './.'),
+        ('TT', 'AT'), ('TT', 'CT'), ('TT', 'GT'), ('TT', './.')    
+    }
+
+    allowable_errors_parent = {
+        ('AA', './.'), 
+        ('AC', 'AA'), ('AC', 'CC'), ('AC', './.'), 
+        ('AG', 'AA'), ('AG', 'GG'), ('AG', './.'), 
+        ('AT', 'AA'), ('AT', 'TT'), ('AT', './.'), 
+        ('CC', './.'), 
+        ('CG', 'CC'), ('CG', 'GG'), ('CG', './.'), 
+        ('CT', 'CC'), ('CT', 'TT'), ('CT', './.'),
+        ('GG', './.'), 
+        ('GT', 'GG'), ('GT', 'TT'), ('GT', './.'),
+        ('TT', './.')    
+    }
+
+print('num error types', len(errors))
+error_to_index = dict([(x, i) for i, x in enumerate(errors)])
+mendelian_check = lambda x: x in mendelian_trios
 
 
 # ------------------------------------ Pull Data ------------------------------------
@@ -113,8 +136,8 @@ for i, chrom in enumerate(chroms):
                 else:
                     assert family_to_inds[famkey] == inds
                 
-                counts = np.zeros((4,)*m, dtype=int)
-                for g, c in zip(product([0, 1, 2, 3], repeat=m), pieces[2:]):
+                counts = np.zeros((len(obss),)*m, dtype=int)
+                for g, c in zip(product(range(len(obss)), repeat=m), pieces[2:]):
                     counts[g] = int(c)
                     
                 family_chrom_to_counts[(famkey, chrom)] = counts
@@ -131,24 +154,19 @@ for famkey in set([x[0] for x in family_chrom_to_counts.keys()]):
         print('Missing chromosome counts', famkey, [chroms[i] for i in np.where(~has_chrom)[0]])
 famkeys = sorted(famkeys)
 
-## filter families without sex
-#famkeys = [k for k in famkeys if np.all([ind in sample_id_to_sex for ind in family_to_inds[k]])]
-#print('Families', len(famkeys))
-
 print('Families', len(famkeys))
 
 
 # ------------------------------------ Poisson Regression ------------------------------------
 
-def get_mendelian(ind_is_mendelian):
+def get_mendelian(m):
     
     # differentiate mendelian and non-mendelian famgens
-    m = len(ind_is_mendelian)
-    is_mendelian = np.ones((4,)*m, dtype=bool)
-    for famgen in product([0, 1, 2, 3], repeat=m):
+    is_mendelian = np.ones((len(obss),)*m, dtype=bool)
+    for famgen in product(range(len(obss)), repeat=m):
         is_mend = True
         for j in range(2, m):
-            if not ind_is_mendelian[j](tuple(famgen[x] for x in [0, 1, j])):
+            if not mendelian_check(tuple(obss[famgen[x]] for x in [0, 1, j])):
                 is_mend = False
         is_mendelian[famgen] = is_mend
     return is_mendelian
@@ -173,7 +191,7 @@ def estimate_error_rates(is_mendelian, allowable_errors, counts):
 
     for k, nmfg in enumerate(nonmendelian_famgens):
         for i, j in product(range(4), range(m)):
-            error = (i, nmfg[j])
+            error = (obss[i], obss[nmfg[j]])
             if error in allowable_errors[j]:
                 neighbor = tuple(i if k==j else nmfg[k] for k in range(m))
                 if is_mendelian[neighbor]:
@@ -228,8 +246,8 @@ def estimate_error_rates(is_mendelian, allowable_errors, counts):
         if k in old_col_index_to_new:
             error = errors[k%len(errors)]
             ind_index = int(np.floor(k/len(errors)))
-            error_rates[ind_index, error[0], error[1]] = ns[old_col_index_to_new[k]]
-            lower_bounds[ind_index, error[0], error[1]] = lower_bound[old_col_index_to_new[k]]
+            error_rates[ind_index, gens.index(error[0]), obss.index(error[1])] = ns[old_col_index_to_new[k]]
+            lower_bounds[ind_index, gens.index(error[0]), obss.index(error[1])] = lower_bound[old_col_index_to_new[k]]
 
     # now fill in P(obs=true_gen)
     for i, gen in enumerate(gens):
@@ -243,10 +261,8 @@ def estimate_error_rates(is_mendelian, allowable_errors, counts):
 ## ------------------------------------ Calculate Various Metrics ------------------------------------
 
 def add_observed_counts(params, counts, j, m):
-    params['observed_0/0'] = int(np.sum(counts[tuple(0 if x==j else slice(None, None, None) for x in range(m))]))
-    params['observed_0/1'] = int(np.sum(counts[tuple(1 if x==j else slice(None, None, None) for x in range(m))]))
-    params['observed_1/1'] = int(np.sum(counts[tuple(2 if x==j else slice(None, None, None) for x in range(m))]))
-    params['observed_./.'] = int(np.sum(counts[tuple(3 if x==j else slice(None, None, None) for x in range(m))]))
+    for i, obs in enumerate(obss):
+        params['observed_%s' % obs] = int(np.sum(counts[tuple(i if x==j else slice(None, None, None) for x in range(m))]))
 
 def add_estimated_error_rates(params, error_rates, lower_bounds, j):
     for gen_index, gen in enumerate(gens):
@@ -295,19 +311,13 @@ for i, famkey in enumerate(famkeys):
         inds = family_to_inds[famkey]
         m = len(inds)
             
-        is_mendelian = get_mendelian([None, None] + ([mendelian_check]*(m-2)))
+        is_mendelian = get_mendelian(m)
         allowable_errors = [allowable_errors_parent]*2 + [allowable_errors_child]*(m-2)
         counts = np.sum(np.array([family_chrom_to_counts[(famkey, chrom)] for chrom in chroms]), axis=0)
 
-        if args.total_sites is not None:
-            accounted_for = np.sum(counts)
-            if accounted_for > args.total_sites:
-                raise Exception('There are more sites in the VCF than you claim. Please adjust --total_sites.')
-            counts[(0,)*m] = args.total_sites - accounted_for
-
         error_rates, lower_bounds = estimate_error_rates(is_mendelian, allowable_errors, counts)
 
-        print(-np.log10(error_rates))
+        #print(-np.log10(error_rates))
 
         for j in range(len(inds)):
             # observed counts

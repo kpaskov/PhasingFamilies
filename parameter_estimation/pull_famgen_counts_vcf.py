@@ -5,6 +5,9 @@ import numpy as np
 import scipy.sparse as sparse
 import argparse
 import gzip
+import time
+
+t0 = time.time()
 
 parser = argparse.ArgumentParser(description='Pull family genotype counts. Bins are created representing different combinations of genotype and depth for each family member.')
 parser.add_argument('vcf_file', type=str, help='VCF file of variants.')
@@ -104,11 +107,14 @@ print('family sizes', args.family_sizes)
 family_size_to_indices = dict()
 family_size_to_counts = dict()
 
+is_individual_included = np.zeros((len(sample_ids),), dtype=bool)
 for family_size in args.family_sizes:
     indices = np.array([family_to_indices[k] for k in families if len(family_to_indices[k])==family_size])
+    is_individual_included[indices.flatten()] = True
     family_size_to_indices[family_size] = indices
     family_size_to_counts[family_size] = np.zeros(tuple([indices.shape[0]] + [len(args.genotypes)]*family_size + [len(args.depth_bins)+1]*family_size), dtype=int)
     print(indices.shape, family_size_to_counts[family_size].shape)
+print('individuals included', np.sum(is_individual_included))
 
 # enumerate all chrom options
 chrom_options = [args.chrom, 'chr'+args.chrom]
@@ -181,6 +187,8 @@ print('final variants of interest', np.sum(is_ok_variant))
 
 # now start pulling genotypes and doing counts
 gen_mapping = dict([(x, i) for i, x in enumerate(args.genotypes)])
+gens = -np.ones((len(sample_ids),), dtype=int)
+dps = -np.ones((len(sample_ids),), dtype=int)
 with gzip.open(args.vcf_file, 'rt') as f:
     # Skip header
     line = next(f)
@@ -195,28 +203,27 @@ with gzip.open(args.vcf_file, 'rt') as f:
         # Pull out genotypes and depth
         gen_index = fmt.index('GT')
         dp_index = fmt.index('DP')
+        maxsplit=max(gen_index, dp_index)+1
 
-        gens = -np.ones((len(sample_ids),), dtype=int)
-        dps = -np.ones((len(sample_ids),), dtype=int)
-
-        for i, piece in enumerate(pieces[9:]):
-            segment = piece.split(':')
+        for i, piece in compress(enumerate(pieces[9:]), is_individual_included):
+            segment = piece.split(':', maxsplit=maxsplit)
             gens[i] = gen_mapping.get(segment[gen_index], -1) # -1 represents an unknown genotype
 
-            if dp_index < len(segment):
-                dp = segment[dp_index]
-                if dp.isdigit():
-                    dps[i] = int(dp)
+            try:
+                dps[i] = int(segment[dp_index])
+            except:
+                dps[i] = -1
 
         dps = np.digitize(dps, [0] + args.depth_bins)-1 # -1 represents an unknown depth
 
         for family_size in args.family_sizes:
             indices = family_size_to_indices[family_size]
-            bins = np.hstack((np.arange(indices.shape[0])[:, np.newaxis], gens[indices], dps[indices]))
-            family_size_to_counts[family_size][tuple(bins[np.all(bins>=0, axis=1), :].T)] += 1
+            g, d = gens[indices], dps[indices]
+            no_unknowns = np.all(g>=0, axis=1) & np.all(d>=0, axis=1)
+            family_size_to_counts[family_size][(np.where(no_unknowns)[0],)+tuple(g[no_unknowns, :].T)+tuple(d[no_unknowns, :].T)] += 1
 
         if j%10000==0:
-            print(j)
+            print(j, time.time()-t0)
         j += 1
     print(i)
 
@@ -226,4 +233,7 @@ for family_size in args.family_sizes:
     out_file = '%s/chr.%s.famsize.%d.famgen.counts' % (args.out_dir, args.chrom, family_size)
     print('saving to %s' % out_file)
     np.save(out_file, family_size_to_counts[family_size])
+
+print('Completed in ', time.time()-t0, 'sec')
+
 

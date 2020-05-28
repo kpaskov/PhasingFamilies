@@ -17,7 +17,7 @@ outdir = sys.argv[4] # ../deletions_ihart
 #deletion_share_cutoff=0.5
 #print('deletion share cutoff', deletion_share_cutoff)
 
-chroms = [str(x) for x in range(1, 23)] #+ ['X']
+chroms = [str(x) for x in range(1, 23)] + ['X']
 
 # pull twins
 identicals = set()

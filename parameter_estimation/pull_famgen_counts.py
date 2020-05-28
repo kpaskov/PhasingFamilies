@@ -12,8 +12,7 @@ parser.add_argument('chrom', type=str, help='Chromosome.')
 parser.add_argument('out_dir', type=str, help='Directory to write counts.')
 parser.add_argument('--include', type=str, default=None, help='Regions to include (.bed).')
 parser.add_argument('--exclude', type=str, default=None, help='Regions to exclude (.bed).')
-parser.add_argument('--af_cutoff', type=float, default=None, help='Only include variants with allele frequency less than this cutoff.')
-parser.add_argument('--homref', type=str, default=None, help='If variants in these regions dont appear in the genotype data, then they are homref for all samples (.bed).')
+#parser.add_argument('--use_bases', action='store_true', default=False, help='Pull counts per base (ex. AA, AT) rather than per genotype (ex. 0/0, 0/1).')
 args = parser.parse_args()
 
 
@@ -25,6 +24,11 @@ if args.chrom == '25':
     args.chrom = 'MT'
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, args.chrom)
+
+if args.use_bases:
+    obss = ['AA', 'AC', 'AG', 'AT', 'CC', 'CG', 'CT', 'GG', 'GT', 'TT', './.']
+else:
+    obss = ['0/0', '0/1', '1/1', './.']
 
 def process_bedfile(bed_file):
     regions = []
@@ -45,11 +49,9 @@ def process_bedfile(bed_file):
 
 include_regions, include_coverage = (None, 0) if args.include is None else process_bedfile(args.include)
 exclude_regions, exclude_coverage = (None, 0) if args.exclude is None else process_bedfile(args.exclude)
-homref_regions, homref_coverage = (None, 0) if args.homref is None else process_bedfile(args.homref)
 
 print('including %s bp' % ('all' if include_regions is None else str(include_coverage)))
 print('excluding %s bp' % ('no' if exclude_regions is None else str(exclude_coverage)))
-print('using %s homref bp' % ('no' if homref_regions is None else str(homref_coverage)))
 
 out_file = '%s/chr.%s.famgen.counts.txt' % (args.out_dir, args.chrom)
 print('saving to %s' % out_file)
@@ -94,11 +96,6 @@ with open(out_file, 'w+') as f:
     if exclude_regions is not None:
         insert_loc = np.searchsorted(exclude_regions, pos_data[:, 1])
         is_ok_exclude = np.remainder(insert_loc, 2)==0
-        
-    if homref_regions is not None:
-        insert_loc = np.searchsorted(homref_regions, pos_data[:, 1])
-        is_in_homref = np.remainder(insert_loc, 2)==1
-
 
     print('not SNP', np.sum(~is_snp))
     print('not PASS', np.sum(~is_pass))
@@ -108,15 +105,8 @@ with open(out_file, 'w+') as f:
     # Pull data together
     A = sparse.hstack([sparse.load_npz('%s/%s' % (args.data_dir, gen_file)) for gen_file in gen_files])
 
-    if args.af_cutoff is not None:
-        is_af_ok = (A.sum(axis=0)/A.shape[0]).A.flatten() <= args.af_cutoff
-    else:
-        is_af_ok = np.ones(is_snp.shape, dtype=bool)
-
-    print('bad AF', np.sum(~is_af_ok))
-
     # filter out snps
-    A = A[:, is_snp & is_pass & is_ok_include & is_ok_exclude & is_af_ok]
+    A = A[:, is_snp & is_pass & is_ok_include & is_ok_exclude]
     print('genotype matrix prepared', A.shape)
 
     for famkey, inds in families.items():
@@ -128,10 +118,6 @@ with open(out_file, 'w+') as f:
         # remove positions where whole family is homref
         has_data = sorted(set(family_genotypes.nonzero()[1]))
         num_hom_ref = family_genotypes.shape[1] - len(has_data)
-
-        # also count the number of homref sites we don't observe
-        if homref_regions is not None:
-            num_hom_ref += (homref_coverage - np.sum(is_in_homref))
 
         family_genotypes = family_genotypes[:, has_data].A
         #print(famkey, family_genotypes.shape)
