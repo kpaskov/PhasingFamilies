@@ -102,20 +102,24 @@ class State:
 
 class InheritanceStates:
 
-	def __init__(self, family_size, allow_upd):
+	def __init__(self, family_size, allow_deletions):
 		self.family_size = family_size
 
-		if allow_upd:
-			#                mom       dad       child1                  other children
-			phase_options = [[0], [1], [2], [3], [0, 2, 3], [0, 1, 2]] + [[0, 1, 2, 3], [0, 1, 2, 3]]*(family_size-3)
-		else:
-			#                mom       dad       child1      other children
-			phase_options = [[0], [1], [2], [3], [0], [2]] + [[0, 1], [2, 3]]*(family_size-3)
-
+		#if allow_upd:
+		#	#                mom       dad       child1                  other children
+		#	phase_options = [[0], [1], [2], [3], [0, 2, 3], [0, 1, 2]] + [[0, 1, 2, 3], [0, 1, 2, 3]]*(family_size-3)
+		#else:
+		#                mom       dad       child1      other children
+		phase_options = [[0], [1], [2], [3], [0], [2]] + [[0, 1], [2, 3]]*(family_size-3)
 		pref = preferred_phase_options(family_size)
 
-		#                              inherited deletions  phase           hard-to-sequence region  
-		states = [x for x in product(*([[0, 1]]*4 +         phase_options + [[0, 1]]))]
+		if allow_deletions:
+			#                              inherited deletions  phase           hard-to-sequence region  
+			states = [x for x in product(*([[0, 1]]*4 +         phase_options + [[0, 1]]))]
+		else:
+			#                              inherited deletions  phase           hard-to-sequence region  
+			states = [x for x in product(*([[1]]*4 +         phase_options + [[0, 1]]))]
+		
 		states = np.asarray(states, dtype=np.int8)
 
 		# family can only have a single UPD event happening at any given position

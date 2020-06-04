@@ -23,13 +23,13 @@ if __name__ == "__main__":
 	assembly = sys.argv[5]
 	out_dir = sys.argv[6]
 	param_file = sys.argv[7]
-	detect_denovos = sys.argv[8] == 'True'
+	detect_deletions = sys.argv[8] == 'True'
 	batch_size = None if len(sys.argv) < 11 else int(sys.argv[9])
 	batch_num = None if len(sys.argv) < 11 else int(sys.argv[10])
 	batch_offset = None
 
-	if detect_denovos:
-		print('Detecting de novos...')
+	if detect_deletions:
+		print('Detecting deletions while phasing ...')
 
 	if chrom == '23':
 		chrom = 'X'
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 	families_of_this_size = pull_families(sample_file, ped_file, m, batch_size, batch_offset)
 
 	# create inheritance states
-	inheritance_states = InheritanceStates(m, detect_denovos)
+	inheritance_states = InheritanceStates(m, detect_deletions)
 	
 	# create transition matrix
 	transition_matrix = TransitionMatrix(inheritance_states, params)
