@@ -122,8 +122,8 @@ class LazyLoss:
 		gen_index = self.genotypes.index(gen)
 		if not self.already_calculated[gen_index]:
 			for i, pm in enumerate(self.perfect_matches):
-				self.s[i, 0] = sum([self.g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen)) if obs != -1])
-				self.s[i, 1] = sum([self.hts_g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen)) if obs != -1])
+				self.s[i, 0] = sum([self.g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen))])
+				self.s[i, 1] = sum([self.hts_g_cost[(j, pred, obs)] for j, (pred, obs) in enumerate(zip(pm, gen))])
 				    
 			values = np.min(self.s[self.perfect_match_indices, 0], axis=1)
 			hts_values = np.min(self.s[self.perfect_match_indices[self.is_hts, :], 1], axis=1)
