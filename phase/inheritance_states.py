@@ -102,7 +102,7 @@ class State:
 
 class InheritanceStates:
 
-	def __init__(self, family_size, allow_deletions):
+	def __init__(self, family_size, detect_deletions_mat, detect_deletions_pat):
 		self.family_size = family_size
 
 		#if allow_upd:
@@ -113,9 +113,15 @@ class InheritanceStates:
 		phase_options = [[0], [1], [2], [3], [0], [2]] + [[0, 1], [2, 3]]*(family_size-3)
 		pref = preferred_phase_options(family_size)
 
-		if allow_deletions:
+		if detect_deletions_mat and detect_deletions_pat:
 			#                              inherited deletions  phase           hard-to-sequence region  
 			states = [x for x in product(*([[0, 1]]*4 +         phase_options + [[0, 1]]))]
+		elif detect_deletions_mat:
+			#                              inherited deletions    phase           hard-to-sequence region  
+			states = [x for x in product(*([[0, 1]]*2 + [[1]]*2 + phase_options + [[0, 1]]))]
+		elif detect_deletions_pat:
+			#                              inherited deletions    phase           hard-to-sequence region  
+			states = [x for x in product(*([[1]]*2 + [[0, 1]]*2 + phase_options + [[0, 1]]))]
 		else:
 			#                              inherited deletions  phase           hard-to-sequence region  
 			states = [x for x in product(*([[1]]*4 +         phase_options + [[0, 1]]))]

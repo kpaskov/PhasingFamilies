@@ -54,7 +54,10 @@ if __name__ == "__main__":
 	families_of_this_size = pull_families(sample_file, ped_file, m, batch_size, batch_offset)
 
 	# create inheritance states
-	inheritance_states = InheritanceStates(m, detect_deletions)
+	if chrom == 'X':
+		inheritance_states = InheritanceStates(m, detect_deletions_mat=detect_deletions, detect_deletions_pat=True)
+	else:
+		inheritance_states = InheritanceStates(m, detect_deletions_mat=detect_deletions, detect_deletions_pat=detect_deletions)
 	
 	# create transition matrix
 	transition_matrix = TransitionMatrix(inheritance_states, params)
