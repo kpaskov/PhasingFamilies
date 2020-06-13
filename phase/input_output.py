@@ -2,6 +2,7 @@ import numpy as np
 from scipy import sparse
 import scipy.stats
 import random
+from collections import defaultdict
 
 # From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
 chrom_lengths37 = {
@@ -59,7 +60,70 @@ chrom_lengths38 = {
 	'Y': 57227415
 }
 
-def pull_families(sample_file, ped_file, m, batch_size=None, batch_offset=None):
+class Family():
+	def __init__(self, famkey):
+		self.id = famkey
+		self.parents_to_children = defaultdict(list)
+		self.mat_ancestors = []
+		self.pat_ancestors = []
+		self.descendents = []
+		self.ordered_couples = []
+		self.individuals = []
+
+	def add_child(self, child_id, mother_id, father_id):
+		if child_id in self.mat_ancestors:
+			self.mat_ancestors.remove(child_id)
+		if child_id in self.pat_ancestors:
+			self.pat_ancestors.remove(child_id)
+
+		if mother_id not in self.individuals:
+			self.mat_ancestors.append(mother_id)
+		if father_id not in self.individuals:
+			self.pat_ancestors.append(father_id)
+		self.parents_to_children[(mother_id, father_id)].append(child_id)
+		random.shuffle(self.parents_to_children[(mother_id, father_id)])
+
+		self._reset_individuals()
+
+	def get_parents(self, child_id):
+		for ((mom, dad), children) in self.parents_to_children:
+			if child_id in children:
+				return (mom, dad)
+		return None
+
+	def _reset_individuals(self):
+		self.descendents = []
+		self.ordered_couples = []
+		parents = set(self.parents_to_children.keys())
+		while len(parents) > 0:
+			already_added = set()
+			for mom, dad in parents:
+				if (mom in self.mat_ancestors or mom in self.descendents) and (dad in self.pat_ancestors or dad in self.descendents):
+					self.ordered_couples.append((mom, dad))
+					self.descendents.extend(self.parents_to_children[(mom, dad)])
+					already_added.add((mom, dad))
+			parents = parents - already_added
+			if len(already_added) == 0:
+				raise Exception('Circular pedigree.')
+		self.individuals = self.mat_ancestors + self.pat_ancestors + self.descendents
+
+	def __lt__(self, other):
+		return self.id < other.id
+
+	def __len__(self):
+		return len(self.individuals)
+
+	def __str__(self):
+		return self.id
+
+	def num_ancestors(self):
+		return len(self.mat_ancestors) + len(self.pat_ancestors)
+
+	def num_descendents(self):
+		return len(self.descendents)
+
+
+def pull_families(sample_file, ped_file):
 	# pull families with sequence data
 	with open(sample_file, 'r') as f:
 		sample_ids = [line.strip() for line in f]
@@ -67,31 +131,21 @@ def pull_families(sample_file, ped_file, m, batch_size=None, batch_offset=None):
 	# pull families from ped file
 	families = dict()
 	with open(ped_file, 'r') as f:	
-	    for line in f:
-	        pieces = line.strip().split('\t')
-	        if len(pieces) < 4:
-	        	print('ped parsing error', line)
-	        else:
-	        	fam_id, child_id, f_id, m_id = pieces[0:4]
+		for line in f:
+			pieces = line.strip().split('\t')
+			if len(pieces) < 4:
+				print('ped parsing error', line)
+			else:
+				fam_id, child_id, f_id, m_id = pieces[0:4]
 
-	        	if child_id in sample_ids and f_id in sample_ids and m_id in sample_ids:
-	        		if (fam_id, m_id, f_id) not in families:
-	        			families[(fam_id, m_id, f_id)] = [m_id, f_id]
-	        		families[(fam_id, m_id, f_id)].append(child_id)
-
-	# randomly permute children
-	families = dict([(k, x[:2]+random.sample(x[2:], len(x)-2)) for k, x in families.items()])
-	print('families with sequence data', len(families))
-
-	families_of_this_size = sorted([(fkey, inds) for fkey, inds in families.items() if len(inds) == m], key=lambda x: x[0])
-	print('families of size %d: %d' % (m, len(families_of_this_size)))
-
-	# limit to batch
-	if batch_size is not None:
-		families_of_this_size = families_of_this_size[batch_offset:(batch_size+batch_offset)]
+				if child_id in sample_ids and f_id in sample_ids and m_id in sample_ids:
+					if fam_id not in families:
+						families[fam_id] = Family(fam_id)
+					families[fam_id].add_child(child_id, m_id, f_id)
+	families = sorted([x for x in families.values()])
 		
-	print('families pulled %d: %d' % (m, len(families_of_this_size)))
-	return families_of_this_size
+	print('families pulled %d' % len(families))
+	return families
 
 def pull_families_from_file(fam_file):
 	families = []
@@ -229,9 +283,9 @@ class WGSData:
 
 		return new_family_genotypes, new_family_snp_positions, mult_factor
 
-def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_positions):
+def write_to_file(famf, statef, family, final_states, family_snp_positions):
 	# write family to file
-	famf.write('%s\t%s\n' % ('.'.join(fkey), '\t'.join(individuals)))
+	famf.write('%s\t%s\n' % (family.id, '\t'.join(family.individuals)))
 	famf.flush()
 
 	# write final states to file
@@ -239,13 +293,10 @@ def write_to_file(famf, statef, fkey, individuals, final_states, family_snp_posi
 	for j in range(1, len(change_indices)):
 		s_start, s_end = change_indices[j-1]+1, change_indices[j]
 		#assert np.all(final_states[:, s_start] == final_states[:, s_end])
-		statef.write('%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n' % (
-					'.'.join(fkey), 
+		statef.write('%s\t%s\t%d\t%d\n' % (
+					family.id, 
 					'\t'.join(map(str, final_states[:, s_start])), 
-					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
-					s_start, s_end, 
-					family_snp_positions[s_end, 1]-family_snp_positions[s_start, 0]+1, 
-					s_end-s_start+1))
+					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
 	statef.flush()	
 
 	print('Write to file complete')

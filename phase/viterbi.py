@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import random
 
 def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, loss):
 		
@@ -9,13 +10,11 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 	m, n = family_genotypes.shape
 	v_cost = np.zeros((states.num_states, n), dtype=float)
 
-	# first step, break symmetry
-	# we enforce that the chromosome starts with no deletions and a hard to sequence region
-	# also, no de novo deletions
 	pos_gen = tuple(family_genotypes[:, 0])
 	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
 
-	ok_start = np.array([states.is_ok_start_end(x) for x in states])
+	# we enforce that the chromosome starts with no deletions
+	ok_start = np.array([states.is_ok_start(x) for x in states])
 	v_cost[~ok_start, 0] = np.inf
 
 	# next steps
@@ -28,14 +27,11 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 	return v_cost
 
 def merge_paths(paths, states):
-	# combine path states a single state (unknown values represented with -1)
-	merged_state = -np.ones((states._states.shape[1],), dtype=np.int8)
-	if paths.shape[0] == 1:
-		merged_state = states[paths[0]]
-	else:
-		path_states = states[paths]
-		known_indices = np.all(path_states == path_states[0, :], axis=0)
-		merged_state[known_indices] = path_states[0, known_indices]
+	# combine path states into a single state (unknown values represented with -1)
+	merged_state = -np.ones((states.full_state_length,), dtype=np.int8)
+	path_states = np.array([states.get_full_state(p) for p in paths])
+	known_indices = np.all(path_states == path_states[0, :], axis=0)
+	merged_state[known_indices] = path_states[0, known_indices]
 	return merged_state
 
 def viterbi_backward_sweep(v_cost, states, transition_matrix):
@@ -43,15 +39,19 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 	# backward sweep
 	prev_time = time.time()
 	n = v_cost.shape[1]
-	final_states = -np.ones((states._states.shape[1], n), dtype=int)
+	final_states = -np.ones((states.full_state_length, n), dtype=int)
 	
 	# choose best paths
-	# we enforce that the chromosome ends with no deletions and a hard to sequence region
+	# we enforce that the chromosome ends with no deletions
 	num_forks = 0
-	ok_end = np.array([states.is_ok_start_end(x) for x in states])
+	ok_end = np.array([states.is_ok_end(x) for x in states])
 	min_value = np.min(v_cost[ok_end, -1])
 	paths = np.where(np.isclose(v_cost[:, -1], min_value) & ok_end)[0]
 	print('Num solutions', paths.shape, min_value, states[paths])
+
+	if paths.shape[0]>1:
+		paths = random.choice(paths)[np.newaxis]
+	print(paths.shape)
 
 	final_states[:, -1] = merge_paths(paths, states)
 	num_forks += (paths.shape[0] > 1)
