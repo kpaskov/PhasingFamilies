@@ -45,16 +45,6 @@ sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, args.chrom)
 coord_file = '%s/chr.%s.gen.coordinates.npy' % (args.data_dir,  args.chrom)
 gen_files = sorted([f for f in listdir(args.data_dir) if ('chr.%s.' % args.chrom) in f and 'gen.npz' in f])
 
-if args.family_size is not None:
-	fam_output_file = '%s/chr.%s.familysize.%d.families.txt' % (args.out_dir, args.chrom, args.family_size)
-	phase_output_file = '%s/chr.%s.familysize.%d.phased.txt' % (args.out_dir, args.chrom, args.family_size)
-elif args.family is not None:
-	fam_output_file = '%s/chr.%s.%s.families.txt' % (args.out_dir, args.chrom, args.family)
-	phase_output_file = '%s/chr.%s.%s.phased.txt' % (args.out_dir, args.chrom, args.family)
-else:
-	fam_output_file = '%s/chr.%s.families.txt' % (args.out_dir, args.chrom)
-	phase_output_file = '%s/chr.%s.phased.txt' % (args.out_dir, args.chrom)
-
 if args.batch_size is not None:
 	fam_output_file = fam_output_file[:-4] + str(batch_num) + '.txt'
 	phase_output_file = phase_output_file[:-4] + str(batch_num) + '.txt'
@@ -79,42 +69,42 @@ print('Families of interest', len(families))
 # get ready to pull processed WGS data 
 wgs_data = WGSData(args.data_dir, gen_files, coord_file, sample_file, args.ped_file, args.chrom, args.assembly)
 
-with open(fam_output_file, 'w+') as famf, open(phase_output_file, 'w+') as statef:
-	# phase each family
-	for family in families:
-		print('family', family.id)
-		try:
-			# create genotypes
-			genotypes = Genotypes(len(family))
+# phase each family
+for family in families:
+	print('family', family.id)
+	try:
+		# create genotypes
+		genotypes = Genotypes(len(family))
 
-			# create inheritance states
-			if args.chrom == 'X':
-				inheritance_states = InheritanceStates(family, args.detect_deletions, True, args.num_loss_regions)
-			else:
-				inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
+		# create inheritance states
+		if args.chrom == 'X':
+			inheritance_states = InheritanceStates(family, args.detect_deletions, True, args.num_loss_regions)
+		else:
+			inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
 				
-			# create transition matrix
-			transition_matrix = TransitionMatrix(inheritance_states, params)
+		# create transition matrix
+		transition_matrix = TransitionMatrix(inheritance_states, params)
 
-			# pull genotype data for this family
-			family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(family.individuals)
-			print('data pulled')
+		# pull genotype data for this family
+		family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(family.individuals)
+		print('data pulled')
 
-			# create loss function for this family
-			loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
-			print('loss created')
+		# create loss function for this family
+		loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
+		print('loss created')
 
-			# forward sweep
-			v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
-			print('forward sweep complete')
+		# forward sweep
+		v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+		print('forward sweep complete')
 
-			# backward sweep
-			final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
-			print('backward sweep complete')
+		# backward sweep
+		final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
+		print('backward sweep complete')
 
-			# write to file
-			write_to_file(famf, statef, family, final_states, family_snp_positions)
-			print('Done!')
+		# write to file
+		with open('%s/chr.%s.%s.phased.txt' % (args.out_dir, args.chrom, args.family), 'w+') as statef:
+			write_to_file(statef, family, final_states, family_snp_positions)
+		print('Done!')
 				
-		except Exception as e:
-			print(family.id, e)
+	except Exception as e:
+		print(family.id, e)

@@ -283,21 +283,22 @@ class WGSData:
 
 		return new_family_genotypes, new_family_snp_positions, mult_factor
 
-def write_to_file(famf, statef, family, final_states, family_snp_positions):
-	# write family to file
-	famf.write('%s\t%s\n' % (family.id, '\t'.join(family.individuals)))
-	famf.flush()
+def write_to_file(phasef, family, final_states, family_snp_positions):
+	phasef.write('\t'.join(['family'] + \
+                           ['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
+                           ['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
+                           sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
+                           ['loss_region', 'start_pos', 'end_pos']) + '\n')
 
 	# write final states to file
 	change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist() + [family_snp_positions.shape[0]-1]
 	for j in range(1, len(change_indices)):
 		s_start, s_end = change_indices[j-1]+1, change_indices[j]
 		#assert np.all(final_states[:, s_start] == final_states[:, s_end])
-		statef.write('%s\t%s\t%d\t%d\n' % (
+		phasef.write('%s\t%s\t%d\t%d\n' % (
 					family.id, 
 					'\t'.join(map(str, final_states[:, s_start])), 
 					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
-	statef.flush()	
 
 	print('Write to file complete')
 
