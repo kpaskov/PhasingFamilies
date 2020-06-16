@@ -45,10 +45,6 @@ sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, args.chrom)
 coord_file = '%s/chr.%s.gen.coordinates.npy' % (args.data_dir,  args.chrom)
 gen_files = sorted([f for f in listdir(args.data_dir) if ('chr.%s.' % args.chrom) in f and 'gen.npz' in f])
 
-if args.batch_size is not None:
-	fam_output_file = fam_output_file[:-4] + str(batch_num) + '.txt'
-	phase_output_file = phase_output_file[:-4] + str(batch_num) + '.txt'
-
 # --------------- pull families of interest ---------------
 families = pull_families(sample_file, args.ped_file)
 
