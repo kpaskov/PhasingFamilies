@@ -68,39 +68,37 @@ wgs_data = WGSData(args.data_dir, gen_files, coord_file, sample_file, args.ped_f
 # phase each family
 for family in families:
 	print('family', family.id)
-	try:
-		# create genotypes
-		genotypes = Genotypes(len(family))
 
-		# create inheritance states
-		if args.chrom == 'X':
-			inheritance_states = InheritanceStates(family, args.detect_deletions, True, args.num_loss_regions)
-		else:
-			inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
+	# create genotypes
+	genotypes = Genotypes(len(family))
+
+	# create inheritance states
+	if args.chrom == 'X':
+		inheritance_states = InheritanceStates(family, args.detect_deletions, True, args.num_loss_regions)
+	else:
+		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
 				
-		# create transition matrix
-		transition_matrix = TransitionMatrix(inheritance_states, params)
+	# create transition matrix
+	transition_matrix = TransitionMatrix(inheritance_states, params)
 
-		# pull genotype data for this family
-		family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(family.individuals)
-		print('data pulled')
+	# pull genotype data for this family
+	family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(family.individuals)
+	print('data pulled')
 
-		# create loss function for this family
-		loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
-		print('loss created')
+	# create loss function for this family
+	loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
+	print('loss created')
 
-		# forward sweep
-		v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
-		print('forward sweep complete')
+	# forward sweep
+	v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+	print('forward sweep complete')
 
-		# backward sweep
-		final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
-		print('backward sweep complete')
+	# backward sweep
+	final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
+	print('backward sweep complete')
 
-		# write to file
-		with open('%s/chr.%s.%s.phased.txt' % (args.out_dir, args.chrom, args.family), 'w+') as statef:
-			write_to_file(statef, family, final_states, family_snp_positions)
-		print('Done!')
-				
-	except Exception as e:
-		print(family.id, e)
+	# write to file
+	with open('%s/chr.%s.%s.phased.txt' % (args.out_dir, args.chrom, args.family), 'w+') as statef:
+		write_to_file(statef, family, final_states, family_snp_positions)
+	print('Done!')
+	
