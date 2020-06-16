@@ -1,6 +1,7 @@
 import numpy as np
 from itertools import product
 from collections import Counter
+from functools import reduce
 
 # -1 = ./.
 # 0 = 0/0
@@ -38,14 +39,13 @@ class LazyLoss:
 
 		assert np.all(self.emission_params>=0)
 
-		self.q = genotypes.q
 		self.genotypes = genotypes
 		self.num_loss_regions = num_loss_regions
 		self.family_size = len(family)
 		self.states = states
 		
-		self.losses = np.zeros((states.num_states, self.q), dtype=float)
-		self.already_calculated = np.zeros((self.q,), dtype=bool)
+		self.losses = np.zeros((states.num_states, len(genotypes)), dtype=float)
+		self.already_calculated = np.zeros((len(genotypes),), dtype=bool)
 		print('losses', self.losses.shape)
 
 		self.__build_perfect_matches__(states)
@@ -103,12 +103,12 @@ class LazyLoss:
 		# 4 = -/1 (hemizygous alt)
 		# 5 = -/- (double deletion)
 
-		state_to_perfect_matches = dict([(s, self.states.get_perfect_matches(s)) for s in states])
-		self.perfect_matches = sorted(set(sum(state_to_perfect_matches.values(), [])))
+		state_to_perfect_matches = dict([(s, set(self.states.get_perfect_matches(s)[0])) for s in states])
+		self.perfect_matches = sorted(reduce((lambda x, y: x | y), state_to_perfect_matches.values()))
 		print('perfect matches', len(self.perfect_matches))
 
 		perfect_match_to_index = dict([(x, i) for i, x in enumerate(self.perfect_matches)])
-		self.perfect_match_indices = [[perfect_match_to_index[pm] for pm in state_to_perfect_matches[s]] for s in states]
+		self.perfect_match_indices = [[perfect_match_to_index[pm] for pm in sorted(state_to_perfect_matches[s])] for s in states]
 
 		# perfect_match_indices is ragged, square it off
 		max_match = max([len(x) for x in self.perfect_match_indices])

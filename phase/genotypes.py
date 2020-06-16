@@ -16,3 +16,6 @@ class Genotypes:
 
 	def __contains__(self, key):
 		return key in self.genotype_to_index
+
+	def __len__(self):
+		return self.genotypes.shape[0]

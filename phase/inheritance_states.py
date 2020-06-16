@@ -117,11 +117,17 @@ class InheritanceStates:
 		self.num_loss_states = num_loss_states
 
 		self._states = np.asarray(list(product(*(del_options + phase_options + loss_regions))), dtype=np.int8)
+		self.num_states = self._states.shape[0]
+		self._phase = self.get_phase()
+		self._full_states = np.hstack((self._states[:, self.deletion_indices], 
+			self._phase, 
+			self._states[:, self.loss_region_index, np.newaxis]))
+
 		print('inheritance states', self._states.shape)
 
-		self.num_states = self._states.shape[0]
 		self.full_state_length = len(del_options) + 2*len(self.family) + 1
 		self._state_to_index = dict([(State(x, self), i) for i, x in enumerate(self._states)])
+		self._full_state_to_index = dict([(tuple(x), i) for i, x in enumerate(self._full_states)])
 
 	def index(self, state):
 		return self._state_to_index[state]
@@ -133,13 +139,13 @@ class InheritanceStates:
 		return state in self._state_to_index
 
 	def __iter__(self):
-		self.index = 0
+		self.ind = 0
 		return self
 
 	def __next__(self):
-		if self.index < self.num_states:
-			self.index += 1
-			return self[self.index-1]
+		if self.ind < self.num_states:
+			self.ind += 1
+			return self[self.ind-1]
 		else:
 			raise StopIteration
 
@@ -147,16 +153,16 @@ class InheritanceStates:
 		neighbor_indices = set()
 		for descendent in self.family.descendents:
 			new_state = state.toggle_maternal_phase(descendent)
-			if new_state in self._state_to_index:
-				neighbor_indices.add(self._state_to_index[new_state])
+			if new_state in self:
+				neighbor_indices.add(self.index(new_state))
 		return neighbor_indices
 
 	def get_paternal_recombination_neighbors(self, state):
 		neighbor_indices = set()
 		for descendent in self.family.descendents:
 			new_state = state.toggle_paternal_phase(descendent)
-			if new_state in self._state_to_index:
-				neighbor_indices.add(self._state_to_index[new_state])
+			if new_state in self:
+				neighbor_indices.add(self.index(new_state))
 		return neighbor_indices
 
 	def get_deletion_neighbors(self, state):
@@ -164,8 +170,8 @@ class InheritanceStates:
 		neighbor_differences = []
 		for deletion_combination in list(product(*([[0, 1]]*len(self.deletion_indices)))):
 			new_state, num_dels_changed = state.toggle_ancestral_deletions(deletion_combination)
-			if new_state != state and new_state in self._state_to_index:
-				neighbor_indices.append(self._state_to_index[new_state])
+			if new_state != state and new_state in self:
+				neighbor_indices.append(self.index(new_state))
 				neighbor_differences.append(num_dels_changed)
 		return neighbor_indices, neighbor_differences
 
@@ -173,8 +179,8 @@ class InheritanceStates:
 		neighbor_indices = set()
 		for i in range(self.num_loss_states):
 			new_state = state.toggle_loss(i)
-			if new_state != state and new_state in self._state_to_index:
-				neighbor_indices.add(self._state_to_index[new_state])
+			if new_state != state and new_state in self:
+				neighbor_indices.add(self.index(new_state))
 		return neighbor_indices
 
 	def is_ok_start(self, state):
@@ -183,35 +189,39 @@ class InheritanceStates:
 	def is_ok_end(self, state):
 		return (not state.has_deletion())
 
-	def get_phase(self, state):
+	def get_phase(self):
 		individual_to_index = dict([(x, i) for i, x in enumerate(self.family.individuals)])
-		phase = np.arange(2*self.family.num_ancestors()).tolist()
+		phase = np.tile(np.arange(2*self.family.num_ancestors()), (self.num_states,1))
 		for mom, dad in self.family.ordered_couples:
 			mom_index, dad_index = individual_to_index[mom], individual_to_index[dad]
 
 			for child in self.family.parents_to_children[(mom, dad)]:
 				child_index = individual_to_index[child]
-				mat_phase = phase[2*mom_index + state[self.maternal_phase_indices[child_index]]]
-				pat_phase = phase[2*dad_index + state[self.paternal_phase_indices[child_index]]]
-				phase.extend([mat_phase, pat_phase])
+				mat_phase = phase[np.arange(self.num_states), 2*mom_index + self._states[:, self.maternal_phase_indices[child_index]]]
+				pat_phase = phase[np.arange(self.num_states), 2*dad_index + self._states[:, self.paternal_phase_indices[child_index]]]
+				phase = np.hstack((phase, mat_phase[:, np.newaxis], pat_phase[:, np.newaxis]))
 		return phase
 
 	def get_full_state(self, state_index):
-		state = State(self._states[state_index, :], self)
-		return tuple(state._data[i] for i in self.deletion_indices) + tuple(self.get_phase(state)) + (state._data[self.loss_region_index],)
+		return tuple(self._full_states[state_index, :])
+
+	def get_original_state(self, full_state):
+		return self[self._full_state_to_index[tuple(full_state)]]
+
 
 	def get_perfect_matches(self, state):
-		phase = self.get_phase(state)
-		allele_combinations = list(product(*([['-'] if state.has_deletion(i) else ['0', '1'] for i in range(2*self.family.num_ancestors())])))
+		phase = self._phase[self.index(state), :]
+		allele_combinations = list(product(*([[2] if state.has_deletion(i) else [0, 1] for i in range(2*self.family.num_ancestors())])))
 		
-		perfect_matches = set()
+		perfect_matches = list()
 		for alleles in allele_combinations:
-			perfect_matches.add(tuple(alleles_to_gen[(alleles[phase[2*i]], alleles[phase[2*i + 1]])] for i in range(len(self.family))))
-		return sorted(perfect_matches)
+			perfect_matches.append(tuple(alleles_to_gen[(alleles[phase[2*i]], alleles[phase[2*i + 1]])] for i in range(len(self.family))))
+		return perfect_matches, allele_combinations
 
+# 0=no variant, 1=variant, 2=deletion
 alleles_to_gen = {
-	('-', '-'): 5, ('-', '0'): 3, ('-', '1'): 4,
-	('0', '-'): 3, ('0', '0'): 0, ('0', '1'): 1,
-	('1', '-'): 4, ('1', '0'): 1, ('1', '1'): 2,
+	(2, 2): 5, (2, 0): 3, (2, 1): 4,
+	(0, 2): 3, (0, 0): 0, (0, 1): 1,
+	(1, 2): 4, (1, 0): 1, (1, 1): 2,
 }
 

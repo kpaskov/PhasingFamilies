@@ -25,10 +25,7 @@ if args.chrom == '25':
 
 sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, args.chrom)
 
-if args.use_bases:
-    obss = ['AA', 'AC', 'AG', 'AT', 'CC', 'CG', 'CT', 'GG', 'GT', 'TT', './.']
-else:
-    obss = ['0/0', '0/1', '1/1', './.']
+obss = ['0/0', '0/1', '1/1', './.']
 
 def process_bedfile(bed_file):
     regions = []
