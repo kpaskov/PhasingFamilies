@@ -58,7 +58,7 @@ if args.family is not None:
 
 # limit to batch
 if args.batch_size is not None:
-	families = families[(args.batch_size*args.batch_num):((args.batch_size+1)*args.batch_num)]
+	families = families[(args.batch_num*args.batch_size):((args.batch_num+1)*args.batch_size)]
 
 print('Families of interest', len(families))
 
