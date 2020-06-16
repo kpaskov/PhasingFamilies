@@ -5,26 +5,30 @@ import time
 import gzip
 from itertools import product
 import sys
+import argparse
+
+parser = argparse.ArgumentParser(description='Pull genotypes.')
+parser.add_argument('vcf_file', type=str, help='VCF file to pull from.')
+parser.add_argument('out_directory', type=str, help='Output directory.')
+parser.add_argument('chrom', type=str, help='Chromosome of interest.')
+parser.add_argument('--batch_size', type=int, default=None, help='Restrict number of positions per file to batch_size.')
+parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of positions per file. Will use positions[(batch_num*batch_size):((batch_num+1)*batch_size)]')
+parser.add_argument('--maxsize', type=int, default=500000000, help='Amount of memory per block.')
+args = parser.parse_args()
 
 t0 = time.time()
 
-# Pull arguments
-vcf_file = sys.argv[1]
-out_directory = sys.argv[2]
-chrom = sys.argv[3]
-maxsize = 500000000
-
-chrom_int = 23 if chrom == 'X' else 24 if chrom == 'Y' else 25 if chrom == 'MT' else int(chrom)
+chrom_int = 23 if args.chrom == 'X' else 24 if args.chrom == 'Y' else 25 if args.chrom == 'MT' else int(args.chrom)
 
 # Pull data from vcf
 def process_vcf(f):
-    with gzip.open('%s/chr.%s.gen.variants.txt.gz' % (out_directory, chrom), 'wt') as variant_f:
+    with gzip.open('%s/chr.%s.%d.gen.variants.txt.gz' % (args.out_directory, args.chrom, args.batch_num), 'wt') as variant_f:
         # Skip header
         line = next(f)
         while line.startswith('##'):
             line = next(f)
 
-        with open('%s/chr.%s.gen.samples.txt' % (out_directory, chrom), 'w+') as sample_f:
+        with open('%s/chr.%s.gen.samples.txt' % (args.out_directory, args.chrom), 'w+') as sample_f:
             # Pull sample_ids and write to file
             sample_ids = line.strip().split('\t')[9:]
             sample_f.write('\n'.join(sample_ids))
@@ -32,85 +36,72 @@ def process_vcf(f):
 
         # Pull genotypes from vcf
         m = len(sample_ids)
-        data, indices, indptr, index = np.zeros((maxsize,), dtype=np.int8), np.zeros((maxsize,), dtype=int), [0], 0
+        data, indices, indptr, index = np.zeros((args.maxsize,), dtype=np.int8), np.zeros((args.maxsize,), dtype=int), [0], 0
         gen_mapping = {'./.': -1, '0/0': 0, '0|0': 0, '0/1': 1, '0|1': 1, '1/0': 1, '1|0': 1, '1/1': 2, '1|1': 2}
 
         # enumerate all chrom options
-        chrom_options = [chrom, 'chr'+chrom]
-        if chrom == 'X':
+        chrom_options = [args.chrom, 'chr'+args.chrom]
+        if args.chrom == 'X':
             chrom_options = chrom_options + ['23', 'chr23']
-        if chrom == 'Y':
+        if args.chrom == 'Y':
             chrom_options = chrom_options + ['24', 'chr24']
-        if chrom == 'MT':
+        if args.chrom == 'MT':
             chrom_options = chrom_options + ['25', 'chr25']
         
         line = next(f)
-        subfile = 0
-        num_lines = 0
+        num_lines_in_file = 0
+        current_line_index = 0
         chrom_coord = []
         for j, line in enumerate(f):
             pieces = line.split('\t', maxsplit=1)
 
             if pieces[0] in chrom_options:
 
-                pieces = line.strip().split('\t')
-                format = pieces[8].strip().split(':')
+                if (current_line_index >= args.batch_num*args.batch_size) and (current_line_index < (args.batch_num+1)*args.batch_size):
+                    pieces = line.strip().split('\t')
+                    format = pieces[8].strip().split(':')
 
-                # Write variant to file
-                variant_f.write('\t'.join(pieces[:9]) + '\n')
+                    # Write variant to file
+                    variant_f.write('\t'.join(pieces[:9]) + '\n')
 
-                pos, _, ref, alt = pieces[1:5]
-                is_biallelic_snp = 1 if len(ref) == 1 and len(alt) == 1 and ref != '.' and alt != '.' else 0
-                is_pass = pieces[6] == 'PASS'
-                chrom_coord.append((chrom_int, int(pos), is_biallelic_snp, is_pass))
+                    pos, _, ref, alt = pieces[1:5]
+                    is_biallelic_snp = 1 if len(ref) == 1 and len(alt) == 1 and ref != '.' and alt != '.' else 0
+                    is_pass = pieces[6] == 'PASS'
+                    chrom_coord.append((chrom_int, int(pos), is_biallelic_snp, is_pass))
 
-                # Pull out genotypes
-                gen_index = format.index('GT')
-                for i, piece in enumerate(pieces[9:]):
-                    segment = piece.split(':', maxsplit=gen_index+1)
-                    gt = gen_mapping.get(segment[gen_index], -1) # For now we mark multi-base loci as unknown
+                    # Pull out genotypes
+                    gen_index = format.index('GT')
+                    for i, piece in enumerate(pieces[9:]):
+                        segment = piece.split(':', maxsplit=gen_index+1)
+                        gt = gen_mapping.get(segment[gen_index], -1) # For now we mark multi-base loci as unknown
 
-                    if gt != 0:
-                        indices[index] = i
-                        data[index] = gt
-                        index += 1
-                indptr.append(index)
-                num_lines += 1
+                        if gt != 0:
+                            indices[index] = i
+                            data[index] = gt
+                            index += 1
+                    indptr.append(index)
+                    num_lines_in_file += 1
 
-                # If file has gotten really big, write subfile to disk
-                if index+m >= maxsize:
-                    gen = csc_matrix((data[:index], indices[:index], indptr), shape=(m, num_lines), dtype=np.int8)
-                    print('Sub dataset', gen.shape)
+                    # If file has gotten really big, raise error.
+                    if index+m >= args.maxsize:
+                        raise Exception('Maxsize too low. Increase maxsize and rerun.')
 
-                    # Save to file
-                    save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
+                current_line_index += 1
 
-                    # Start fresh
-                    subfile += 1
-                    num_lines = 0
-                    indptr, index = [0], 0
-                    data[:] = 0
-                    indices[:] = 0
-
-
-    gen = csc_matrix((data[:index], indices[:index], indptr), shape=(m, num_lines), dtype=np.int8)
-        
-    # Save to file
-    if subfile == 0:
-        print('Full dataset', gen.shape)
-        save_npz('%s/chr.%s.gen' % (out_directory, chrom), gen)
+    if index>0:
+        gen = csc_matrix((data[:index], indices[:index], indptr), shape=(m, num_lines_in_file), dtype=np.int8)
+            
+        # Save to file
+        save_npz('%s/chr.%s.%d.gen' % (args.out_directory, args.chrom, args.batch_num), gen)
+        np.save('%s/chr.%s.%d.gen.coordinates' % (args.out_directory, args.chrom, args.batch_num), np.asarray(chrom_coord, dtype=int))
     else:
-        print('Sub dataset', gen.shape)
-        save_npz('%s/chr.%s.%d.gen' % (out_directory, chrom, subfile), gen)
-
-    np.save('%s/chr.%s.gen.coordinates' % (out_directory, chrom), np.asarray(chrom_coord, dtype=int))
-
+        print('No data in batch.')
     print('Completed in ', time.time()-t0, 'sec')
 
-if vcf_file.endswith('.gz'):
-    with gzip.open(vcf_file, 'rt') as f:
+if args.vcf_file.endswith('.gz'):
+    with gzip.open(args.vcf_file, 'rt') as f:
         process_vcf(f)
 else:
-    with open(vcf_file, 'r') as f:
+    with open(args.vcf_file, 'r') as f:
         process_vcf(f)
 
