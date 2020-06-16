@@ -98,7 +98,7 @@ for family in families:
 	print('backward sweep complete')
 
 	# write to file
-	with open('%s/chr.%s.%s.phased.txt' % (args.out_dir, args.chrom, args.family), 'w+') as statef:
+	with open('%s/chr.%s.%s.phased.txt' % (args.out_dir, args.chrom, family), 'w+') as statef:
 		write_to_file(statef, family, final_states, family_snp_positions)
 	print('Done!')
 	
