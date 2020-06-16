@@ -50,7 +50,11 @@ class TransitionMatrix:
 
 		self.transitions = np.array(transitions)
 		self.costs = np.array(transition_costs)
-		assert np.all(self.costs>0)
+
+		if np.sum(self.costs<0)>0:
+			print('Negative transmission costs!')
+			self.costs[self.costs<0] = 0
+		#assert np.all(self.costs>0)
 
 		
 		print('transitions', self.transitions.shape)
