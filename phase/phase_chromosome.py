@@ -1,11 +1,10 @@
 import sys
 import json
-from os import listdir
 from itertools import product
 
 
 from inheritance_states import InheritanceStates
-from input_output import WGSData, write_to_file, pull_families
+from input_output import write_to_file, pull_families, pull_gen_data_for_individuals
 from transition_matrices import TransitionMatrix
 from genotypes import Genotypes
 from losses import LazyLoss
@@ -16,7 +15,6 @@ from viterbi import viterbi_forward_sweep, viterbi_backward_sweep
 import argparse
 
 parser = argparse.ArgumentParser(description='Phase chromosome.')
-parser.add_argument('chrom', type=str, help='Chromosome.')
 parser.add_argument('ped_file', type=str, help='Ped file of family structure.')
 parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
 parser.add_argument('assembly', type=str, help='Reference genome assembly for data.')
@@ -31,22 +29,17 @@ parser.add_argument('--batch_size', type=int, default=None, help='Restrict numbe
 parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of families. Will use families[(batch_num*batch_size):((batch_num+1)*batch_size)]')
 args = parser.parse_args()
 
+chroms = [str(x) for x in range(1, 23)]
+
 if args.detect_deletions:
 	print('Detecting deletions while phasing ...')
-
-if args.chrom == '23':
-	args.chrom = 'X'
 
 with open(args.param_file, 'r') as f:
 	params = json.load(f)
 
-# --------------- set up filenames ---------------
-sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, args.chrom)
-coord_file = '%s/chr.%s.gen.coordinates.npy' % (args.data_dir,  args.chrom)
-gen_files = sorted([f for f in listdir(args.data_dir) if ('chr.%s.' % args.chrom) in f and 'gen.npz' in f])
 
 # --------------- pull families of interest ---------------
-families = pull_families(sample_file, args.ped_file)
+families = pull_families('%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0]), args.ped_file)
 
 # limit by size
 if args.family_size is not None:
@@ -62,9 +55,6 @@ if args.batch_size is not None:
 
 print('Families of interest', len(families))
 
-# get ready to pull processed WGS data 
-wgs_data = WGSData(args.data_dir, gen_files, coord_file, sample_file, args.ped_file, args.chrom, args.assembly)
-
 # phase each family
 for family in families:
 	print('family', family.id)
@@ -73,32 +63,39 @@ for family in families:
 	genotypes = Genotypes(len(family))
 
 	# create inheritance states
-	if args.chrom == 'X':
-		inheritance_states = InheritanceStates(family, args.detect_deletions, True, args.num_loss_regions)
-	else:
-		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
+	inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
 				
 	# create transition matrix
 	transition_matrix = TransitionMatrix(inheritance_states, params)
 
-	# pull genotype data for this family
-	family_genotypes, family_snp_positions, mult_factor = wgs_data.pull_data_for_individuals(family.individuals)
-	print('data pulled')
-
 	# create loss function for this family
 	loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
-	print('loss created')
+	#print('loss created')
 
-	# forward sweep
-	v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
-	print('forward sweep complete')
+	with open('%s/%s.phased.txt' % (args.out_dir, family), 'w+') as statef:
+		# write header
+		statef.write('\t'.join(['chrom'] + \
+                           ['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
+                           ['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
+                           sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
+                           ['loss_region', 'start_pos', 'end_pos']) + '\n')
 
-	# backward sweep
-	final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
-	print('backward sweep complete')
+		for chrom in chroms:
+			print('chrom', chrom)
 
-	# write to file
-	with open('%s/chr.%s.%s.phased.txt' % (args.out_dir, args.chrom, family), 'w+') as statef:
-		write_to_file(statef, family, final_states, family_snp_positions)
+			# pull genotype data for this family
+			family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, args.assembly, chrom, family.individuals)
+
+			# forward sweep
+			v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+
+			# backward sweep
+			final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
+
+			# write to file
+			write_to_file(statef, chrom, family, final_states, family_snp_positions)
+
+			statef.flush()
+
 	print('Done!')
 	

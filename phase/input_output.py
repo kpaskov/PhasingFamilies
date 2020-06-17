@@ -3,6 +3,7 @@ from scipy import sparse
 import scipy.stats
 import random
 from collections import defaultdict
+from os import listdir
 
 # From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
 chrom_lengths37 = {
@@ -179,124 +180,114 @@ def pull_sex(ped_file):
 				sample_id_to_sex[child_id] = sex
 	return sample_id_to_sex
 
-class WGSData:
-	def __init__(self, data_dir, gen_files, coord_file, sample_file, ped_file, chrom, assembly):
+def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
+	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
+	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
+	coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
 
-		if assembly == '37':
-			self.chrom_length = chrom_lengths37[chrom]
-		elif assembly == '38':
-			self.chrom_length = chrom_lengths38[chrom]
-		else:
-			self.chrom_length = None
-			
-		self.data_dir = data_dir
-		self.gen_files = gen_files
+	# pull samples
+	with open(sample_file, 'r') as f:
+		sample_ids = [line.strip() for line in f]
+	sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
 
-		with open(sample_file, 'r') as f:
-			sample_ids = [line.strip() for line in f]
-		self.sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
+	# pull chrom length
+	assert assembly == '37' or assembly == '38'
+	chrom_length = chrom_lengths37[chrom] if assembly == '37' else chrom_lengths38[chrom] if assembly == '38' else None
 
-		# use only SNPs, no indels
-		# use only variants that PASS GATK
-		coordinates = np.load(coord_file)
-		self.snp_positions = coordinates[:, 1]
-		self.is_snp = coordinates[:, 2]==1
-		self.is_pass = coordinates[:, 3]==1
+	# pull coordinates
+	# use only SNPs, no indels
+	# use only variants that PASS GATK
+	coordinates = np.load(coord_file)
+	snp_positions = coordinates[:, 1]
+	is_snp = coordinates[:, 2]==1
+	is_pass = coordinates[:, 3]==1
 
-		self.snp_positions = self.snp_positions[self.is_snp & self.is_pass]
-		assert np.all(self.snp_positions <= self.chrom_length)
-		print('chrom shape only SNPs', self.snp_positions.shape)
+	snp_positions = snp_positions[is_snp & is_pass]
+	assert np.all(snp_positions <= chrom_length)
+	#print('chrom shape only SNPs', snp_positions.shape)
 
-	
-	def pull_data_for_individuals(self, individuals):
-		#load from npz
-		m = len(individuals)
-		ind_indices = [self.sample_id_to_index[x] for x in individuals]
+	# pull genotypes
+	m = len(individuals)
+	ind_indices = [sample_id_to_index[x] for x in individuals]
 		
-		data = sparse.hstack([sparse.load_npz('%s/%s' % (self.data_dir, gen_file))[ind_indices, :] for gen_file in self.gen_files]).A
-		data = data[:, self.is_snp & self.is_pass]
+	data = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :] for gen_file in gen_files]).A
+	data = data[:, is_snp & is_pass]
 
-		data[data<0] = -1
+	data[data<0] = -1
 
-		# if a position has only 0s and -1s in the family, assume it's homref for everyone
-		data[:, np.all(data<=0, axis=0)] = 0
+	# if a position has only 0s and -1s in the family, assume it's homref for everyone
+	data[:, np.all(data<=0, axis=0)] = 0
 
-		print('all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
-		print('all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
+	#print('all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
+	#print('all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
 
-		# remove multiallelic sites
-		is_multiallelic = np.zeros((self.snp_positions.shape[0],), dtype=bool)
-		indices = np.where(self.snp_positions[:-1] == self.snp_positions[1:])[0]
-		is_multiallelic[indices] = True
-		is_multiallelic[indices+1] = True
+	# remove multiallelic sites
+	is_multiallelic = np.zeros((snp_positions.shape[0],), dtype=bool)
+	indices = np.where(snp_positions[:-1] == snp_positions[1:])[0]
+	is_multiallelic[indices] = True
+	is_multiallelic[indices+1] = True
 
-		n = 2*np.sum(~is_multiallelic)+1
-		family_genotypes = np.zeros((m, n), dtype=np.int8)
-		family_genotypes[:, np.arange(1, n-1, 2)] = data[:, ~is_multiallelic]
+	n = 2*np.sum(~is_multiallelic)+1
+	family_genotypes = np.zeros((m, n), dtype=np.int8)
+	family_genotypes[:, np.arange(1, n-1, 2)] = data[:, ~is_multiallelic]
 		
-		observed = np.zeros((n,), dtype=bool)
-		observed[np.arange(1, n-1, 2)] = True
+	observed = np.zeros((n,), dtype=bool)
+	observed[np.arange(1, n-1, 2)] = True
 		
-		family_snp_positions = np.zeros((n, 2), dtype=np.int)
-		family_snp_positions[np.arange(1, n-1, 2), 0] = self.snp_positions[~is_multiallelic]
-		family_snp_positions[np.arange(1, n-1, 2), 1] = self.snp_positions[~is_multiallelic]+1
+	family_snp_positions = np.zeros((n, 2), dtype=np.int)
+	family_snp_positions[np.arange(1, n-1, 2), 0] = snp_positions[~is_multiallelic]
+	family_snp_positions[np.arange(1, n-1, 2), 1] = snp_positions[~is_multiallelic]+1
 
-		family_snp_positions[np.arange(0, n-2, 2), 1] = self.snp_positions[~is_multiallelic]
-		family_snp_positions[np.arange(2, n, 2), 0] = self.snp_positions[~is_multiallelic]+1
-		family_snp_positions[0, 0] = 1
-		family_snp_positions[-1, 1] = self.chrom_length
+	family_snp_positions[np.arange(0, n-2, 2), 1] = snp_positions[~is_multiallelic]
+	family_snp_positions[np.arange(2, n, 2), 0] = snp_positions[~is_multiallelic]+1
+	family_snp_positions[0, 0] = 1
+	family_snp_positions[-1, 1] = chrom_length
 
-		assert np.all(family_snp_positions[:, 1] >= family_snp_positions[:, 0])
+	assert np.all(family_snp_positions[:, 1] >= family_snp_positions[:, 0])
 
-		# remove unnecessary intervals
-		haslength = np.where(family_snp_positions[:, 0]!=family_snp_positions[:, 1])[0]
-		family_genotypes = family_genotypes[:, haslength]
-		family_snp_positions = family_snp_positions[haslength, :]
-		observed = observed[haslength]
+	# remove unnecessary intervals
+	haslength = np.where(family_snp_positions[:, 0]!=family_snp_positions[:, 1])[0]
+	family_genotypes = family_genotypes[:, haslength]
+	family_snp_positions = family_snp_positions[haslength, :]
+	observed = observed[haslength]
 
-		# aggregate identical genotypes
-		rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
-		n = rep_indices.shape[0]+1
-		print('n', n)
+	# aggregate identical genotypes
+	rep_indices = np.where(np.any(family_genotypes[:, 1:]!=family_genotypes[:, :-1], axis=0))[0]
+	n = rep_indices.shape[0]+1
+	#print('n', n)
 
-		new_family_genotypes = np.zeros((m, n), dtype=np.int8)
-		mult_factor = np.zeros((n,), dtype=np.int)
+	new_family_genotypes = np.zeros((m, n), dtype=np.int8)
+	mult_factor = np.zeros((n,), dtype=np.int)
 
-		new_family_genotypes[:, :-1] = family_genotypes[:, rep_indices]
-		new_family_genotypes[:, -1] = family_genotypes[:, -1]
+	new_family_genotypes[:, :-1] = family_genotypes[:, rep_indices]
+	new_family_genotypes[:, -1] = family_genotypes[:, -1]
 
-		new_family_snp_positions = np.zeros((n, 2), dtype=np.int)
-		new_family_snp_positions[0, 0] = family_snp_positions[0, 0]
-		new_family_snp_positions[:-1, 1] = family_snp_positions[rep_indices, 1]
-		new_family_snp_positions[1:, 0] = family_snp_positions[rep_indices+1, 0]
-		new_family_snp_positions[-1, 1] = family_snp_positions[-1, 1]
+	new_family_snp_positions = np.zeros((n, 2), dtype=np.int)
+	new_family_snp_positions[0, 0] = family_snp_positions[0, 0]
+	new_family_snp_positions[:-1, 1] = family_snp_positions[rep_indices, 1]
+	new_family_snp_positions[1:, 0] = family_snp_positions[rep_indices+1, 0]
+	new_family_snp_positions[-1, 1] = family_snp_positions[-1, 1]
 
-		print(new_family_snp_positions)
+	#print(new_family_snp_positions)
 
-		c = np.cumsum(observed)
-		mult_factor[0] = c[rep_indices[0]]
-		mult_factor[1:-1] = c[rep_indices[1:]] - c[rep_indices[:-1]]
-		mult_factor[-1] = c[-1] - c[rep_indices[-1]]
+	c = np.cumsum(observed)
+	mult_factor[0] = c[rep_indices[0]]
+	mult_factor[1:-1] = c[rep_indices[1:]] - c[rep_indices[:-1]]
+	mult_factor[-1] = c[-1] - c[rep_indices[-1]]
 
-		print(new_family_snp_positions)
-		print(mult_factor)
+	print('genotypes pulled', new_family_genotypes.shape)
+	#print(mult_factor)
 
-		return new_family_genotypes, new_family_snp_positions, mult_factor
+	return new_family_genotypes, new_family_snp_positions, mult_factor
 
-def write_to_file(phasef, family, final_states, family_snp_positions):
-	phasef.write('\t'.join(['family'] + \
-                           ['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
-                           ['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
-                           sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
-                           ['loss_region', 'start_pos', 'end_pos']) + '\n')
-
+def write_to_file(phasef, chrom, family, final_states, family_snp_positions):
 	# write final states to file
 	change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist() + [family_snp_positions.shape[0]-1]
 	for j in range(1, len(change_indices)):
 		s_start, s_end = change_indices[j-1]+1, change_indices[j]
 		#assert np.all(final_states[:, s_start] == final_states[:, s_end])
 		phasef.write('%s\t%s\t%d\t%d\n' % (
-					family.id, 
+					'chr' + chrom, 
 					'\t'.join(map(str, final_states[:, s_start])), 
 					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
 

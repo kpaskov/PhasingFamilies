@@ -91,8 +91,8 @@ class InheritanceStates:
 			mom_to_children[mom].extend(children)
 			dad_to_children[dad].extend(children)
 		
-		# if a parent has more than 2 children, no need to fix the first child - otherwise we need to
-		parents_with_fixed_child = set()#[p for p, children in mom_to_children.items() if len(children)>2] + [p for p, children in dad_to_children.items() if len(children)>2])
+		# always fix first child of the parent
+		parents_with_fixed_child = set()
 		phase_options = []
 		for mom, dad in family.ordered_couples:
 			for child in family.parents_to_children[(mom, dad)]:
