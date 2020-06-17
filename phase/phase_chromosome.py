@@ -57,45 +57,49 @@ print('Families of interest', len(families))
 
 # phase each family
 for family in families:
-	print('family', family.id)
+	try:
+		print('family', family.id)
 
-	# create genotypes
-	genotypes = Genotypes(len(family))
+		# create genotypes
+		genotypes = Genotypes(len(family))
 
-	# create inheritance states
-	inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
-				
-	# create transition matrix
-	transition_matrix = TransitionMatrix(inheritance_states, params)
+		# create inheritance states
+		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
+					
+		# create transition matrix
+		transition_matrix = TransitionMatrix(inheritance_states, params)
 
-	# create loss function for this family
-	loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
-	#print('loss created')
+		# create loss function for this family
+		loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
+		#print('loss created')
 
-	with open('%s/%s.phased.txt' % (args.out_dir, family), 'w+') as statef:
-		# write header
-		statef.write('\t'.join(['chrom'] + \
-                           ['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
-                           ['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
-                           sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
-                           ['loss_region', 'start_pos', 'end_pos']) + '\n')
+		with open('%s/%s.phased.txt' % (args.out_dir, family), 'w+') as statef:
+			# write header
+			statef.write('\t'.join(['chrom'] + \
+	                           ['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
+	                           ['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
+	                           sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
+	                           ['loss_region', 'start_pos', 'end_pos']) + '\n')
 
-		for chrom in chroms:
-			print('chrom', chrom)
+			for chrom in chroms:
+				print('chrom', chrom)
 
-			# pull genotype data for this family
-			family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, args.assembly, chrom, family.individuals)
+				# pull genotype data for this family
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, args.assembly, chrom, family.individuals)
 
-			# forward sweep
-			v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+				# forward sweep
+				v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
 
-			# backward sweep
-			final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
+				# backward sweep
+				final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
 
-			# write to file
-			write_to_file(statef, chrom, family, final_states, family_snp_positions)
+				# write to file
+				write_to_file(statef, chrom, family, final_states, family_snp_positions)
 
-			statef.flush()
+				statef.flush()
+	except Exception as e: 
+		print(e)
+
 
 	print('Done!')
 	
