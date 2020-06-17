@@ -1,7 +1,8 @@
 import sys
 import json
 from itertools import product
-
+import traceback
+from os import listdir
 
 from inheritance_states import InheritanceStates
 from input_output import write_to_file, pull_families, pull_gen_data_for_individuals
@@ -27,6 +28,8 @@ parser.add_argument('--family_size', type=int, default=None, help='Size of famil
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
 parser.add_argument('--batch_size', type=int, default=None, help='Restrict number of families to batch_size.')
 parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of families. Will use families[(batch_num*batch_size):((batch_num+1)*batch_size)]')
+parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
+
 args = parser.parse_args()
 
 chroms = [str(x) for x in range(1, 23)]
@@ -48,6 +51,11 @@ if args.family_size is not None:
 # limit to family
 if args.family is not None:
 	families = [x for x in families if x.id==args.family]
+
+# no over-writing files
+if args.no_overwrite:
+	current_families = set([x[:-11] for x in listdir(args.out_dir) if x.endswith('.phased.txt')])
+	families = [x for x in families if x.id not in current_families]
 
 # limit to batch
 if args.batch_size is not None:
@@ -97,8 +105,8 @@ for family in families:
 				write_to_file(statef, chrom, family, final_states, family_snp_positions)
 
 				statef.flush()
-	except Exception as e: 
-		print(e)
+	except Exception: 
+		traceback.print_exc()
 
 
 	print('Done!')
