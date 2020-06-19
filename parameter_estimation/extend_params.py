@@ -42,12 +42,7 @@ gens = ['0/0', '0/1', '1/1']
 obss = ['0/0', '0/1', '1/1', './.']
 num_overwritten = 0
 for k in individuals:
-	pieces = k.split('.')
-	if len(pieces)==4:
-		fam_id, mom_id, dad_id, ind_id = pieces
-	else:
-		fam_id, mom_id, dad_id, ind_id = pieces[0], pieces[1] + '.' + pieces[2], pieces[3] + '.' + pieces[4], pieces[5] + '.' + pieces[6]
-	new_key = ind_id
+	new_key = k
 	if new_key in new_params:
 		num_overwritten += 1
 	new_params[new_key] = dict()

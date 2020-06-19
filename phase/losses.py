@@ -24,10 +24,10 @@ class LazyLoss:
 			for pred, obs in product(preds, obss):
 				pred_index, obs_index = preds.index(pred), obss.index(obs)
 				for j, ind in enumerate(family.individuals):
-					if ind not in params:
+					if family.id + '.' + ind not in params:
 						raise Exception('Cant find params for individual %s.' % ind)
 
-					self.emission_params[k, j, pred_index, obs_index] = params[ind]['-log10(P[obs=%s|true_gen=%s,loss=%d])' % (obs, pred, k)]
+					self.emission_params[k, j, pred_index, obs_index] = params[family.id + '.' + ind]['-log10(P[obs=%s|true_gen=%s,loss=%d])' % (obs, pred, k)]
 			
 				# if we can't estimate an error rate, use the median value for everyone else
 				self.emission_params[k, np.isnan(self.emission_params[k, :, pred_index, obs_index]), pred_index, obs_index] = np.nanmedian(self.emission_params[k, :, pred_index, obs_index])

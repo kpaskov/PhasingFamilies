@@ -3,6 +3,7 @@ from itertools import combinations
 import numpy as np
 import scipy.stats
 import sys
+from os import listdir
 
 #chrom = sys.argv[1]
 
@@ -28,8 +29,7 @@ import sys
 
 phase_dir = 'phased_spark_quads'
 #phenotype_file = 'phenotypes/scq.csv'
-phenotype_file = 'data/spark.ped'
-family_sizes = [4]
+phenotype_file = 'data/spark.ped.quads.ped'
 identicals_file = 'sibpair_similarity/spark_quads_identicals.txt'
 phenotype = ''
 #phenotype = 'q10_hand_tool'
@@ -40,8 +40,8 @@ phenotype = ''
 #family_sizes = [4]
 #identicals_file = 'sibpair_similarity/ihart_identicals.txt'
 
-#chroms = [str(x) for x in range(1, 23)] + ['X']
-chroms = ['10']
+chroms = [str(x) for x in range(1, 23)]
+#chroms = ['10']
 interval = 500000
 
 def pull_phenotype_ped(ped_file):
@@ -80,17 +80,20 @@ def pull_sibpairs(phase_dir, identicals_file, chrom, sample_to_affected, sample_
 	# pull individuals
 	family_to_inds = defaultdict(list)
 	sibpairs = list()
-	for family_size in family_sizes:
-		with open('%s/chr.%s.familysize.%d.families.txt' % (phase_dir, chrom, family_size), 'r') as f:
-			next(f) # skip header
-			for line in f:
-				pieces = line.strip().split('\t')
-				family_to_inds[pieces[0]] = pieces[1:]
-				for child1, child2 in combinations(pieces[3:], 2):
-					if child1 not in leave_out and child2 not in leave_out and child1 in sample_to_affected and child2 in sample_to_affected:
-						sibpairs.append(Sibpair((pieces[0]), child1, child2, pieces[1], pieces[2], 
-							int(sample_to_affected[child1]=='2')+int(sample_to_affected[child2]=='2'),
-							int(sample_to_sex[child1]=='1')+int(sample_to_sex[child2]=='1')))
+	for filename in listdir(phase_dir):
+		if filename.endswith('.phased.txt'):
+			family_key = filename[:-11]
+			with open('%s/%s' % (phase_dir, filename), 'r')  as f:
+				header = next(f).strip().split('\t')
+				# check that we have a typical nuclear family structure
+				if tuple(header[1:5]) == ('m1_del', 'm2_del', 'p1_del', 'p2_del'):
+					individuals = [header[i][:-4] for i in range(5, len(header)-3, 2)]
+					family_to_inds[family_key] = individuals
+					for child1, child2 in combinations(individuals[2:], 2):
+						if child1 not in leave_out and child2 not in leave_out and child1 in sample_to_affected and child2 in sample_to_affected:
+							sibpairs.append(Sibpair(family_key, child1, child2, individuals[0], individuals[1], 
+								int(sample_to_affected[child1]=='2')+int(sample_to_affected[child2]=='2'),
+								int(sample_to_sex[child1]=='1')+int(sample_to_sex[child2]=='1')))
 
 	sibpairs = sorted(sibpairs)
 
@@ -106,17 +109,19 @@ def pull_sibpair_matches(phase_dir, chrom, sibpairs, family_to_inds, interval):
 
 	# pull positions
 	positions = set()
-	for family_size in family_sizes:
-		with open('%s/chr.%s.familysize.%d.phased.txt' % (phase_dir, chrom, family_size), 'r')  as f:
-			next(f) # skip header
+	for filename in listdir(phase_dir):
+		if filename.endswith('.phased.txt'):
+			with open('%s/%s' % (phase_dir, filename), 'r')  as f:
+				next(f) # skip header
 
-			for line in f:
-				pieces = line.strip().split('\t')
-				start_pos, end_pos = [int(x) for x in pieces[(6+2*family_size):(8+2*family_size)]]
-				assert end_pos >= start_pos
+				for line in f:
+					pieces = line.strip().split('\t')
+					if pieces[0][3:] == chrom:
+						start_pos, end_pos = [int(x) for x in pieces[-2:]]
+						assert end_pos >= start_pos
 
-				positions.add(start_pos)
-				positions.add(end_pos)
+						positions.add(start_pos)
+						positions.add(end_pos)
 
 	positions.update(np.arange(0, max(positions), interval))
 	positions = np.array(sorted(positions))
@@ -128,35 +133,37 @@ def pull_sibpair_matches(phase_dir, chrom, sibpairs, family_to_inds, interval):
 	# sibpair, position
 	mat_match_data = -np.ones((len(sibpair_to_index), regions.shape[0]), dtype=int)
 	pat_match_data = -np.ones((len(sibpair_to_index), regions.shape[0]), dtype=int)
-	for family_size in family_sizes:
-		with open('%s/chr.%s.familysize.%d.phased.txt' % (phase_dir, chrom, family_size), 'r')  as f:
-			next(f) # skip header
+	for filename in listdir(phase_dir):
+		if filename.endswith('.phased.txt'):
+			family_key = filename[:-11]
+			with open('%s/%s' % (phase_dir, filename), 'r')  as f:
+				next(f) # skip header
 
-			for line in f:
-				pieces = line.strip().split('\t')
-				family_key = pieces[0]
-				start_pos, end_pos = [int(x) for x in pieces[(6+2*family_size):(8+2*family_size)]]
-				state = np.array([int(x) for x in pieces[1:(6+2*family_size)]])
-				inds = family_to_inds[family_key]
-				assert len(inds) == family_size
+				for line in f:
+					pieces = line.strip().split('\t')
+					if pieces[0][3:] == chrom:
+						start_pos, end_pos = [int(x) for x in pieces[-2:]]
+						state = np.array([int(x) for x in pieces[1:-2]])
 
-				sibpair_indices = np.array([sibpair_to_index[(family_key, child1, child2)] for child1, child2 in combinations(inds[2:], 2) if (family_key, child1, child2) in sibpair_to_index])
-				if len(sibpair_indices) > 0:
-					pos_indices = np.arange(position_to_index[start_pos], position_to_index[end_pos])
+						inds = family_to_inds[family_key]
 
-					mat_phase = np.array(list(combinations(state[np.arange(8, 4+2*len(inds), 2)], 2)))
-					no_missing = np.all(mat_phase>=0, axis=1)
-					for sibpair_index in sibpair_indices[no_missing & (mat_phase[:, 0]==mat_phase[:, 1])]:
-						mat_match_data[sibpair_index, pos_indices] = 1
-					for sibpair_index in sibpair_indices[no_missing & (mat_phase[:, 0]!=mat_phase[:, 1])]:
-						mat_match_data[sibpair_index, pos_indices] = 0
-					
-					pat_phase = np.array(list(combinations(state[np.arange(9, 4+2*len(inds), 2)], 2)))
-					no_missing = np.all(pat_phase>=0, axis=1)
-					for sibpair_index in sibpair_indices[no_missing & (pat_phase[:, 0]==pat_phase[:, 1])]:
-						pat_match_data[sibpair_index, pos_indices] = 1
-					for sibpair_index in sibpair_indices[no_missing & (pat_phase[:, 0]!=pat_phase[:, 1])]:
-						pat_match_data[sibpair_index, pos_indices] = 0
+						sibpair_indices = np.array([sibpair_to_index[(family_key, child1, child2)] for child1, child2 in combinations(inds[2:], 2) if (family_key, child1, child2) in sibpair_to_index])
+						if len(sibpair_indices) > 0:
+							pos_indices = np.arange(position_to_index[start_pos], position_to_index[end_pos])
+
+							mat_phase = np.array(list(combinations(state[np.arange(8, 4+2*len(inds), 2)], 2)))
+							no_missing = np.all(mat_phase>=0, axis=1)
+							for sibpair_index in sibpair_indices[no_missing & (mat_phase[:, 0]==mat_phase[:, 1])]:
+								mat_match_data[sibpair_index, pos_indices] = 1
+							for sibpair_index in sibpair_indices[no_missing & (mat_phase[:, 0]!=mat_phase[:, 1])]:
+								mat_match_data[sibpair_index, pos_indices] = 0
+							
+							pat_phase = np.array(list(combinations(state[np.arange(9, 4+2*len(inds), 2)], 2)))
+							no_missing = np.all(pat_phase>=0, axis=1)
+							for sibpair_index in sibpair_indices[no_missing & (pat_phase[:, 0]==pat_phase[:, 1])]:
+								pat_match_data[sibpair_index, pos_indices] = 1
+							for sibpair_index in sibpair_indices[no_missing & (pat_phase[:, 0]!=pat_phase[:, 1])]:
+								pat_match_data[sibpair_index, pos_indices] = 0
 				
 	return regions, mat_match_data, pat_match_data
 
@@ -339,7 +346,7 @@ if __name__ == "__main__":
 		sample_to_affected, sample_to_sex = pull_phenotype_scq(phenotype_file)
 
 	for chrom in chroms:
-		outfile = '%s/chr.%s.IST.pvalues.be.%s.intervals.%d' % (phase_dir, chrom, phenotype, interval)
+		outfile = '%s/chr.%s.IST.pvalues.be.%sintervals.%d' % (phase_dir, chrom, phenotype, interval)
 
 		family_to_inds, sibpairs = pull_sibpairs(phase_dir, identicals_file, chrom, sample_to_affected, sample_to_sex)
 		print('sibpairs', len(sibpairs))
@@ -357,8 +364,6 @@ if __name__ == "__main__":
 		mat_match_data_interval, pat_match_data_interval = reduce_to_intervals(intervals, mat_match_data, pat_match_data, regions)
 		print(mat_match_data_interval.shape)
 		print(np.unique(mat_match_data_interval, return_counts=True), np.unique(pat_match_data_interval, return_counts=True))
-		np.save(outfile + '.mat_match', mat_match_data_interval)
-		np.save(outfile + '.pat_match', pat_match_data_interval)
 
 		r, r_mat, r_pat = generate_test_statistic(mat_match_data_interval, pat_match_data_interval, sibpairs)
 		print('statistic computed')

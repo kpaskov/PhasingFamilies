@@ -188,8 +188,8 @@ def pull_sex(ped_file):
 
 def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
+	coord_files = ['%s/chr.%s.%d.gen.coordinates.npy' % (data_dir,  chrom, int(gen_file.split('.')[2])) for gen_file in gen_files]
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
-	coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
 
 	# pull samples
 	with open(sample_file, 'r') as f:
@@ -203,7 +203,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	# pull coordinates
 	# use only SNPs, no indels
 	# use only variants that PASS GATK
-	coordinates = np.load(coord_file)
+	coordinates = np.vstack([np.load(coord_file) for coord_file in coord_files])
 	snp_positions = coordinates[:, 1]
 	is_snp = coordinates[:, 2]==1
 	is_pass = coordinates[:, 3]==1
