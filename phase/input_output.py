@@ -130,11 +130,7 @@ class Family():
 		return len(self.descendents)
 
 
-def pull_families(sample_file, ped_file):
-	# pull families with sequence data
-	with open(sample_file, 'r') as f:
-		sample_ids = [line.strip() for line in f]
-
+def pull_families(ped_file):
 	# pull families from ped file
 	families = dict()
 	with open(ped_file, 'r') as f:	
@@ -145,7 +141,7 @@ def pull_families(sample_file, ped_file):
 			else:
 				fam_id, child_id, f_id, m_id = pieces[0:4]
 
-				if child_id in sample_ids and f_id in sample_ids and m_id in sample_ids:
+				if f_id != '0' and m_id != '0':
 					if fam_id not in families:
 						families[fam_id] = Family(fam_id)
 					families[fam_id].add_child(child_id, m_id, f_id)
@@ -188,7 +184,7 @@ def pull_sex(ped_file):
 
 def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
-	coord_files = ['%s/chr.%s.%d.gen.coordinates.npy' % (data_dir,  chrom, int(gen_file.split('.')[2])) for gen_file in gen_files]
+	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f])
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 
 	# pull samples
@@ -203,7 +199,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	# pull coordinates
 	# use only SNPs, no indels
 	# use only variants that PASS GATK
-	coordinates = np.vstack([np.load(coord_file) for coord_file in coord_files])
+	coordinates = np.vstack([np.load('%s/%s' % (data_dir, coord_file)) for coord_file in coord_files])
 	snp_positions = coordinates[:, 1]
 	is_snp = coordinates[:, 2]==1
 	is_pass = coordinates[:, 3]==1
@@ -214,7 +210,8 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 
 	# pull genotypes
 	m = len(individuals)
-	ind_indices = [sample_id_to_index[x] for x in individuals]
+	has_seq = np.where([x in sample_id_to_index for x in individuals])[0]
+	ind_indices = [sample_id_to_index[x] for x in individuals if x in sample_id_to_index]
 		
 	data = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :] for gen_file in gen_files]).A
 	data = data[:, is_snp & is_pass]
@@ -234,7 +231,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	is_multiallelic[indices+1] = True
 
 	n = 2*np.sum(~is_multiallelic)+1
-	family_genotypes = np.zeros((m, n), dtype=np.int8)
+	family_genotypes = np.zeros((len(has_seq), n), dtype=np.int8)
 	family_genotypes[:, np.arange(1, n-1, 2)] = data[:, ~is_multiallelic]
 		
 	observed = np.zeros((n,), dtype=bool)
@@ -265,8 +262,8 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	new_family_genotypes = np.zeros((m, n), dtype=np.int8)
 	mult_factor = np.zeros((n,), dtype=np.int)
 
-	new_family_genotypes[:, :-1] = family_genotypes[:, rep_indices]
-	new_family_genotypes[:, -1] = family_genotypes[:, -1]
+	new_family_genotypes[np.ix_(has_seq, np.arange(n-1))] = family_genotypes[:, rep_indices]
+	new_family_genotypes[has_seq, -1] = family_genotypes[:, -1]
 
 	new_family_snp_positions = np.zeros((n, 2), dtype=np.int)
 	new_family_snp_positions[0, 0] = family_snp_positions[0, 0]

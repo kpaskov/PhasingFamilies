@@ -42,7 +42,7 @@ with open(args.param_file, 'r') as f:
 
 
 # --------------- pull families of interest ---------------
-families = pull_families('%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0]), args.ped_file)
+families = pull_families(args.ped_file)
 
 # limit by size
 if args.family_size is not None:
