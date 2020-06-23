@@ -10,24 +10,24 @@ from collections import Counter
 import scipy.stats
 import gzip
 
-## must be phased in quads for now
-#data_dir = 'split_gen_spark'
-#chrom = '10'
-#interval_start_pos, interval_end_pos = 125000000, 126500000
-#ped_file = 'data/spark.ped.quads.ped'
-#param_file = 'parameter_estimation/params/spark_multiloss_params.json'
-#phase_dir = 'phased_spark_quads'
-#num_loss_regions = 1
-#of_interest = 'data/10interest_38.bed'
-
-data_dir = 'split_gen_ssc'
+# must be phased in quads for now
+data_dir = '../DATA/spark/genotypes'
 chrom = '10'
-interval_start_pos, interval_end_pos = 126688569, 128188569
-ped_file = 'data/ssc.ped'
-param_file = 'parameter_estimation/params/ssc_multiloss_params.json'
-phase_dir = 'phased_ssc'
-num_loss_regions = 2
-of_interest = 'data/10interest_37.bed'
+interval_start_pos, interval_end_pos = 125000000, 126500000
+ped_file = '../DATA/spark/spark.ped.quads.ped'
+param_file = 'params/spark_multiloss_params.json'
+phase_dir = 'phased_spark_quads'
+num_loss_regions = 1
+of_interest = 'data/10interest_38.bed'
+
+#data_dir = 'split_gen_ssc'
+#chrom = '10'
+#interval_start_pos, interval_end_pos = 126688569, 128188569
+#ped_file = 'data/ssc.ped'
+#param_file = 'parameter_estimation/params/ssc_multiloss_params.json'
+#phase_dir = 'phased_ssc'
+#num_loss_regions = 2
+#of_interest = 'data/10interest_37.bed'
 
 
 # pull phasing code
@@ -55,8 +55,9 @@ spec.loader.exec_module(losses)
 # pull genotype data
 gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
 gen = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file)) for gen_file in gen_files])
+coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f])
+coordinates = np.vstack([np.load('%s/%s' % (data_dir, coord_file)) for coord_file in coord_files])
 
-coordinates = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom))
 snp_positions = coordinates[:, 1]
 is_snp = coordinates[:, 2]==1
 is_pass = coordinates[:, 3]==1
@@ -71,13 +72,16 @@ indices = np.where(is_snp & is_pass & np.isin(snp_positions, pos_of_interest))[0
 new_snp_positions = np.array(pos_of_interest)
 refs = ['N']*len(new_snp_positions)
 alts = ['N']*len(new_snp_positions)
-with gzip.open('%s/chr.%s.gen.variants.txt.gz' % (data_dir, chrom), 'rt') as f:
-	for i, line in enumerate(f):
-		pieces = line.strip().split('\t')
-		if i in indices:
-			assert new_snp_positions[indices.index(i)] == int(pieces[1])
-			refs[indices.index(i)] = pieces[3]
-			alts[indices.index(i)] = pieces[4]
+
+var_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.variants.txt.gz' in f])
+for var_file in var_files:
+    with gzip.open('%s/%s' % (data_dir, var_file), 'rt') as f:
+    	for i, line in enumerate(f):
+    		pieces = line.strip().split('\t')
+    		if i in indices:
+    			assert new_snp_positions[indices.index(i)] == int(pieces[1])
+    			refs[indices.index(i)] = pieces[3]
+    			alts[indices.index(i)] = pieces[4]
 
 
 new_gen = -np.ones((gen.shape[0], new_snp_positions.shape[0]), dtype=int)
@@ -106,25 +110,28 @@ with open('%s/chr.%s.gen.samples.txt' % (data_dir, chrom), 'r') as f:
 with open(param_file, 'r') as f:
     params = json.load(f)
 
-families = input_output.pull_families('%s/chr.%s.gen.samples.txt' % (data_dir, chrom), ped_file)
+families = input_output.pull_families(ped_file)
 
 family_to_index = dict([(x.id, i) for i, x in enumerate(families)])
 # family, state, 0/1
 family_to_states = -np.ones((len(families), 13, 4))
-with open('%s/chr.%s.familysize.4.phased.txt' % (phase_dir, chrom), 'r') as f:
-    next(f) # skip header
-    for line in f:
-        pieces = line.strip().split('\t')
-        start_pos, end_pos = int(pieces[14]), int(pieces[15])
-        weight = np.clip(min(end_pos, interval_end_pos) - max(start_pos, interval_start_pos), 0, None)
-        if weight>0:
-            state = np.array([int(x) for x in pieces[1:14]])
-            key = '.'.join(pieces[0].split('.')[:3])
-            if key not in family_to_index:
-                key = pieces[0].split('.')[0]
 
-            indices = np.where(state>=0)[0]
-            family_to_states[family_to_index[key], indices, state[indices]] += weight
+phase_files = sorted([f for f in listdir(data_dir) if 'phased.txt' in f])
+for phase_file in phase_files:
+    with open('%s/%s' % (phase_dir, phase_file), 'r') as f:
+        next(f) # skip header
+        for line in f:
+            pieces = line.strip().split('\t')
+            start_pos, end_pos = int(pieces[14]), int(pieces[15])
+            weight = np.clip(min(end_pos, interval_end_pos) - max(start_pos, interval_start_pos), 0, None)
+            if weight>0:
+                state = np.array([int(x) for x in pieces[1:14]])
+                key = '.'.join(pieces[0].split('.')[:3])
+                if key not in family_to_index:
+                    key = pieces[0].split('.')[0]
+
+                indices = np.where(state>=0)[0]
+                family_to_states[family_to_index[key], indices, state[indices]] += weight
 
 family_to_state = -np.ones((len(families), 13), dtype=int)
 for value in range(4):

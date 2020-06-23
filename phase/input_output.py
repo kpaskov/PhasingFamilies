@@ -183,8 +183,8 @@ def pull_sex(ped_file):
 	return sample_id_to_sex
 
 def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
-	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f])
-	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f])
+	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
+	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 
 	# pull samples

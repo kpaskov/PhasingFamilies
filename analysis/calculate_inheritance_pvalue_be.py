@@ -179,22 +179,26 @@ def reduce_to_intervals(intervals, mat_match_data, pat_match_data, regions):
 	mat_match_data_interval = -np.ones((mat_match_data.shape[0], intervals.shape[0]), dtype=int)
 	pat_match_data_interval = -np.ones((pat_match_data.shape[0], intervals.shape[0]), dtype=int)
 
+	region_length = regions[:, 1]-regions[:, 0]
+
 	for i, (interval_start, interval_end) in enumerate(intervals):
 		overlap = np.minimum(regions[:, 1], interval_end) - np.maximum(regions[:, 0], interval_start)
-		mat_match = np.zeros((mat_match_data.shape[0],), dtype=int)
-		mat_mismatch = np.zeros((mat_match_data.shape[0],), dtype=int)
-		pat_match = np.zeros((pat_match_data.shape[0],), dtype=int)
-		pat_mismatch = np.zeros((pat_match_data.shape[0],), dtype=int)
-		for region_index, overlap in zip(np.where(overlap>0)[0], overlap[overlap>0]):
-			mat_match[mat_match_data[:, region_index]==1] += overlap
-			mat_mismatch[mat_match_data[:, region_index]==0] += overlap
-			pat_match[pat_match_data[:, region_index]==1] += overlap
-			pat_mismatch[pat_match_data[:, region_index]==0] += overlap
+		assert np.all((overlap<= 0) | (overlap == region_length))
 
-		mat_match_data_interval[mat_match>(interval_end-interval_start)*0.9, i] = 1
-		mat_match_data_interval[mat_mismatch>(interval_end-interval_start)*0.9, i] = 0
-		pat_match_data_interval[pat_match>(interval_end-interval_start)*0.9, i] = 1
-		pat_match_data_interval[pat_mismatch>(interval_end-interval_start)*0.9, i] = 0
+		is_overlapped = overlap>0
+
+		is_mat_matched = np.sum(region_length[is_overlapped] * (mat_match_data[:, is_overlapped]==1), axis=1) > (interval_end-interval_start)*0.9
+		mat_match_data_interval[is_mat_matched, i] = 1
+
+		is_mat_mismatched = np.sum(region_length[is_overlapped] * (mat_match_data[:, is_overlapped]==0), axis=1) > (interval_end-interval_start)*0.9
+		mat_match_data_interval[is_mat_mismatched, i] = 0
+
+		is_pat_matched = np.sum(region_length[is_overlapped] * (pat_match_data[:, is_overlapped]==1), axis=1) > (interval_end-interval_start)*0.9
+		pat_match_data_interval[is_pat_matched, i] = 1
+
+		is_pat_mismatched = np.sum(region_length[is_overlapped] * (pat_match_data[:, is_overlapped]==0), axis=1) > (interval_end-interval_start)*0.9
+		pat_match_data_interval[is_pat_mismatched, i] = 0
+
 
 	return mat_match_data_interval, pat_match_data_interval
 
@@ -243,7 +247,7 @@ def calculate_pvalue(obs):
 
 	n = np.sum(obs, axis=1)
 
-	p0, p1, p2, p3, p4, p5 = 1, 1, 1, 1, 1, 1
+	p0, p1, p2, p3, p4, p5, p6 = 1, 1, 1, 1, 1, 1, 1
 
 	if n[0] != 0:
 		p0 = scipy.stats.binom_test(obs[0, 1] + 2*obs[0, 2], 2*n[0], p=0.5, alternative='greater')
@@ -275,7 +279,11 @@ def calculate_pvalue(obs):
 		except:
 			pass
 
-	return p0, p1, p2, p3, p4, p5
+	if (n[0]+n[2]) != 0:
+		p6 = scipy.stats.binom_test(obs[0, 1] + 2*obs[0, 2] + obs[2, 1] + 2*obs[2, 2], 
+									(2*n[0])+(2*n[2]), p=0.5, alternative='greater')
+
+	return p0, p1, p2, p3, p4, p5, p6
 
 def calculate_pvalue_mat_pat(obs):
 	#obs: UU/AU/AA, num match
@@ -283,7 +291,7 @@ def calculate_pvalue_mat_pat(obs):
 	n = np.sum(obs, axis=1)
 	#p = (obs.T/n).T
 
-	p0, p1, p2, p3, p4, p5 = 1, 1, 1, 1, 1, 1
+	p0, p1, p2, p3, p4, p5, p6 = 1, 1, 1, 1, 1, 1, 1
 
 	if n[0] != 0:
 		p0 = scipy.stats.binom_test(obs[0, 1], n[0], p=0.5, alternative='greater')
@@ -315,13 +323,17 @@ def calculate_pvalue_mat_pat(obs):
 		except:
 			pass
 
-	return p0, p1, p2, p3, p4, p5
+	if (n[0]+n[2]) != 0:
+		p6 = scipy.stats.binom_test(obs[0, 1] + obs[2, 1], 
+									n[0]+n[2], p=0.5, alternative='greater')
+
+	return p0, p1, p2, p3, p4, p5, p6
 
 def calculate_pvalues(r, r_mat, r_pat):
 	# r: positions, FF/MF/MM, UU/AU/AA, num match
 
-	# pos, FF/MF/MM/all, mat/pat/both, UU/AU/AA/AUvsAA/AUvsUU/AUvsAAUU
-	pvalues = np.ones((r.shape[0], 4, 3, 6))
+	# pos, FF/MF/MM/all, mat/pat/both, UU/AU/AA/AUvsAA/AUvsUU/AUvsAAUU/all
+	pvalues = np.ones((r.shape[0], 4, 3, 7))
 	for index in range(r.shape[0]):
 		# both
 		pvalues[index, 0, 2, :] = calculate_pvalue(r[index, 0, :, :])
@@ -373,6 +385,7 @@ if __name__ == "__main__":
 		print(np.unique(mat_match_data_interval, return_counts=True), np.unique(pat_match_data_interval, return_counts=True))
 
 		r, r_mat, r_pat = generate_test_statistic(mat_match_data_interval, pat_match_data_interval, sibpairs)
+		np.save(outfile + '.contingency', np.sum(r, axis=1))
 		print('statistic computed')
 
 		pvalues = calculate_pvalues(r, r_mat, r_pat)
