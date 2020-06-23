@@ -199,7 +199,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	# pull coordinates
 	# use only SNPs, no indels
 	# use only variants that PASS GATK
-	coordinates = np.vstack([np.load('%s/%s' % (data_dir, coord_file)) for coord_file in coord_files])
+	coordinates = np.hstack([np.load('%s/%s' % (data_dir, coord_file)) for coord_file in coord_files])
 	snp_positions = coordinates[:, 1]
 	is_snp = coordinates[:, 2]==1
 	is_pass = coordinates[:, 3]==1
