@@ -3,6 +3,7 @@ import json
 from itertools import product
 import traceback
 from os import listdir
+import numpy as np
 
 from inheritance_states import InheritanceStates
 from input_output import write_to_file, pull_families, pull_gen_data_for_individuals
@@ -32,8 +33,9 @@ parser.add_argument('--no_overwrite', action='store_true', default=False, help='
 
 args = parser.parse_args()
 
-#chroms = [str(x) for x in range(1, 23)]
-chroms = ['22']
+chroms = [str(x) for x in range(1, 23)]
+af_boundaries = np.arange(0, 10000, np.log10(2))
+
 
 if args.detect_deletions:
 	print('Detecting deletions while phasing ...')
@@ -70,7 +72,7 @@ for family in families:
 		print('family', family.id)
 
 		# create genotypes
-		genotypes = Genotypes(len(family))
+		genotypes = Genotypes(len(family), af_boundaries)
 
 		# create inheritance states
 		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
@@ -79,7 +81,7 @@ for family in families:
 		transition_matrix = TransitionMatrix(inheritance_states, params)
 
 		# create loss function for this family
-		loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions)
+		loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions, af_boundaries)
 		#print('loss created')
 
 		with open('%s/%s.phased.txt' % (args.out_dir, family), 'w+') as statef:
@@ -94,7 +96,7 @@ for family in families:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
-				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, args.assembly, chrom, family.individuals)
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, args.assembly, chrom, family.individuals)
 
 				# forward sweep
 				v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
