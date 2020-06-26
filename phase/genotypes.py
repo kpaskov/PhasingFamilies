@@ -23,10 +23,10 @@ class Genotype:
 
 class Genotypes:
 	def __init__(self, m, af_boundaries):
-		self._genotypes = np.array([x for x in list(product(*([[-1, 0, 1, 2]]*m + [list(range(len(af_boundaries)))]))) if np.any(np.array(x[:-1])>0) or np.all(np.array(x)==0)], dtype=np.int8)
+		genotypes = np.array([x for x in list(product(*([[-1, 0, 1, 2]]*m + [list(range(len(af_boundaries)))]))) if np.any(np.array(x[:-1])>0) or np.all(np.array(x)==0)], dtype=np.int8)
 		self._genotype_to_index = dict([(Genotype(x), i) for i, x in enumerate(self._genotypes)])
-		self.num_genotypes = self._genotypes.shape[0]
-		print('genotypes', self._genotypes.shape)
+		self.num_genotypes = len(self._genotype_to_index)
+		print('genotypes', genotypes.shape)
 
 	def index(self, gen):
 		return self._genotype_to_index[Genotype(gen)]
