@@ -182,9 +182,10 @@ def pull_sex(ped_file):
 				sample_id_to_sex[child_id] = sex
 	return sample_id_to_sex
 
-def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
-	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
-	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
+def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals):
+	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: 0 if len(x.split('.'))==4 else int(x.split('.')[2]))
+	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: 0 if len(x.split('.'))==5 else int(x.split('.')[2]))
+	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: 0 if len(x.split('.'))==5 else int(x.split('.')[2]))
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
 
 	# pull samples
@@ -199,7 +200,9 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	# pull coordinates
 	# use only SNPs, no indels
 	# use only variants that PASS GATK
-	coordinates = np.hstack([np.load('%s/%s' % (data_dir, coord_file)) for coord_file in coord_files])
+	coordinates = [np.load('%s/%s' % (data_dir, coord_file)) for coord_file in coord_files]
+	has_data = np.where([x.shape[0]>0 for x in coordinates])[0]
+	coordinates = np.vstack([coordinates[i] for i in has_data])
 	snp_positions = coordinates[:, 1]
 	is_snp = coordinates[:, 2]==1
 	is_pass = coordinates[:, 3]==1
@@ -208,18 +211,27 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	assert np.all(snp_positions <= chrom_length)
 	#print('chrom shape only SNPs', snp_positions.shape)
 
+	# pull af
+	af = np.hstack([np.load('%s/%s' % (data_dir, af_files[i])) for i in has_data]).flatten()
+	af = np.digitize(-np.log10(af[is_snp & is_pass]), af_boundaries[:-1])-1
+
 	# pull genotypes
 	m = len(individuals)
-	has_seq = np.where([x in sample_id_to_index for x in individuals])[0]
+	has_seq = np.array(np.where([x in sample_id_to_index for x in individuals])[0].tolist() + [m])
 	ind_indices = [sample_id_to_index[x] for x in individuals if x in sample_id_to_index]
 		
-	data = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :] for gen_file in gen_files]).A
+	data = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_files[i]))[ind_indices, :] for i in has_data]).A
 	data = data[:, is_snp & is_pass]
 
 	data[data<0] = -1
 
+	# append af to end of family genotypes
+	print(data.shape, af.shape)
+	data = np.vstack((data, af))
+
 	# if a position has only 0s and -1s in the family, assume it's homref for everyone
-	data[:, np.all(data<=0, axis=0)] = 0
+	# we don't use af for sites where the whole family is homref, so set af to the 0 bin for efficiency
+	data[:, np.all(data[:-1, :]<=0, axis=0)] = 0
 
 	#print('all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
 	#print('all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
@@ -259,7 +271,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	n = rep_indices.shape[0]+1
 	#print('n', n)
 
-	new_family_genotypes = np.zeros((m, n), dtype=np.int8)
+	new_family_genotypes = np.zeros((m+1, n), dtype=np.int8)
 	mult_factor = np.zeros((n,), dtype=np.int)
 
 	new_family_genotypes[np.ix_(has_seq, np.arange(n-1))] = family_genotypes[:, rep_indices]
@@ -278,7 +290,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals):
 	mult_factor[1:-1] = c[rep_indices[1:]] - c[rep_indices[:-1]]
 	mult_factor[-1] = c[-1] - c[rep_indices[-1]]
 
-	print('genotypes pulled', new_family_genotypes.shape)
+	print('genotypes pulled', new_family_genotypes.shape, new_family_genotypes)
 	#print(mult_factor)
 
 	return new_family_genotypes, new_family_snp_positions, mult_factor

@@ -94,6 +94,7 @@ class InheritanceStates:
 		# always fix first child of the parent
 		parents_with_fixed_child = set()
 		phase_options = []
+		fixed_children = []
 		for mom, dad in family.ordered_couples:
 			for child in family.parents_to_children[(mom, dad)]:
 				if mom in parents_with_fixed_child:
@@ -101,14 +102,17 @@ class InheritanceStates:
 				else:
 					phase_options.append([0])
 					parents_with_fixed_child.add(mom)
+					fixed_children.append((child, 'mat'))
 
 				if dad in parents_with_fixed_child:
 					phase_options.append([0, 1])
 				else:
 					phase_options.append([0])
 					parents_with_fixed_child.add(dad)
+					fixed_children.append((child, 'pat'))
 
 		loss_regions = [list(np.arange(num_loss_states))]
+		print('fixed', fixed_children)
 
 		self.deletion_indices = np.arange(len(del_options))
 		self.maternal_phase_indices = [None]*self.family.num_ancestors() + np.arange(len(del_options), len(del_options)+len(phase_options), 2).tolist()
@@ -211,7 +215,7 @@ class InheritanceStates:
 
 	def get_perfect_matches(self, state):
 		phase = self._phase[self.index(state), :]
-		allele_combinations = list(product(*([[2] if state.has_deletion(i) else [0, 1] for i in range(2*self.family.num_ancestors())])))
+		allele_combinations = list(product(*([[2, 2] if state.has_deletion(i) else [0, 1] for i in range(2*self.family.num_ancestors())])))
 		
 		perfect_matches = list()
 		for alleles in allele_combinations:

@@ -32,7 +32,8 @@ parser.add_argument('--no_overwrite', action='store_true', default=False, help='
 
 args = parser.parse_args()
 
-chroms = [str(x) for x in range(1, 23)]
+#chroms = [str(x) for x in range(1, 23)]
+chroms = ['22']
 
 if args.detect_deletions:
 	print('Detecting deletions while phasing ...')

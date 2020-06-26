@@ -10,8 +10,7 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 	m, n = family_genotypes.shape
 	v_cost = np.zeros((states.num_states, n), dtype=float)
 
-	pos_gen = tuple(family_genotypes[:, 0])
-	v_cost[:, 0] = mult_factor[0]*loss(pos_gen)
+	v_cost[:, 0] = mult_factor[0]*loss(family_genotypes[:, 0])
 
 	# we enforce that the chromosome starts with no deletions
 	ok_start = np.array([states.is_ok_start(x) for x in states])
@@ -19,8 +18,7 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 
 	# next steps
 	for j in range(1, n): 
-		pos_gen = tuple(family_genotypes[:, j])
-		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(pos_gen)
+		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])
 
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 

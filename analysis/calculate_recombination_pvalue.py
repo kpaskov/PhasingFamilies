@@ -4,6 +4,7 @@ import numpy as np
 import scipy.stats
 import sys
 from os import listdir
+import random
 
 #chrom = sys.argv[1]
 
@@ -44,6 +45,7 @@ chroms = [str(x) for x in range(1, 23)]
 #chroms = ['10']
 #interval = 5000000
 #name = str(interval)
+interval = None
 name = 'cyto'
 
 
@@ -79,11 +81,26 @@ def pull_sibpairs(phase_dir, identicals_file, sample_to_affected, sample_to_sex)
 				if tuple(header[1:5]) == ('m1_del', 'm2_del', 'p1_del', 'p2_del'):
 					individuals = [header[i][:-4] for i in range(5, len(header)-3, 2)]
 					family_to_inds[family_key] = individuals
-					for child1, child2 in combinations(individuals[2:], 2):
-						if child1 not in leave_out and child2 not in leave_out and child1 in sample_to_affected and child2 in sample_to_affected:
-							sibpairs.append(Sibpair(family_key, child1, child2, individuals[0], individuals[1], 
-								int(sample_to_affected[child1]=='2')+int(sample_to_affected[child2]=='2'),
-								int(sample_to_sex[child1]=='1')+int(sample_to_sex[child2]=='1')))
+					affected_children = [x for x in individuals[2:] if x in sample_to_affected and sample_to_affected[x]=='2']
+					unaffected_children = [x for x in individuals[2:] if x in sample_to_affected and sample_to_affected[x]=='1']
+					random.shuffle(affected_children)
+					random.shuffle(unaffected_children)
+
+					for i in range(0, len(affected_children)-1, 2):
+						child1, child2 = affected_children[i:(i+2)]
+						sibpairs.append(Sibpair(family_key, child1, child2, individuals[0], individuals[1], 2,
+									int(sample_to_sex[child1]=='1')+int(sample_to_sex[child2]=='1')))
+
+					for i in range(0, len(unaffected_children)-1, 2):
+						child1, child2 = unaffected_children[i:(i+2)]
+						sibpairs.append(Sibpair(family_key, child1, child2, individuals[0], individuals[1], 0,
+									int(sample_to_sex[child1]=='1')+int(sample_to_sex[child2]=='1')))
+
+					if (len(affected_children) % 2 == 1) and (len(unaffected_children) % 2 == 1):
+						child1, child2 = affected_children[-1], unaffected_children[-1]
+						sibpairs.append(Sibpair(family_key, child1, child2, individuals[0], individuals[1], 1,
+									int(sample_to_sex[child1]=='1')+int(sample_to_sex[child2]=='1')))
+
 
 	sibpairs = sorted(sibpairs)
 
@@ -232,26 +249,6 @@ def calculate_pvalue(obs):
 		except:
 			pass
 
-	if n[0] != 0 and n[1] != 0:
-		try:
-			p1 = obs[0, 1]/n[0]
-			p2 = obs[1, 1]/n[1]
-			p = (obs[0, 1] + obs[1, 1])/(n[0]+n[1])
-			z = (p1-p2)/np.sqrt(p*(1-p)*((1/n[0])+(1/n[1])))
-			ps[1] = scipy.stats.norm.cdf(z)
-		except:
-			pass
-
-	if n[1] != 0 and n[2] != 0:
-		try:
-			p1 = obs[1, 1]/n[1]
-			p2 = obs[2, 1]/n[2]
-			p = (obs[1, 1] + obs[2, 1])/(n[1]+n[2])
-			z = (p1-p2)/np.sqrt(p*(1-p)*((1/n[1])+(1/n[2])))
-			ps[2] = scipy.stats.norm.cdf(z)
-		except:
-			pass
-
 	return ps
 
 def calculate_pvalues(r):
@@ -280,22 +277,23 @@ if __name__ == "__main__":
 
 		positions = pull_sibpair_positions(phase_dir, chrom)
 
-		#intervals = np.arange(0, max(positions), interval)
-
 		intervals = set()
-		with open('data/cytoBand%s.txt' % build, 'r') as f:
-			for line in f:
-				pieces = line.strip().split('\t')
-				if pieces[0].startswith('chr') and pieces[0][3:] == chrom:
-					start_pos, end_pos = int(pieces[1]), int(pieces[2])
-					intervals.update([
-						start_pos, 
-						0.75*start_pos + 0.25*end_pos,
-						0.5*start_pos + 0.5*end_pos,
-						0.25*start_pos + 0.75*end_pos,
-						end_pos
-						])
-		intervals.add(max(positions))
+		if interval is not None:
+			intervals = np.arange(0, max(positions)+interval, interval)
+		else:
+			with open('data/cytoBand%s.txt' % build, 'r') as f:
+				for line in f:
+					pieces = line.strip().split('\t')
+					if pieces[0].startswith('chr') and pieces[0][3:] == chrom:
+						start_pos, end_pos = int(pieces[1]), int(pieces[2])
+						intervals.update([
+							start_pos, 
+							0.75*start_pos + 0.25*end_pos,
+							0.5*start_pos + 0.5*end_pos,
+							0.25*start_pos + 0.75*end_pos,
+							end_pos
+							])
+			intervals.add(max(positions))
 		intervals = np.array(sorted(intervals))
 
 		positions.update(intervals)
