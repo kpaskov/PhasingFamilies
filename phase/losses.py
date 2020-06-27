@@ -77,8 +77,6 @@ class LazyLoss:
 
 		cache_size = np.argmax(np.flip(np.cumsum(counts[indices]), axis=0) < np.arange(counts.shape[0]))
 		cached_genotypes = famgens[:, indices[-cache_size:]].T
-		print(cached_genotypes.shape)
-		print(cached_genotypes)
 
 		old_indices = np.asarray([self.gen_to_index.get(tuple(x), -1) for x in cached_genotypes] + [-1])
 
