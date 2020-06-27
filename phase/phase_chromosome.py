@@ -52,6 +52,12 @@ with open(args.param_file, 'r') as f:
 # --------------- pull families of interest ---------------
 families = pull_families(args.ped_file)
 
+# make sure at least one individual has genetic data (chromosome 1 chosen arbitrarily)
+sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0])
+with open(sample_file, 'r') as f:
+	sample_ids = set([line.strip() for line in f])
+families = [x for x in families if len(set(x.individuals) & sample_ids)>0]
+
 # limit by size
 if args.family_size is not None:
 	families = [x for x in families if len(x) == args.family_size]
