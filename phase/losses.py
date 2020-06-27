@@ -90,12 +90,12 @@ class LazyLoss:
 		print('cached losses', self.losses.shape, 'already_calculated', np.sum(self.already_calculated))
 
 	def __setup_ref_cost__(self):
-		gen = np.zeros((self.family_size,), dtype=int)
-		gen_index = self.gen_to_index[(0,)*(self.family_size+1)]
+		gen = np.zeros((self.family_size+1,), dtype=int)
+		gen_index = self.gen_to_index[tuple(gen)]
 
 		#for gen in list(product(*[[0, -1]]*self.family_size)):
 		for i, pm in enumerate(self.perfect_matches):
-			self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), gen], axis=1)
+			self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen[:-1])], axis=1)
 					    
 		for k in range(self.num_loss_regions):
 			self.losses[self.loss_region==k, gen_index] = -np.log10(np.sum(np.power(10, -(self.s[k, self.perfect_match_indices[self.loss_region==k, :]] + \
@@ -110,7 +110,6 @@ class LazyLoss:
 		#	print(self.num_cached, self.num_uncached)
 
 		if gen_index is not None and self.already_calculated[gen_index]:
-			self.num_cached += 1
 			return self.losses[:, gen_index]
 		else:
 			loss = np.zeros((self.states.num_states,), dtype=float)
@@ -124,10 +123,6 @@ class LazyLoss:
 			if gen_index is not None:
 				self.losses[:, gen_index] = loss
 				self.already_calculated[gen_index] = True
-
-			if gen_index is None:
-				self.num_uncached += 1
-
 			return loss
 
 
