@@ -8,7 +8,6 @@ import numpy as np
 from inheritance_states import InheritanceStates
 from input_output import write_to_file, pull_families, pull_gen_data_for_individuals
 from transition_matrices import TransitionMatrix
-from genotypes import Genotypes
 from losses import LazyLoss
 from viterbi import viterbi_forward_sweep, viterbi_backward_sweep
 
@@ -71,9 +70,6 @@ for family in families:
 	try:
 		print('family', family.id)
 
-		# create genotypes
-		genotypes = Genotypes(len(family), af_boundaries)
-
 		# create inheritance states
 		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
 					
@@ -81,7 +77,7 @@ for family in families:
 		transition_matrix = TransitionMatrix(inheritance_states, params)
 
 		# create loss function for this family
-		loss = LazyLoss(inheritance_states, genotypes, family, params, args.num_loss_regions, af_boundaries)
+		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions, af_boundaries)
 		#print('loss created')
 
 		with open('%s/%s.phased.txt' % (args.out_dir, family), 'w+') as statef:

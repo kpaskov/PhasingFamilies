@@ -213,7 +213,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 
 	# pull af
 	af = np.hstack([np.load('%s/%s' % (data_dir, af_files[i])) for i in has_data]).flatten()
-	af = np.digitize(-np.log10(af[is_snp & is_pass]), af_boundaries[:-1])-1
+	af = np.digitize(-np.log10(af[is_snp & is_pass]), af_boundaries)
 
 	# pull genotypes
 	m = len(individuals)

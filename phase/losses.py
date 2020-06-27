@@ -13,7 +13,7 @@ from functools import reduce
 
 
 class LazyLoss:
-	def __init__(self, states, genotypes, family, params, num_loss_regions, af_boundaries):
+	def __init__(self, states, family, params, num_loss_regions, af_boundaries):
 
 		obss = ['0/0', '0/1', '1/1', './.']
 		preds = ['0/0', '0/1', '1/1', '-/0', '-/1', '-/-']
@@ -44,15 +44,19 @@ class LazyLoss:
 
 		assert np.all(self.emission_params>=0)
 
-		self.genotypes = genotypes
 		self.num_loss_regions = num_loss_regions
 		self.family_size = len(family)
 		self.states = states
-		self.af_boundaries = af_boundaries
-		
-		self.losses = np.zeros((states.num_states, len(genotypes)), dtype=float)
-		self.already_calculated = np.zeros((len(genotypes),), dtype=bool)
-		print('losses', self.losses.shape)
+		self.alt_costs = [x if x <= -np.log10(0.5) else af_boundaries[i-1] for i, x in enumerate(af_boundaries)] + [af_boundaries[-1]]
+		self.ref_costs = [-np.log10(1-(10**-alt_cost)) for alt_cost in self.alt_costs]
+		#print('alt costs', self.alt_costs)
+		#print('ref costs', self.ref_costs)
+
+		self.losses = np.zeros((states.num_states, 2))
+		self.already_calculated = np.zeros((2,), dtype=bool)
+		self.gen_to_index = {
+			(0,)*(self.family_size+1): 0
+		}
 
 		self.__build_perfect_matches__(states)
 		
@@ -64,45 +68,67 @@ class LazyLoss:
 
 		self.__setup_ref_cost__()
 
+		self.num_cached = 0
+		self.num_uncached = 0
+
+	def set_cache(self, family_genotypes):
+		famgens, counts = np.unique(family_genotypes, axis=1, return_counts=True)
+		indices = np.argsort(counts)
+
+		cache_size = np.argmax(np.flip(np.cumsum(counts[indices])) < np.arange(counts.shape[0]))
+		cached_genotypes = famgens[:, indices[-cache_size:]].T
+		print(cached_genotypes.shape)
+		print(cached_genotypes)
+
+		old_indices = np.asarray([self.gen_to_index.get(tuple(x), -1) for x in cached_genotypes] + [-1])
+
+		self.losses = self.losses[:, old_indices]
+		self.already_calculated = self.already_calculated[old_indices]
+		self.gen_to_index = dict([(tuple(x), i) for i, x in enumerate(cached_genotypes)])
+		assert self.already_calculated[-1] == False
+		assert len(self.gen_to_index) == self.losses.shape[1]-1
+		print('cached losses', self.losses.shape, 'already_calculated', np.sum(self.already_calculated))
 
 	def __setup_ref_cost__(self):
-		gen = (0,)*(self.family_size+1)
-		gen_index = self.genotypes.index(gen)
+		gen = np.zeros((self.family_size,), dtype=int)
+		gen_index = self.gen_to_index[(0,)*(self.family_size+1)]
 
-		for gen in list(product(*[[0, -1]]*self.family_size)):
-			alt_cost = 10 # just a big number (inf creates nans when multiplied by 0)
-			ref_cost = 0
-			l = np.zeros((self.losses.shape[0],))
-			for i, pm in enumerate(self.perfect_matches):
-				self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
+		#for gen in list(product(*[[0, -1]]*self.family_size)):
+		for i, pm in enumerate(self.perfect_matches):
+			self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), gen], axis=1)
 					    
-			for k in range(self.num_loss_regions):
-				l[self.loss_region==k] = -np.log10(np.sum(np.power(10, -(self.s[k, self.perfect_match_indices[self.loss_region==k, :]] + \
-																	    ref_cost*self.perfect_match_ref_alleles[self.loss_region==k, :] + \
-																		alt_cost*self.perfect_match_alt_alleles[self.loss_region==k, :])), axis=1))
-			if np.all(self.losses[:, gen_index]==0):
-				self.losses[:, gen_index] = l
-			else:
-				self.losses[:, gen_index] = np.minimum(self.losses[:, gen_index], l)
+		for k in range(self.num_loss_regions):
+			self.losses[self.loss_region==k, gen_index] = -np.log10(np.sum(np.power(10, -(self.s[k, self.perfect_match_indices[self.loss_region==k, :]] + \
+																		10*self.perfect_match_alt_alleles[self.loss_region==k, :])), axis=1))
 		
-		assert np.all(self.losses[:, gen_index] > 0)
 		self.already_calculated[gen_index] = True
 
 	def __call__(self, gen): 
-		gen_index = self.genotypes.index(gen)
-		alt_cost = self.af_boundaries[gen[-1]+1]
-		ref_cost = -np.log10(1+np.log10(alt_cost))
-		if not self.already_calculated[gen_index]:
+		gen_index = self.gen_to_index.get(tuple(gen), None)
+
+		#if (self.num_cached + self.num_uncached) % 1000 == 0:
+		#	print(self.num_cached, self.num_uncached)
+
+		if gen_index is not None and self.already_calculated[gen_index]:
+			self.num_cached += 1
+			return self.losses[:, gen_index]
+		else:
+			loss = np.zeros((self.states.num_states,), dtype=float)
 			for i, pm in enumerate(self.perfect_matches):
 				self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen[:-1])], axis=1)
-				    
+					    
 			for k in range(self.num_loss_regions):
-				self.losses[self.loss_region==k, gen_index] = -np.log10(np.sum(np.power(10, -(self.s[k, self.perfect_match_indices[self.loss_region==k, :]] + \
-																							 ref_cost*self.perfect_match_ref_alleles[self.loss_region==k, :] + \
-																							 alt_cost*self.perfect_match_alt_alleles[self.loss_region==k, :])), axis=1))
-			assert np.all(self.losses[:, gen_index] > 0)
-			self.already_calculated[gen_index] = True
-		return self.losses[:, gen_index]
+				loss[self.loss_region==k] = -np.log10(np.sum(np.power(10, -(self.s[k, self.perfect_match_indices[self.loss_region==k, :]] + \
+																								 self.ref_costs[gen[-1]]*self.perfect_match_ref_alleles[self.loss_region==k, :] + \
+																								 self.alt_costs[gen[-1]]*self.perfect_match_alt_alleles[self.loss_region==k, :])), axis=1))
+			if gen_index is not None:
+				self.losses[:, gen_index] = loss
+				self.already_calculated[gen_index] = True
+
+			if gen_index is None:
+				self.num_uncached += 1
+
+			return loss
 
 
 	def __build_perfect_matches__(self, states):
