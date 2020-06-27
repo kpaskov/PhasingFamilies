@@ -33,7 +33,13 @@ parser.add_argument('--no_overwrite', action='store_true', default=False, help='
 args = parser.parse_args()
 
 chroms = [str(x) for x in range(1, 23)]
-af_boundaries = np.arange(0, 10000, np.log10(2))
+
+# set up af boundaries
+af_boundaries = np.arange(np.log10(2), np.log10(2000), np.log10(2)).tolist()
+af_boundaries.extend([-np.log10(1-10.0**-x) for x in af_boundaries])
+af_boundaries = np.array(sorted(af_boundaries))
+print('af boundaries', af_boundaries)
+
 
 
 if args.detect_deletions:
@@ -93,6 +99,9 @@ for family in families:
 
 				# pull genotype data for this family
 				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, args.assembly, chrom, family.individuals)
+
+				# update loss cache
+				loss.set_cache(family_genotypes)
 
 				# forward sweep
 				v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
