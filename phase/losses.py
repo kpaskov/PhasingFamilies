@@ -31,7 +31,7 @@ class LazyLoss:
 						self.emission_params[k, j, pred_index, obs_index] = params[ind]['-log10(P[obs=%s|true_gen=%s,loss=%d])' % (obs, pred, k)]
 					else:
 						# no sequence data for this individual, meaning all entries will be 0/0
-						self.emission_params[k, j, pred_index, obs_index] = 0 if obs=='0/0' else np.inf
+						self.emission_params[k, j, pred_index, obs_index] = 0 if obs=='0/0' else np.nan
 						no_data.add(ind)
 				# if we can't estimate an error rate, use the median value for everyone else
 				self.emission_params[k, np.isnan(self.emission_params[k, :, pred_index, obs_index]), pred_index, obs_index] = np.nanmedian(self.emission_params[k, :, pred_index, obs_index])

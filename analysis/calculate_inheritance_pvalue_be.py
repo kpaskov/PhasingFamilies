@@ -27,19 +27,19 @@ from os import listdir
 #ped_file = 'data/ancestry.ped'
 #family_sizes = [4, 5, 6, 7]
 
-#phase_dir = 'phased_spark_quads'
-##phenotype_file = 'phenotypes/scq.csv'
-#phenotype_file = 'data/spark.ped.quads.ped'
-#identicals_file = 'sibpair_similarity/spark_quads_identicals.txt'
-#phenotype = ''
+phase_dir = 'phased_spark_quads'
+#phenotype_file = 'phenotypes/scq.csv'
+phenotype_file = 'data/spark.ped.quads.ped'
+identicals_file = 'sibpair_similarity/spark_quads_identicals.txt'
+phenotype = ''
 ##phenotype = 'q10_hand_tool'
 
-phase_dir = 'phased_ancestry_quads'
-#phenotype_file = 'phenotypes/scq.csv'
-phenotype_file = '../DATA/ancestry/ancestryDNA.ped.quads.ped'
-identicals_file = 'sibpair_similarity/ssc_identicals.txt'
-phenotype = ''
-#phenotype = 'q10_hand_tool'
+#phase_dir = 'phased_ancestry_quads'
+##phenotype_file = 'phenotypes/scq.csv'
+#phenotype_file = '../DATA/ancestry/ancestryDNA.ped.quads.ped'
+#identicals_file = 'sibpair_similarity/ssc_identicals.txt'
+#phenotype = ''
+##phenotype = 'q10_hand_tool'
 
 #phase_dir = 'phased_ihart_quads'
 #phenotype_file = 'data/v34.vcf.ped'
@@ -49,7 +49,7 @@ phenotype = ''
 
 chroms = [str(x) for x in range(1, 23)]
 #chroms = ['10']
-interval = 1000000
+interval = 5000000
 
 def pull_phenotype_ped(ped_file):
 	sample_to_sex = dict()
