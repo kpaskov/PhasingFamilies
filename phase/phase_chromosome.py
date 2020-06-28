@@ -80,11 +80,12 @@ if args.batch_size is not None:
 if args.detect_consanguinity:
 	families = [x for x in families if x.num_ancestors()==2 and len(x.ordered_couples)==1]
 	
-	# to detect consanguinity, model a shared ancestor
+	# to detect consanguinity, model parents as siblings - they have the freedom to inherit
+	# completely different copies from "mat_shared_ancestor" and "pat_shared_ancestor"
+	# or they can have consanguineous regions.
 	for family in families:
-		family.add_child(family.mat_ancestors[0], 'shared_ancestor', 'maternal_unshared_ancestor')
-		family.add_child(family.pat_ancestors[0], 'shared_ancestor', 'paternal_unshared_ancestor')
-
+		family.add_child(family.mat_ancestors[0], 'mat_shared_ancestor', 'pat_shared_ancestor')
+		family.add_child(family.pat_ancestors[0], 'mat_shared_ancestor', 'pat_shared_ancestor')
 print('Families of interest', len(families))
 
 # phase each family

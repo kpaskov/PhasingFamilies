@@ -178,9 +178,19 @@ def pull_sex(ped_file):
 		for line in f:
 			pieces = line.strip().split('\t')
 			if len(pieces) >= 5:
-				fam_id, child_id, f_id, m_id, sex = pieces[:5]
+				fam_id, child_id, f_id, m_id, sex, aff = pieces[:6]
 				sample_id_to_sex[child_id] = sex
 	return sample_id_to_sex
+
+def pull_phenotype(ped_file):
+	sample_id_to_aff = dict()
+	with open(ped_file, 'r') as f:	
+		for line in f:
+			pieces = line.strip().split('\t')
+			if len(pieces) >= 6:
+				fam_id, child_id, f_id, m_id, sex, aff = pieces[:6]
+				sample_id_to_aff[child_id] = aff
+	return sample_id_to_aff
 
 def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: 0 if len(x.split('.'))==4 else int(x.split('.')[2]))

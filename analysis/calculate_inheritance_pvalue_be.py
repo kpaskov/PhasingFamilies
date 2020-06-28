@@ -49,7 +49,7 @@ phenotype = ''
 
 chroms = [str(x) for x in range(1, 23)]
 #chroms = ['10']
-interval = 5000000
+interval = 500000
 
 def pull_phenotype_ped(ped_file):
 	sample_to_sex = dict()
