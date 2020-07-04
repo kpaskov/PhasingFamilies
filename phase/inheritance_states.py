@@ -50,13 +50,17 @@ class State:
 	def is_hard_to_sequence(self, state):
 		return self._data[loss_region_index] != 0
 
-	def toggle_maternal_phase(self, individual):
-		index = self._inheritance_states.maternal_phase_indices[self._inheritance_states.family.individuals.index(individual)]
-		return State(self._data[:index] + (1-self._data[index],) + self._data[(index+1):], self._inheritance_states)
+	def toggle_maternal_phases(self, individuals):
+		updated_data = np.array(self._data)
+		indices = [self._inheritance_states.maternal_phase_indices[self._inheritance_states.family.individuals.index(individual)] for individual in individuals]
+		updated_data[indices] = 1-updated_data[indices]
+		return State(updated_data, self._inheritance_states)
 
-	def toggle_paternal_phase(self, individual):
-		index = self._inheritance_states.paternal_phase_indices[self._inheritance_states.family.individuals.index(individual)]
-		return State(self._data[:index] + (1-self._data[index],) + self._data[(index+1):], self._inheritance_states)
+	def toggle_paternal_phases(self, individuals):
+		updated_data = np.array(self._data)
+		indices = [self._inheritance_states.paternal_phase_indices[self._inheritance_states.family.individuals.index(individual)] for individual in individuals]
+		updated_data[indices] = 1-updated_data[indices]
+		return State(updated_data, self._inheritance_states)
 
 	def toggle_ancestral_deletions(self, deletion_states):
 		updated_data = np.array(self._data)
@@ -92,7 +96,7 @@ class InheritanceStates:
 			dad_to_children[dad].extend(children)
 		
 		# always fix first child of the parent
-		parents_with_fixed_child = set([k for k, v in mom_to_children.items() if len(v)>2] + [k for k, v in dad_to_children.items() if len(v)>2])
+		parents_with_fixed_child = set()
 		phase_options = []
 		self.fixed_children = []
 		for mom, dad in family.ordered_couples:
@@ -155,18 +159,32 @@ class InheritanceStates:
 
 	def get_maternal_recombination_neighbors(self, state):
 		neighbor_indices = set()
-		for descendent in self.family.descendents:
-			new_state = state.toggle_maternal_phase(descendent)
+		for siblings in self.family.parents_to_children.values():
+			# first sibling is fixed, so recombination in first sibling results in joint recombination in all other siblings
+			new_state = state.toggle_maternal_phases(siblings[1:])
 			if new_state in self:
 				neighbor_indices.add(self.index(new_state))
+
+			# typical maternal recombination in other siblings
+			for sibling in siblings[1:]:
+				new_state = state.toggle_maternal_phases([sibling])
+				if new_state in self:
+					neighbor_indices.add(self.index(new_state))
 		return neighbor_indices
 
 	def get_paternal_recombination_neighbors(self, state):
 		neighbor_indices = set()
-		for descendent in self.family.descendents:
-			new_state = state.toggle_paternal_phase(descendent)
+		for siblings in self.family.parents_to_children.values():
+			# first sibling is fixed, so recombination in first sibling results in joint recombination in all other siblings
+			new_state = state.toggle_paternal_phases(siblings[1:])
 			if new_state in self:
 				neighbor_indices.add(self.index(new_state))
+
+			# typical paternal recombination in other siblings
+			for sibling in siblings[1:]:
+				new_state = state.toggle_paternal_phases([sibling])
+				if new_state in self:
+					neighbor_indices.add(self.index(new_state))
 		return neighbor_indices
 
 	def get_deletion_neighbors(self, state):
