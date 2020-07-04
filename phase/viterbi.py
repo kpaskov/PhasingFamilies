@@ -18,7 +18,9 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 
 	# next steps
 	for j in range(1, n): 
-		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])
+		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1)
+		if mult_factor[j] != 0:
+			v_cost[:, j] += mult_factor[j]*loss(family_genotypes[:, j])
 
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
@@ -26,30 +28,26 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 
 def merge_paths(paths, states):
 	# combine path states into a single state (unknown values represented with -1)
-	merged_state = -np.ones((states.full_state_length,), dtype=np.int8)
-	path_states = np.array([states.get_full_state(p) for p in paths])
-	known_indices = np.all(path_states == path_states[0, :], axis=0)
-	merged_state[known_indices] = path_states[0, known_indices]
-	return merged_state
+	path_states = states.get_full_states(paths)
+	return ((path_states[0, :]+1)*np.all(np.equal(path_states, path_states[0, :]), axis=0)) - 1
 
 def viterbi_backward_sweep(v_cost, states, transition_matrix):
 
 	# backward sweep
 	prev_time = time.time()
 	n = v_cost.shape[1]
-	final_states = -np.ones((states.full_state_length, n), dtype=int)
+	final_states = -np.ones((states.full_state_length, n), dtype=np.int8)
 	
 	# choose best paths
 	# we enforce that the chromosome ends with no deletions
 	num_forks = 0
 	ok_end = np.array([states.is_ok_end(x) for x in states])
 	min_value = np.min(v_cost[ok_end, -1])
-	paths = np.where(np.isclose(v_cost[:, -1], min_value) & ok_end)[0]
+	paths = np.where(np.isclose(v_cost[:, -1], min_value, rtol=0, atol=0.1) & ok_end)[0]
 	print('Num solutions', paths.shape, min_value, states[paths])
 
 	if paths.shape[0]>1:
-		paths = random.choice(paths)[np.newaxis]
-	print(paths.shape)
+		paths = [random.choice(paths)]
 
 	final_states[:, -1] = merge_paths(paths, states)
 	num_forks += (paths.shape[0] > 1)
@@ -61,14 +59,14 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 		min_value = np.min(total_cost, axis=1)
 		new_paths = set()
 		for i, k in enumerate(paths):
-			min_indices = transition_matrix.transitions[k, np.where(np.isclose(total_cost[i, :], min_value[i]))[0]]	
+			min_indices = transition_matrix.transitions[k, np.isclose(total_cost[i, :], min_value[i], rtol=0, atol=0.1)]	
 			new_paths.update(min_indices.tolist())
 		
-		paths = np.asarray(list(new_paths), dtype=int)
+		paths = list(new_paths)
 		final_states[:, j] = merge_paths(paths, states)
-		num_forks += (paths.shape[0] > 1)
+		num_forks += (len(paths) > 1)
 
-	print('Num positions in fork', num_forks)
+	print('Num forks', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 
 	
 	return final_states

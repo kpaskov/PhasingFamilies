@@ -92,9 +92,9 @@ class InheritanceStates:
 			dad_to_children[dad].extend(children)
 		
 		# always fix first child of the parent
-		parents_with_fixed_child = set()
+		parents_with_fixed_child = set([k for k, v in mom_to_children.items() if len(v)>2] + [k for k, v in dad_to_children.items() if len(v)>2])
 		phase_options = []
-		fixed_children = []
+		self.fixed_children = []
 		for mom, dad in family.ordered_couples:
 			for child in family.parents_to_children[(mom, dad)]:
 				if mom in parents_with_fixed_child:
@@ -102,17 +102,17 @@ class InheritanceStates:
 				else:
 					phase_options.append([0])
 					parents_with_fixed_child.add(mom)
-					fixed_children.append((child, 'mat'))
+					self.fixed_children.append((child, 'mat'))
 
 				if dad in parents_with_fixed_child:
 					phase_options.append([0, 1])
 				else:
 					phase_options.append([0])
 					parents_with_fixed_child.add(dad)
-					fixed_children.append((child, 'pat'))
+					self.fixed_children.append((child, 'pat'))
 
 		loss_regions = [list(np.arange(num_loss_states))]
-		print('fixed', fixed_children)
+		print('fixed', self.fixed_children)
 
 		self.deletion_indices = np.arange(len(del_options))
 		self.maternal_phase_indices = [None]*self.family.num_ancestors() + np.arange(len(del_options), len(del_options)+len(phase_options), 2).tolist()
@@ -206,8 +206,8 @@ class InheritanceStates:
 				phase = np.hstack((phase, mat_phase[:, np.newaxis], pat_phase[:, np.newaxis]))
 		return phase
 
-	def get_full_state(self, state_index):
-		return tuple(self._full_states[state_index, :])
+	def get_full_states(self, state_indices):
+		return self._full_states[state_indices, :]
 
 	def get_original_state(self, full_state):
 		return self[self._full_state_to_index[tuple(full_state)]]

@@ -35,16 +35,11 @@ args = parser.parse_args()
 
 chroms = [str(x) for x in range(1, 23)]
 
-# set up af boundaries
-af_boundaries = np.arange(np.log10(2), np.log10(2000), np.log10(2)).tolist()
-af_boundaries.extend([-np.log10(1-10.0**-x) for x in af_boundaries])
-af_boundaries = np.array(sorted(af_boundaries))
-print('af boundaries', af_boundaries)
-
-
-
 if args.detect_deletions:
 	print('Detecting deletions while phasing ...')
+
+if args.detect_consanguinity:
+	print('Detecting parental consanguinity while phasing ...')
 
 with open(args.param_file, 'r') as f:
 	params = json.load(f)
@@ -58,6 +53,15 @@ sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0])
 with open(sample_file, 'r') as f:
 	sample_ids = set([line.strip() for line in f])
 families = [x for x in families if len(set(x.individuals) & sample_ids)>0]
+
+# set up af boundaries
+num_unrelated_individuals = sum([f.num_ancestors() for f in families])
+print('unrelated individuals in dataset', num_unrelated_individuals)
+
+af_boundaries = np.arange(-np.log10(0.25), np.log10(2*num_unrelated_individuals/3), np.log10(2)).tolist() # use rule of 3; we can't differentiate allele frequencies any smaller than 3/(2*num unrelated individuals).
+af_boundaries.extend([-np.log10(1-(10.0**-x)) for x in af_boundaries[1:]])
+af_boundaries = np.array(sorted(af_boundaries, reverse=True))
+print('af boundaries', af_boundaries)
 
 # limit by size
 if args.family_size is not None:
