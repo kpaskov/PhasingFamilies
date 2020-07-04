@@ -18,9 +18,7 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 
 	# next steps
 	for j in range(1, n): 
-		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1)
-		if mult_factor[j] != 0:
-			v_cost[:, j] += mult_factor[j]*loss(family_genotypes[:, j])
+		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])
 
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
