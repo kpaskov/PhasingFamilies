@@ -86,6 +86,21 @@ class Family():
 
 		self._reset_individuals()
 
+	def prune(self, sample_ids):
+		for sample_id in sample_ids:
+			is_leaf = True
+			parents = None
+			for (mom, dad), children in self.parents_to_children.items():
+				if mom == sample_id or dad == sample_id:
+					is_leaf = False
+				if sample_id in children:
+					parents = (mom, dad)
+
+			if is_leaf:
+				self.parents_to_children[parents].remove(sample_id)
+		self._reset_individuals()
+	
+
 	def get_parents(self, child_id):
 		for ((mom, dad), children) in self.parents_to_children:
 			if child_id in children:

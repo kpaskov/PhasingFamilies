@@ -52,12 +52,13 @@ families = pull_families(args.ped_file)
 sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0])
 with open(sample_file, 'r') as f:
 	sample_ids = set([line.strip() for line in f])
-families = [x for x in families if len(set(x.individuals) & sample_ids)>0]
-print(len(families), 'have genomic data')
+sample_ids = set([sample_id for sample_id in sample_ids if sample_id in params])
 
-# make sure at least one individual has parameters
-families = [x for x in families if len([y for y in x.individuals if x.id + '.' + y in params or y in params])]
-print(len(families), 'have parameters')
+for family in families:
+	family.prune(set(family.individuals) - sample_ids)
+
+families = [x for x in families if x.num_descendents()>0]
+print(len(families), 'have genomic data and parameters')
 
 # set up af boundaries
 num_unrelated_individuals = sum([f.num_ancestors() for f in families])
