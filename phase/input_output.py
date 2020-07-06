@@ -240,7 +240,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	data = np.vstack((data, af))
 
 	# if a position has only 0s and -1s in the family, assume it's homref for everyone
-	data[:-1, np.all(data[:-1, :]<=0, axis=0)] = 0
+	data[:, np.all(data[:-1, :]<=0, axis=0)] = 0
 
 	#print('all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
 	#print('all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
