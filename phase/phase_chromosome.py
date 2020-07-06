@@ -53,6 +53,11 @@ sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0])
 with open(sample_file, 'r') as f:
 	sample_ids = set([line.strip() for line in f])
 families = [x for x in families if len(set(x.individuals) & sample_ids)>0]
+print(len(families), 'have genomic data')
+
+# make sure at least one individual has parameters
+families = [x for x in families if len([y for y in x.individuals if x.id + '.' + y in params or y in params])]
+print(len(families), 'have parameters')
 
 # set up af boundaries
 num_unrelated_individuals = sum([f.num_ancestors() for f in families])
