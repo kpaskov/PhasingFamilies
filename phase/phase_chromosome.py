@@ -52,10 +52,10 @@ families = pull_families(args.ped_file)
 sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0])
 with open(sample_file, 'r') as f:
 	sample_ids = set([line.strip() for line in f])
-sample_ids = set([sample_id for sample_id in sample_ids if sample_id in params])
 
 for family in families:
-	family.prune(set(family.individuals) - sample_ids)
+	to_be_removed = [x for x in family.individuals if x not in sample_ids or (x not in params and '%s.%s' % (family.id, x) not in params)]
+	family.prune(to_be_removed)
 
 families = [x for x in families if x.num_descendents()>0]
 print(len(families), 'have genomic data and parameters')

@@ -19,7 +19,7 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 	# next steps
 	for j in range(1, n): 
 		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])
-
+	
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
 	return v_cost
@@ -35,7 +35,7 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 	prev_time = time.time()
 	n = v_cost.shape[1]
 	final_states = -np.ones((states.full_state_length, n), dtype=np.int8)
-	
+
 	# choose best paths
 	# we enforce that the chromosome ends with no deletions
 	num_forks = 0
@@ -59,7 +59,7 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 		for i, k in enumerate(paths):
 			min_indices = transition_matrix.transitions[k, np.isclose(total_cost[i, :], min_value[i], rtol=0, atol=0.01)]	
 			new_paths.update(min_indices.tolist())
-		
+			
 		paths = list(new_paths)
 		final_states[:, j] = merge_paths(paths, states)
 		num_forks += (len(paths) > 1)

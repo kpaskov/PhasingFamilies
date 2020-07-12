@@ -123,6 +123,25 @@ class Family():
 				raise Exception('Circular pedigree.')
 		self.individuals = self.mat_ancestors + self.pat_ancestors + self.descendents
 
+	def set_individual_order(self, individuals):	
+		assert sorted(individuals) == sorted(self.individuals)	
+		self.mat_ancestors = individuals[:len(self.mat_ancestors)]
+		self.pat_ancestors = individuals[len(self.mat_ancestors):len(self.mat_ancestors)+len(self.pat_ancestors)]
+		self.descendents = []
+		self.ordered_couples = []
+
+		descendents = individuals[self.num_ancestors():]
+		while len(descendents)>0:
+			for (mom, dad), children in self.parents_to_children.items():
+				if descendents[0] in children:
+					self.parents_to_children[(mom, dad)] = descendents[:len(children)]
+					descendents = descendents[len(children):]
+					self.ordered_couples.append((mom, dad))
+					self.descendents.extend(self.parents_to_children[(mom, dad)])
+					break
+		
+		self.individuals = self.mat_ancestors + self.pat_ancestors + self.descendents
+
 	def __lt__(self, other):
 		return self.id < other.id
 
