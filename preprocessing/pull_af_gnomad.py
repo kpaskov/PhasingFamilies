@@ -60,7 +60,7 @@ if args.batch_num < num_batches:
 	# load AF from appropriate section of gnomad vcf_file
 	vcf = TabixFile(args.gnomad_vcf_file, parser=None)
 	if batch_size is not None:
-		start_pos, end_pos = args.batch_num*args.batch_size, (args.batch_num+1)*args.batch_size
+		start_pos, end_pos = args.batch_num*batch_size, (args.batch_num+1)*batch_size
 		print('Interval', start_pos, end_pos)
 		gnomad_positions, gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference=contig.name, start=start_pos, end=end_pos))
 	else:
