@@ -66,8 +66,8 @@ if args.batch_num < num_batches:
 	else:
 		gnomad_positions, gnomad_afs = pull_af_from_gnomadprocess_body(vcf.fetch(reference='chr%s' % args.chrom))
 	indices = gnomad_positions[1:]<=gnomad_positions[:-1]
-	print(gnomad_positions[indices])
-	print(gnomad_positions[indices+1])
+	print(gnomad_positions[:-1][indices])
+	print(gnomad_positions[1:][indices])
 	assert np.all(gnomad_positions[1:]>gnomad_positions[:-1])
 
 	# pull AF for positions of interest
