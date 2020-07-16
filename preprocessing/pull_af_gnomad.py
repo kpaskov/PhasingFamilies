@@ -1,10 +1,7 @@
-import sys
-from collections import defaultdict
-import random
-from os import listdir
-from scipy import sparse
 import numpy as np
 import argparse
+import json
+from pysam import VariantFile, TabixFile
 
 parser = argparse.ArgumentParser(description='Pull allele frequency from gnomad.')
 parser.add_argument('data_dir', type=str, help='Data directory.')
