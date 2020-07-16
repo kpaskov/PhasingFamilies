@@ -15,6 +15,7 @@ args = parser.parse_args()
 with open('%s/info.json' % args.data_dir, 'r') as f:
 	info = json.load(f)
 	batch_size = info['batch_size']
+	assermbly = info['assembly']
 
 with open('data/chrom_lengths%s.json' % assembly, 'r') as f:
 	chrom_length = json.load(f)[args.chrom]
@@ -67,13 +68,13 @@ if args.batch_num < num_batches:
 	assert gnomad_positions[1:]>gnomad_positions[:-1]
 
 	# pull AF for positions of interest
-	af = np.zeros((pos_data.shape[0],))
-	af[:] = np.nan
+	af = -np.ones((pos_data.shape[0],))
 
 	data_indices = is_snp & np.isin(pos_data, positions)
 	gnomad_indices = np.isin(positions, pos_data)
 
 	af[data_indices] = gnomad_afs[gnomad_indices]
+	af[af==-1] = 3/(2*71702) # rule of 3 applied to number of genomes included in gnomadv3
 	np.save('%s/chr.%s.%d.gen.af' % (args.data_dir, args.chrom, args.batch_num), af)
 
 
