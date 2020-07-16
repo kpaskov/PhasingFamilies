@@ -55,7 +55,7 @@ if args.batch_num < num_batches:
 	if pos_data.shape[0]>0:
 		is_snp = pos_data[:, 2].astype(bool)
 		is_pass = pos_data[:, 3].astype(bool)
-	assert pos_data[is_snp][1:]>pos_data[is_snp][:-1]
+	assert np.all(pos_data[is_snp][1:]>pos_data[is_snp][:-1])
 
 	# load AF from appropriate section of gnomad vcf_file
 	vcf = TabixFile(args.vcf_file, parser=None)
@@ -65,7 +65,7 @@ if args.batch_num < num_batches:
 		gnomad_positions, gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference=contig.name, start=start_pos, end=end_pos))
 	else:
 		gnomad_positions, gnomad_afs = pull_af_from_gnomadprocess_body(vcf.fetch(reference=contig.name))
-	assert gnomad_positions[1:]>gnomad_positions[:-1]
+	assert np.all(gnomad_positions[1:]>gnomad_positions[:-1])
 
 	# pull AF for positions of interest
 	af = -np.ones((pos_data.shape[0],))
@@ -74,7 +74,7 @@ if args.batch_num < num_batches:
 	gnomad_indices = np.isin(positions, pos_data)
 
 	af[data_indices] = gnomad_afs[gnomad_indices]
-	af[af==-1] = 3/(2*71702) # rule of 3 applied to number of genomes included in gnomadv3
+	af = np.clip(af, 3/(2*71702), 1-(3/(2*71702)))
 	np.save('%s/chr.%s.%d.gen.af' % (args.data_dir, args.chrom, args.batch_num), af)
 
 
