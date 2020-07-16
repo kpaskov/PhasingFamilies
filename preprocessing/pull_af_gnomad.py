@@ -55,7 +55,7 @@ if args.batch_num < num_batches:
 	if pos_data.shape[0]>0:
 		is_snp = pos_data[:, 2].astype(bool)
 		is_pass = pos_data[:, 3].astype(bool)
-	assert np.all(pos_data[is_snp][1:]>pos_data[is_snp][:-1])
+	assert np.all(pos_data[is_snp][1:, 1]>pos_data[is_snp][:-1, 1])
 
 	# load AF from appropriate section of gnomad vcf_file
 	vcf = TabixFile(args.vcf_file, parser=None)
@@ -70,8 +70,8 @@ if args.batch_num < num_batches:
 	# pull AF for positions of interest
 	af = -np.ones((pos_data.shape[0],))
 
-	data_indices = is_snp & np.isin(pos_data, positions)
-	gnomad_indices = np.isin(positions, pos_data)
+	data_indices = is_snp & np.isin(pos_data[:, 1], positions)
+	gnomad_indices = np.isin(positions, pos_data[:, 1])
 
 	af[data_indices] = gnomad_afs[gnomad_indices]
 	af = np.clip(af, 3/(2*71702), 1-(3/(2*71702)))
