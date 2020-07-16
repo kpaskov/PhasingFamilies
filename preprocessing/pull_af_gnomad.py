@@ -58,7 +58,7 @@ if args.batch_num < num_batches:
 	assert np.all(pos_data[is_snp][1:, 1]>pos_data[is_snp][:-1, 1])
 
 	# load AF from appropriate section of gnomad vcf_file
-	vcf = TabixFile(args.vcf_file, parser=None)
+	vcf = TabixFile(args.gnomad_vcf_file, parser=None)
 	if args.batch_size is not None:
 		start_pos, end_pos = args.batch_num*args.batch_size, (args.batch_num+1)*args.batch_size
 		print('Interval', start_pos, end_pos)
