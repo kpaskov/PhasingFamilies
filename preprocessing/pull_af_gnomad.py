@@ -15,7 +15,7 @@ args = parser.parse_args()
 with open('%s/info.json' % args.data_dir, 'r') as f:
 	info = json.load(f)
 	batch_size = info['batch_size']
-	assermbly = info['assembly']
+	assembly = info['assembly']
 
 with open('data/chrom_lengths%s.json' % assembly, 'r') as f:
 	chrom_length = json.load(f)[args.chrom]
