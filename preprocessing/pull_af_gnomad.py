@@ -24,7 +24,7 @@ with open('data/chrom_lengths%s.json' % assembly, 'r') as f:
 if batch_size is None:
 	num_batches = 1
 else:
-	num_batches = math.ceil(chrom_length/batch_size)
+	num_batches = np.ceil(chrom_length/batch_size)
 
 def pull_af_from_info(info):
 	af = -1
