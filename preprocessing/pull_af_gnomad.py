@@ -72,11 +72,20 @@ if args.batch_num < num_batches:
 		if batch_size is not None:
 			start_pos, end_pos = args.batch_num*batch_size, (args.batch_num+1)*batch_size
 			print('Interval', start_pos, end_pos)
-			gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom, start=start_pos, end=end_pos),
-				positions, refs, alts, args.num_gnomad_samples)
+			try:
+				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom, start=start_pos, end=end_pos),
+					positions, refs, alts, args.num_gnomad_samples)
+			except ValueError:
+				# this is for build37
+				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference=args.chrom, start=start_pos, end=end_pos),
+					positions, refs, alts, args.num_gnomad_samples)
 		else:
-			gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom),
-				positions, refs, alts, args.num_gnomad_samples)
+			try:
+				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom),
+					positions, refs, alts, args.num_gnomad_samples)
+			except ValueError:
+				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference=args.chrom),
+					positions, refs, alts, args.num_gnomad_samples)
 	else:
 		gnomad_afs = np.zeros((0,))
 
