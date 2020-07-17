@@ -5,6 +5,7 @@ import json
 import argparse
 import input_output
 import os
+import traceback
 
 parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
 parser.add_argument('phase_dir', type=str, help='Directory with phase data.')
@@ -47,9 +48,16 @@ def pull_phase(filename):
 		states = np.array(states).T
 		starts = np.array(starts)
 		ends = np.array(ends)
+
+		# if this is a hard to sequences region, we don't know the exact location of crossovers
+		states[:, states[-1, :]==1] = -1
+
 		for (mat_index1, pat_index1), (mat_index2, pat_index2) in combinations(zip(mat_indices[2:], pat_indices[2:]), 2):
-			if np.sum((states[mat_index1, :] == states[mat_index2, :])*(ends-starts))/np.sum(ends-starts) > 0.9 and \
-			   np.sum((states[pat_index1, :] == states[pat_index2, :])*(ends-starts))/np.sum(ends-starts) > 0.9:
+			no_missing_mat = (states[mat_index1, :] != -1) & (states[mat_index2, :] != -1)
+			no_missing_pat = (states[pat_index1, :] != -1) & (states[pat_index2, :] != -1)
+
+			if np.sum(((states[mat_index1, :] == states[mat_index2, :])*(ends-starts))[no_missing_mat])/np.sum((ends-starts)[no_missing_mat]) > 0.9 and \
+			   np.sum(((states[pat_index1, :] == states[pat_index2, :])*(ends-starts))[no_missing_pat])/np.sum((ends-starts)[no_missing_pat]) > 0.9:
 			   raise Exception('This family contains identical twins.')
 
 
@@ -103,14 +111,14 @@ def match_recombinations(recombinations, chrom, child, is_mat):
     for break_start, break_end in zip(breaks[:-1], breaks[1:]):
         r_group = rs[break_start:break_end]
         if len(r_group)>0:
-	        if len(r_group)%2 == 0:
-	            gene_conversions.append(GeneConversion(family_id, chrom, 
-	                                                   r_group[0].start_pos, r_group[-1].end_pos, child,
-	                                                   is_mat, not is_mat, len(r_group)>2, tuple(r_group), r_group[0].family_size))
-	        else:
-	            crossovers.append(Crossover(family_id, chrom,
-	                                       r_group[0].start_pos, r_group[-1].end_pos, child,
-	                                       is_mat, not is_mat, len(r_group)>1, tuple(r_group), r_group[0].family_size))
+            if len(r_group)%2 == 0:
+                gene_conversions.append(GeneConversion(family_id, chrom, 
+                                                       r_group[0].start_pos, r_group[-1].end_pos, child,
+                                                       is_mat, not is_mat, len(r_group)>2, tuple(r_group), r_group[0].family_size))
+            else:
+                crossovers.append(Crossover(family_id, chrom,
+                                           r_group[0].start_pos, r_group[-1].end_pos, child,
+                                           is_mat, not is_mat, len(r_group)>1, tuple(r_group), r_group[0].family_size))
                     
     return gene_conversions, crossovers
 
@@ -118,8 +126,50 @@ def remove_massive_events(gene_conversions, crossovers):
     # remove events that span too large an area
     gene_conversions = [gc for gc in gene_conversions if gc.end_pos-gc.start_pos<2000000]
 
-    # don't remove any crossovers because it will affect the phasing
-    #crossovers = [co for co in crossovers if co.end_pos-co.start_pos<2000000]
+    # # remove crossovers in pairs to keep phasing ok
+    # to_be_removed = [co for co in crossovers if co.end_pos-co.start_pos>=1000000]
+    
+    # # first, check if closest crossover is already being removed
+    # used_as_pair = [False]*len(to_be_removed)
+    
+    # for i, co1 in enumerate(to_be_removed):
+    #     closest_partner = None
+    #     dist_to_partner = np.inf
+    #     if not used_as_pair[i]:
+    #         for co2 in crossovers:
+    #             if co1 != co2 and co1.chrom == co2.chrom and co1.is_mat == co2.is_mat and co1.child == co2.child:
+    #                 dist = max(co1.start_pos, co2.start_pos)-min(co1.end_pos, co2.end_pos)
+    #                 assert dist>0
+    #                 if dist < dist_to_partner:
+    #                     dist_to_partner = dist
+    #                     closest_partner = co2
+    
+    #     if closest_partner is not None and closest_partner in to_be_removed and not used_as_pair[to_be_removed.index(closest_partner)]:
+    #         used_as_pair[to_be_removed.index(closest_partner)] = True
+    #         used_as_pair[i] = True
+
+    # partners_to_be_removed = set()
+    # no_pair = set()
+    # # now find pairs for everyone who is unpaired
+    # for co1, is_paired in zip(to_be_removed, used_as_pair):
+    #     if not is_paired:
+    #         closest_partner = None
+    #         dist_to_partner = np.inf
+    #         for co2 in crossovers:
+    #             if co1 != co2 and co1.chrom == co2.chrom and co1.is_mat == co2.is_mat and co1.child == co2.child and co2 not in to_be_removed and co2 not in partners_to_be_removed:
+    #                 dist = max(co1.start_pos, co2.start_pos)-min(co1.end_pos, co2.end_pos)
+    #                 assert dist>0
+    #                 if dist < dist_to_partner:
+    #                     dist_to_partner = dist
+    #                     closest_partner = co2
+    #         if closest_partner is not None:
+    #             partners_to_be_removed.add(closest_partner)
+    #         else:
+    #             no_pair.add(co1)
+    
+    # to_be_removed = (set(to_be_removed) | partners_to_be_removed) - no_pair
+    # assert len(to_be_removed)%2==0
+    # crossovers = [co for co in crossovers if co not in to_be_removed]
 
     return gene_conversions, crossovers
     
@@ -219,6 +269,7 @@ for file in sorted(os.listdir(args.phase_dir)):
 
 			with open('%s/%s.gene_conversions.json' % (args.phase_dir, family_id), 'w+') as f:
 				json.dump([gc._asdict() for gc in gene_conversions], f, indent=4)
-		except Exception as e: print(e)
+		except Exception:
+			traceback.print_exc()
 
 

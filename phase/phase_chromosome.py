@@ -30,6 +30,7 @@ parser.add_argument('--batch_size', type=int, default=None, help='Restrict numbe
 parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of families. Will use families[(batch_num*batch_size):((batch_num+1)*batch_size)]')
 parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
 parser.add_argument('--detect_consanguinity', action='store_true', default=False, help='Detect consanguinity between parents. Can model basic consanguinity produced from a single shared ancestor. This option is only available for nuclear families.')
+parser.add_argument('--max_af_cost', action='store_true', default=np.log10(71702*2/3), help='Maximum allele frequency cost to consider. Should be set to something like np.log10(2*n/3) where n is the number of individuals used when estimating allele frequencies in data_dir/chr.*.gen.af.npy.')
 
 args = parser.parse_args()
 
@@ -60,11 +61,7 @@ for family in families:
 families = [x for x in families if x.num_descendents()>0]
 print(len(families), 'have genomic data and parameters')
 
-# set up af boundaries
-num_unrelated_individuals = sum([f.num_ancestors() for f in families])
-print('unrelated individuals in dataset', num_unrelated_individuals)
-
-af_boundaries = np.arange(-np.log10(0.25), np.log10(2*num_unrelated_individuals/3), np.log10(2)).tolist() # use rule of 3; we can't differentiate allele frequencies any smaller than 3/(2*num unrelated individuals).
+af_boundaries = np.arange(-np.log10(0.25), args.max_af_cost, np.log10(2)).tolist()
 af_boundaries.extend([-np.log10(1-(10.0**-x)) for x in af_boundaries[1:]])
 af_boundaries = np.array(sorted(af_boundaries, reverse=True))
 print('af boundaries', af_boundaries)
