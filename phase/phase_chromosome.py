@@ -61,7 +61,7 @@ for family in families:
 families = [x for x in families if x.num_descendents()>0]
 print(len(families), 'have genomic data and parameters')
 
-af_boundaries = np.arange(-np.log10(0.25), args.max_af_cost, 1).tolist()
+af_boundaries = np.arange(-np.log10(0.25), args.max_af_cost, np.log10(2)).tolist()
 af_boundaries.extend([-np.log10(1-(10.0**-x)) for x in af_boundaries[1:]])
 af_boundaries = np.array(sorted(af_boundaries, reverse=True))
 print('af boundaries', af_boundaries)

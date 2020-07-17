@@ -227,10 +227,13 @@ def pull_phenotype(ped_file):
 	return sample_id_to_aff
 
 def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals):
-	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: 0 if len(x.split('.'))==4 else int(x.split('.')[2]))
-	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: 0 if len(x.split('.'))==5 else int(x.split('.')[2]))
-	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: 0 if len(x.split('.'))==5 else int(x.split('.')[2]))
+	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
+	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
+	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
 	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
+
+	assert len(gen_files) == len(coord_files)
+	assert len(gen_files) == len(af_files)
 
 	# pull samples
 	with open(sample_file, 'r') as f:
@@ -244,40 +247,36 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	# pull coordinates
 	# use only SNPs, no indels
 	# use only variants that PASS GATK
-	coordinates = [np.load('%s/%s' % (data_dir, coord_file)) for coord_file in coord_files]
-	has_data = np.where([x.shape[0]>0 for x in coordinates])[0]
-	coordinates = np.vstack([coordinates[i] for i in has_data])
-	snp_positions = coordinates[:, 1]
-	is_snp = coordinates[:, 2]==1
-	is_pass = coordinates[:, 3]==1
-
-	snp_positions = snp_positions[is_snp & is_pass]
-	assert np.all(snp_positions <= chrom_length)
-	#print('chrom shape only SNPs', snp_positions.shape)
-
-	# pull af
-	af = np.hstack([np.load('%s/%s' % (data_dir, af_files[i])) for i in has_data]).flatten()
-	af = np.digitize(-np.log10(af[is_snp & is_pass]), af_boundaries)
-
-	# pull genotypes
+	# pull data only for individuals
 	m = len(individuals)
 	has_seq = np.array(np.where([x in sample_id_to_index for x in individuals])[0].tolist() + [m])
 	ind_indices = [sample_id_to_index[x] for x in individuals if x in sample_id_to_index]
-		
-	data = sparse.hstack([sparse.load_npz('%s/%s' % (data_dir, gen_files[i]))[ind_indices, :] for i in has_data]).A
-	data = data[:, is_snp & is_pass]
 
-	data[data<0] = -1
+	gens, snp_positions, afs = [], [], []
+	for gen_file, coord_file, af_file in zip(gen_files, coord_files, af_files):
+		coords = np.load('%s/%s' % (data_dir, coord_file))
+		if coords.shape[0]>0:
+			poss = coords[:, 1]
+			is_snp = coords[:, 2]==1
+			is_pass = coords[:, 3]==1
+			if np.sum(is_snp & is_pass)>0:
+				gen = sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :]
+				af = np.load('%s/%s' % (data_dir, af_file))
+				family_has_variant = ((gen>0).sum(axis=0)>0).A.flatten()
+				has_data = is_snp & is_pass & family_has_variant
+				gens.append(gen[:, has_data].A)
+				snp_positions.append(poss[has_data])
+				afs.append(np.digitize(-np.log10(af[has_data]), af_boundaries))
 
-	# append af to end of family genotypes
-	print(data.shape, af.shape)
-	data = np.vstack((data, af))
+	gens = np.hstack(gens)
+	snp_positions = np.hstack(snp_positions)
+	afs = np.hstack(afs)
 
-	# if a position has only 0s and -1s in the family, assume it's homref for everyone
-	data[:, np.all(data[:-1, :]<=0, axis=0)] = 0
+	assert np.all(snp_positions <= chrom_length)
 
-	#print('all homref', np.sum(np.all(data==0, axis=0))/data.shape[1])
-	#print('all homref or missing', np.sum(np.all(data<=0, axis=0))/data.shape[1])
+	# append af to end of family genotypes to get our observed data
+	print(gens.shape, afs.shape)
+	data = np.vstack((gens, afs))
 
 	# remove multiallelic sites
 	is_multiallelic = np.zeros((snp_positions.shape[0],), dtype=bool)
