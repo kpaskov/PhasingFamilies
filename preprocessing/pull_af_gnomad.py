@@ -2,10 +2,12 @@ import numpy as np
 import argparse
 import json
 from pysam import VariantFile, TabixFile
+import gzip
 
 parser = argparse.ArgumentParser(description='Pull allele frequency from gnomad.')
 parser.add_argument('data_dir', type=str, help='Data directory.')
 parser.add_argument('gnomad_vcf_file', type=str, help='Gnomad VCF file to pull from allele frequency from.')
+parser.add_argument('num_gnomad_samples', type=int, help='Num samples used in this version of gnomad.')
 parser.add_argument('chrom', type=str, help='Chromosome of interest.')
 parser.add_argument('batch_num', type=int, default=0, help='To be used to restrict positions per file. Will include positions >= batch_num*batch_size and <= (batch_num+1)*batch_size')
 args = parser.parse_args()
@@ -30,55 +32,55 @@ def pull_af_from_info(info):
 	af = -1
 	for entry in info:
 		if entry.startswith('AF='):
-			af = float(af[0])
+			af = float(entry[3:])
 			break
 	return af
 
-def pull_af_from_gnomad(records):
-	positions = []
-	afs = []
+def pull_af_from_gnomad(records, positions, refs, alts, n):
+	position_to_index = dict([(x, i) for i, x in enumerate(positions)])
+	afs = np.zeros((len(positions),))
 	for line in records:
 		pieces = line.strip().split('\t')
 		info = pieces[7].strip().split(';')
-		positions.append(int(pieces[1]))
-		is_snp = 'variant_type=SNV' in info
-		if is_snp:
-			positions.append(int(pieces[1]))
-			afs.append(pull_af_from_info(info))
-			
-	return np.array(positions), np.array(afs)
+		if (int(pieces[1]) in position_to_index):
+			index = position_to_index[int(pieces[1])]
+			if (refs[index] == pieces[3]) and (alts[index] == pieces[4]):
+				afs[index] = pull_af_from_info(info)
+	return np.clip(np.array(afs), 3/(2*n), 1-(3/(2*n))) # rule of 3
 
 if args.batch_num < num_batches:
 	# pull positions of interest
 	coord_file = '%s/chr.%s.%d.gen.coordinates.npy' % (args.data_dir, args.chrom, args.batch_num)
 	pos_data = np.load(coord_file)
 	if pos_data.shape[0]>0:
-		is_snp = pos_data[:, 2].astype(bool)
-		is_pass = pos_data[:, 3].astype(bool)
-	assert np.all(pos_data[is_snp][1:, 1]>pos_data[is_snp][:-1, 1])
-
-	# load AF from appropriate section of gnomad vcf_file
-	vcf = TabixFile(args.gnomad_vcf_file, parser=None)
-	if batch_size is not None:
-		start_pos, end_pos = args.batch_num*batch_size, (args.batch_num+1)*batch_size
-		print('Interval', start_pos, end_pos)
-		gnomad_positions, gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom, start=start_pos, end=end_pos))
+		positions = pos_data[:, 1]
 	else:
-		gnomad_positions, gnomad_afs = pull_af_from_gnomadprocess_body(vcf.fetch(reference='chr%s' % args.chrom))
-	indices = gnomad_positions[1:]<=gnomad_positions[:-1]
-	print(gnomad_positions[:-1][indices])
-	print(gnomad_positions[1:][indices])
-	assert np.all(gnomad_positions[1:]>gnomad_positions[:-1])
+		positions = np.zeros((0,), dtype=int)
+	print(positions.shape)
 
-	# pull AF for positions of interest
-	af = -np.ones((pos_data.shape[0],))
+	# pull ref/alt alleles
+	refs, alts = [], []
+	with gzip.open('%s/chr.%s.%d.gen.variants.txt.gz' % (args.data_dir, args.chrom, args.batch_num), 'rt') as f:
+		for line in f:
+			pieces = line.strip().split('\t', maxsplit=5)
+			refs.append(pieces[3])
+			alts.append(pieces[4])
+	print(len(refs), len(alts))
 
-	data_indices = is_snp & np.isin(pos_data[:, 1], positions)
-	gnomad_indices = np.isin(positions, pos_data[:, 1])
+	if positions.shape[0]>0:
+		vcf = TabixFile(args.gnomad_vcf_file, parser=None)
+		if batch_size is not None:
+			start_pos, end_pos = args.batch_num*batch_size, (args.batch_num+1)*batch_size
+			print('Interval', start_pos, end_pos)
+			gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom, start=start_pos, end=end_pos),
+				positions, refs, alts, args.num_gnomad_samples)
+		else:
+			gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom),
+				positions, refs, alts, args.num_gnomad_samples)
+	else:
+		gnomad_afs = np.zeros((0,))
 
-	af[data_indices] = gnomad_afs[gnomad_indices]
-	af = np.clip(af, 3/(2*71702), 1-(3/(2*71702)))
-	np.save('%s/chr.%s.%d.gen.af' % (args.data_dir, args.chrom, args.batch_num), af)
+	np.save('%s/chr.%s.%d.gen.af' % (args.data_dir, args.chrom, args.batch_num), gnomad_afs)
 
 
 
