@@ -23,7 +23,7 @@ with open('data/chrom_lengths%s.json' % assembly, 'r') as f:
 	chrom_length = json.load(f)[args.chrom]
 
 # calculate how many batches should exist
-if batch_size is None:
+if batch_size == -1:
 	num_batches = 1
 else:
 	num_batches = np.ceil(chrom_length/batch_size)
@@ -81,7 +81,7 @@ if args.batch_num < num_batches:
 
 	if positions.shape[0]>0:
 		vcf = TabixFile(args.gnomad_vcf_file, parser=None)
-		if batch_size is not None:
+		if batch_size != -1:
 			start_pos, end_pos = args.batch_num*batch_size, (args.batch_num+1)*batch_size
 			print('Interval', start_pos, end_pos)
 			try:
