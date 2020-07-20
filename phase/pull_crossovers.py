@@ -107,7 +107,7 @@ def match_recombinations(recombinations, chrom, child, is_mat):
     
     rs = [r for r in recombinations if r.chrom==chrom and r.child==child and r.is_mat==is_mat]
     dists = np.array([r2.start_pos-r1.end_pos for r1, r2 in zip(rs[:-1], rs[1:])])
-    breaks = [0] + (np.where(dists>500000)[0]+1).tolist() + [len(rs)]
+    breaks = [0] + (np.where(dists>100000)[0]+1).tolist() + [len(rs)]
     for break_start, break_end in zip(breaks[:-1], breaks[1:]):
         r_group = rs[break_start:break_end]
         if len(r_group)>0:
@@ -253,7 +253,7 @@ for file in sorted(os.listdir(args.phase_dir)):
 					gene_conversions.extend(gc)
 					crossovers.extend(co)
 
-			gene_conversions, crossovers = remove_massive_events(gene_conversions, crossovers)
+			#gene_conversions, crossovers = remove_massive_events(gene_conversions, crossovers)
 
 			#if num_children>2:
 			#	gene_conversions, crossovers = move_identical(gene_conversions, crossovers)

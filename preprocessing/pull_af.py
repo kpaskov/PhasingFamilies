@@ -4,12 +4,12 @@ import random
 from os import listdir
 from scipy import sparse
 import numpy as np
+import json
 
 data_dir = sys.argv[1]
 ped_file = sys.argv[2]
 out_dir = sys.argv[3]
-
-chroms = [str(x) for x in range(1, 23)] + ['X', 'Y']
+chrom = sys.argv[4]
 
 class Family():
 	def __init__(self, famkey):
@@ -104,33 +104,32 @@ families = pull_families(ped_file)
 ancestors = sorted(sum([x.mat_ancestors + x.pat_ancestors for x in families], []))
 print('ancestors', len(ancestors))
 
-for chrom in chroms:
-	# pull samples
-	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
-	with open(sample_file, 'r') as f:
-		sample_ids = [line.strip() for line in f]
-	sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
-	ind_indices = [sample_id_to_index[x] for x in ancestors if x in sample_id_to_index]  
+# pull samples
+sample_file = '%s/samples.json' % data_dir
+with open(sample_file, 'r') as f:
+	sample_ids = json.load(f)
+sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
+ind_indices = [sample_id_to_index[x] for x in ancestors if x in sample_id_to_index]  
 
-	# calculate AF among ancestors
-	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
+# calculate AF among ancestors
+gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
 
-	for gen_file in gen_files:
-		print(gen_file)
-		batch_num = int(gen_file.split('.')[2])
+for gen_file in gen_files:
+	print(gen_file)
+	batch_num = int(gen_file.split('.')[2])
 
-		# pull genotypes		
-		data = sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :]
-		num_het = (data==1).sum(axis=0).A.flatten()
-		num_homalt = (data==2).sum(axis=0).A.flatten()
-		num_missing = (data<0).sum(axis=0).A.flatten()
-		num_homref = len(ind_indices) - num_het - num_homalt - num_missing
-		assert np.all(num_homref >= 0)
+	# pull genotypes		
+	data = sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :]
+	num_het = (data==1).sum(axis=0).A.flatten()
+	num_homalt = (data==2).sum(axis=0).A.flatten()
+	num_missing = (data<0).sum(axis=0).A.flatten()
+	num_homref = len(ind_indices) - num_het - num_homalt - num_missing
+	assert np.all(num_homref >= 0)
 
-		af = np.zeros((data.shape[1],))
-		all_missing = (num_homref + num_het + num_homalt) == 0
-		af[~all_missing] = (num_het[~all_missing] + 2*num_homalt[~all_missing])/(2*num_homref[~all_missing] + 2*num_het[~all_missing] + 2*num_homalt[~all_missing])
-		np.save('%s/chr.%s.%d.gen.af' % (out_dir, chrom, batch_num), af)
+	af = np.zeros((data.shape[1],))
+	all_missing = (num_homref + num_het + num_homalt) == 0
+	af[~all_missing] = (num_het[~all_missing] + 2*num_homalt[~all_missing])/(2*num_homref[~all_missing] + 2*num_het[~all_missing] + 2*num_homalt[~all_missing])
+	np.save('%s/chr.%s.%d.gen.af' % (out_dir, chrom, batch_num), af)
 
 
 

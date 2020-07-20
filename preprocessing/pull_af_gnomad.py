@@ -36,16 +36,26 @@ def pull_af_from_info(info):
 			break
 	return af
 
-def pull_af_from_gnomad(records, positions, refs, alts, n):
-	position_to_index = dict([(x, i) for i, x in enumerate(positions)])
+def pull_af_from_gnomad(records, positions, refs, alts, is_snp, is_pass, n):
+	position_ref_alt_to_index = dict([(x, i) for i, x in enumerate(zip(positions, refs, alts))])
 	afs = np.zeros((len(positions),))
+	was_backwards = 0
 	for line in records:
 		pieces = line.strip().split('\t')
 		info = pieces[7].strip().split(';')
-		if (int(pieces[1]) in position_to_index):
-			index = position_to_index[int(pieces[1])]
-			if (refs[index] == pieces[3]) and (alts[index] == pieces[4]):
-				afs[index] = pull_af_from_info(info)
+		pos, ref, alt = int(pieces[1]), pieces[3], pieces[4]
+		if (pos, ref, alt) in position_ref_alt_to_index:
+			afs[position_ref_alt_to_index[(pos, ref, alt)]] = pull_af_from_info(info)
+		elif (pos, alt, ref) in position_ref_alt_to_index:
+			afs[position_ref_alt_to_index[(pos, alt, ref)]] = 1-pull_af_from_info(info)
+			was_backwards += 1
+
+	print('% missing', np.sum(afs[is_snp & is_pass]==0)/np.sum(is_snp & is_pass))
+	print('backwards', was_backwards)
+	indices = is_snp & is_pass & (afs==0)
+	for i in np.where(indices)[0]:
+		print(positions[i], refs[i], alts[i])
+
 	return np.clip(np.array(afs), 3/(2*n), 1-(3/(2*n))) # rule of 3
 
 if args.batch_num < num_batches:
@@ -54,6 +64,8 @@ if args.batch_num < num_batches:
 	pos_data = np.load(coord_file)
 	if pos_data.shape[0]>0:
 		positions = pos_data[:, 1]
+		is_snp = pos_data[:, 2]==1
+		is_pass = pos_data[:, 3]==1
 	else:
 		positions = np.zeros((0,), dtype=int)
 	print(positions.shape)
@@ -74,7 +86,7 @@ if args.batch_num < num_batches:
 			print('Interval', start_pos, end_pos)
 			try:
 				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom, start=start_pos, end=end_pos),
-					positions, refs, alts, args.num_gnomad_samples)
+					positions, refs, alts, is_snp, is_pass, args.num_gnomad_samples)
 			except ValueError:
 				# this is for build37
 				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference=args.chrom, start=start_pos, end=end_pos),

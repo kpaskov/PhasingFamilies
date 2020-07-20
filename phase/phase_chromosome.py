@@ -50,9 +50,9 @@ with open(args.param_file, 'r') as f:
 families = pull_families(args.ped_file)
 
 # make sure at least one individual has genetic data (chromosome 1 chosen arbitrarily)
-sample_file = '%s/chr.%s.gen.samples.txt' % (args.data_dir, chroms[0])
+sample_file = '%s/samples.json' % args.data_dir
 with open(sample_file, 'r') as f:
-	sample_ids = set([line.strip() for line in f])
+	sample_ids = set(json.load(f))
 
 for family in families:
 	to_be_removed = [x for x in family.individuals if x not in sample_ids or (x not in params and '%s.%s' % (family.id, x) not in params)]
