@@ -88,14 +88,14 @@ if args.batch_num < num_batches:
 			except ValueError:
 				# this is for build37
 				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference=args.chrom, start=start_pos, end=end_pos),
-					positions, refs, alts, args.num_gnomad_samples)
+					positions, refs, alts, is_snp, is_pass, args.num_gnomad_samples)
 		else:
 			try:
 				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference='chr%s' % args.chrom),
-					positions, refs, alts, args.num_gnomad_samples)
+					positions, refs, alts, is_snp, is_pass, args.num_gnomad_samples)
 			except ValueError:
 				gnomad_afs = pull_af_from_gnomad(vcf.fetch(reference=args.chrom),
-					positions, refs, alts, args.num_gnomad_samples)
+					positions, refs, alts, is_snp, is_pass, args.num_gnomad_samples)
 	else:
 		gnomad_afs = np.zeros((0,))
 
