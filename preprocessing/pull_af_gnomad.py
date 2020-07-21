@@ -60,6 +60,7 @@ if args.batch_num < num_batches:
 	# pull positions of interest
 	coord_file = '%s/chr.%s.%d.gen.coordinates.npy' % (args.data_dir, args.chrom, args.batch_num)
 	pos_data = np.load(coord_file)
+	print(pos_data.shape)
 	if pos_data.shape[0]>0:
 		positions = pos_data[:, 1]
 		is_snp = pos_data[:, 2]==1
