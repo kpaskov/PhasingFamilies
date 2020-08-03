@@ -12,6 +12,8 @@ parser.add_argument('chrom', type=str, help='Chromosome of interest.')
 parser.add_argument('batch_num', type=int, default=0, help='To be used to restrict positions per file. Will include positions >= batch_num*batch_size and <= (batch_num+1)*batch_size')
 args = parser.parse_args()
 
+print('chrom', args.chrom, 'batch_num', args.batch_num)
+
 
 # pull metadata
 with open('%s/info.json' % args.data_dir, 'r') as f:

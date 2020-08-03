@@ -65,7 +65,7 @@ def pull_phase(filename):
 		
 
 # extracts all recombination points from phase
-Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size'])
+Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size', 'mom', 'dad'])
 def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  indices, is_mat):
     recombinations = []
     for chrom in range(1, 23):
@@ -84,22 +84,22 @@ def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  i
                     if states[index, current_index-1] != -1 and states[index, current_index] != -1:
                         # we know exactly where the recombination happened
                         recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals)))
+                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1]))
                     elif states[index, current_index-1] != -1 and states[index, current_index] == -1 and states[index, next_index] != -1 and states[index, current_index-1] != states[index, next_index]:
                         # there's a region where the recombination must have occured
                         recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[next_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals)))
+                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1]))
                     
                     current_index = next_index
                 if states[index, current_index-1] != -1 and states[index, current_index] != -1:
                     # we know exactly where the recombination happened
                     recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals)))
+                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1]))
 
     return recombinations
 
-Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size'])
-GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size'])
+Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad'])
+GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad'])
 
 def match_recombinations(recombinations, chrom, child, is_mat):
     gene_conversions = []
@@ -114,116 +114,14 @@ def match_recombinations(recombinations, chrom, child, is_mat):
             if len(r_group)%2 == 0:
                 gene_conversions.append(GeneConversion(family_id, chrom, 
                                                        r_group[0].start_pos, r_group[-1].end_pos, child,
-                                                       is_mat, not is_mat, len(r_group)>2, tuple(r_group), r_group[0].family_size))
+                                                       is_mat, not is_mat, len(r_group)>2, tuple(r_group), r_group[0].family_size,
+                                                       r_group[0].mom, r_group[0].dad))
             else:
                 crossovers.append(Crossover(family_id, chrom,
                                            r_group[0].start_pos, r_group[-1].end_pos, child,
-                                           is_mat, not is_mat, len(r_group)>1, tuple(r_group), r_group[0].family_size))
+                                           is_mat, not is_mat, len(r_group)>1, tuple(r_group), r_group[0].family_size,
+                                           r_group[0].mom, r_group[0].dad))
                     
-    return gene_conversions, crossovers
-
-def remove_massive_events(gene_conversions, crossovers):
-    # remove events that span too large an area
-    gene_conversions = [gc for gc in gene_conversions if gc.end_pos-gc.start_pos<2000000]
-
-    # # remove crossovers in pairs to keep phasing ok
-    # to_be_removed = [co for co in crossovers if co.end_pos-co.start_pos>=1000000]
-    
-    # # first, check if closest crossover is already being removed
-    # used_as_pair = [False]*len(to_be_removed)
-    
-    # for i, co1 in enumerate(to_be_removed):
-    #     closest_partner = None
-    #     dist_to_partner = np.inf
-    #     if not used_as_pair[i]:
-    #         for co2 in crossovers:
-    #             if co1 != co2 and co1.chrom == co2.chrom and co1.is_mat == co2.is_mat and co1.child == co2.child:
-    #                 dist = max(co1.start_pos, co2.start_pos)-min(co1.end_pos, co2.end_pos)
-    #                 assert dist>0
-    #                 if dist < dist_to_partner:
-    #                     dist_to_partner = dist
-    #                     closest_partner = co2
-    
-    #     if closest_partner is not None and closest_partner in to_be_removed and not used_as_pair[to_be_removed.index(closest_partner)]:
-    #         used_as_pair[to_be_removed.index(closest_partner)] = True
-    #         used_as_pair[i] = True
-
-    # partners_to_be_removed = set()
-    # no_pair = set()
-    # # now find pairs for everyone who is unpaired
-    # for co1, is_paired in zip(to_be_removed, used_as_pair):
-    #     if not is_paired:
-    #         closest_partner = None
-    #         dist_to_partner = np.inf
-    #         for co2 in crossovers:
-    #             if co1 != co2 and co1.chrom == co2.chrom and co1.is_mat == co2.is_mat and co1.child == co2.child and co2 not in to_be_removed and co2 not in partners_to_be_removed:
-    #                 dist = max(co1.start_pos, co2.start_pos)-min(co1.end_pos, co2.end_pos)
-    #                 assert dist>0
-    #                 if dist < dist_to_partner:
-    #                     dist_to_partner = dist
-    #                     closest_partner = co2
-    #         if closest_partner is not None:
-    #             partners_to_be_removed.add(closest_partner)
-    #         else:
-    #             no_pair.add(co1)
-    
-    # to_be_removed = (set(to_be_removed) | partners_to_be_removed) - no_pair
-    # assert len(to_be_removed)%2==0
-    # crossovers = [co for co in crossovers if co not in to_be_removed]
-
-    return gene_conversions, crossovers
-    
-
-def move_identical(gene_conversions, crossovers):
-    # gene conversions
-    gc_to_overlapping = dict([(x, {x}) for x in gene_conversions])
-    for gc1, gc2 in combinations(gene_conversions, 2):
-        if gc1.child != gc2.child and gc1.chrom == gc2.chrom and min(gc1.end_pos, gc2.end_pos)-max(gc1.start_pos, gc2.start_pos)>0: 
-            gc_to_overlapping[gc1].add(gc2)
-            gc_to_overlapping[gc2].add(gc1)
-
-    to_be_added = []
-    to_be_removed = set()
-    for key, gc_group in gc_to_overlapping.items():
-        if set(sum([list(x.child) for x in gc_group], [])) == set(individuals[2:]):
-            to_be_added.append(GeneConversion(key.family, key.chrom, 
-                                              min([gc.start_pos for gc in gc_group]), max([gc.end_pos for gc in gc_group]),
-                                              individuals[2], key.is_mat, key.is_pat, key.is_complex, 
-                                              tuple(sum([list(gc.recombinations) for gc in gc_group], [])), key.family_size))
-            to_be_removed.update(gc_group)
-
-
-    for c in to_be_removed:
-        gene_conversions.remove(c)
-    gene_conversions = [GeneConversion(gc.family, gc.chrom, gc.start_pos, gc.end_pos,
-                                      gc.child[0], gc.is_mat, gc.is_pat, gc.is_complex, gc.recombinations, gc.family_size) for gc in gene_conversions]
-    gene_conversions.extend(to_be_added)
-    print('gene conversions transferred to child1', len(to_be_added))
-
-    # recombinations
-    co_to_overlapping = dict([(x, {x}) for x in crossovers])
-    for gc1, gc2 in combinations(crossovers, 2):
-        if gc1.child != gc2.child and gc1.chrom == gc2.chrom and min(gc1.end_pos, gc2.end_pos)-max(gc1.start_pos, gc2.start_pos)>0: 
-            co_to_overlapping[gc1].add(gc2)
-            co_to_overlapping[gc2].add(gc1)
-
-    to_be_added = []
-    to_be_removed = set()
-    for key, gc_group in co_to_overlapping.items():
-        if set(sum([list(x.child) for x in gc_group], [])) == set(individuals[2:]):
-            to_be_added.append(Crossover(key.family, key.chrom, 
-                                              min([gc.start_pos for gc in gc_group]), max([gc.end_pos for gc in gc_group]),
-                                              individuals[2], key.is_mat, key.is_pat, key.is_complex, 
-                                              tuple(sum([list(gc.recombinations) for gc in gc_group], [])), key.family_size))
-            to_be_removed.update(gc_group)
-
-
-    for c in to_be_removed:
-        crossovers.remove(c)
-    crossovers = [Crossover(co.family, co.chrom, co.start_pos, co.end_pos,
-                                      co.child[0], co.is_mat, co.is_pat, co.is_complex, co.recombinations, co.family_size) for co in crossovers]
-    crossovers.extend(to_be_added)
-    print('crossovers transferred to child1', len(to_be_added))
     return gene_conversions, crossovers
 	
 for file in sorted(os.listdir(args.phase_dir)):
@@ -232,6 +130,11 @@ for file in sorted(os.listdir(args.phase_dir)):
 			family_id = file[:-11]
 			print(family_id)
 			states, chroms, starts, ends, individuals, mat_indices, pat_indices = pull_phase('%s/%s.phased.txt' % (args.phase_dir, family_id))
+			
+			missing_chroms = set(range(1, 23)) - set(np.unique(chroms))
+			if len(missing_chroms)>0:
+				raise Exception('missing %s' % str(missing_chroms))
+
 			mult = ends-starts
 			num_children = len(individuals)-2
 
@@ -253,11 +156,6 @@ for file in sorted(os.listdir(args.phase_dir)):
 					gene_conversions.extend(gc)
 					crossovers.extend(co)
 
-			#gene_conversions, crossovers = remove_massive_events(gene_conversions, crossovers)
-
-			#if num_children>2:
-			#	gene_conversions, crossovers = move_identical(gene_conversions, crossovers)
-
 			print('gc', len(gene_conversions), 'co', len(crossovers))
 
 			gc = len(gene_conversions)/num_children
@@ -271,5 +169,12 @@ for file in sorted(os.listdir(args.phase_dir)):
 				json.dump([gc._asdict() for gc in gene_conversions], f, indent=4)
 		except Exception:
 			traceback.print_exc()
+
+			crossover_file = '%s/%s.crossovers.json' % (args.phase_dir, family_id)
+			if os.path.isfile(crossover_file):
+				os.remove(crossover_file)
+			gene_conversion_file = '%s/%s.gene_conversions.json' % (args.phase_dir, family_id)
+			if os.path.isfile(gene_conversion_file):
+				os.remove(gene_conversion_file)
 
 

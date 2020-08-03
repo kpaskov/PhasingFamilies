@@ -177,11 +177,11 @@ for batch_num in range(args.kfold_crossvalidation):
 	test_quads = set(quads[(batch_size*batch_num):(batch_size*(batch_num+1))])
 	train_quads = set(quads)-test_quads
 
-	with open('%s.train_quads.%.0f.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
+	with open('%s.train_quads.%g.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
 		for quad in train_quads:
 			f.write('\t'.join(quad) + '\n')
 
-	with open('%s.test_quads.%.0f.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
+	with open('%s.test_quads.%g.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
 		for quad in test_quads:
 			f.write('\t'.join(quad) + '\n')
 
@@ -195,19 +195,19 @@ for batch_num in range(args.kfold_crossvalidation):
 	X_pat_train = X_from_crossovers(crossovers_pat_train, pos_to_index)
 	X_pat_test = X_from_crossovers(crossovers_pat_test, pos_to_index)
 
-	sparse.save_npz('%s.X_mat_train.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_mat_train)
-	sparse.save_npz('%s.X_mat_test.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_mat_test)
-	sparse.save_npz('%s.X_pat_train.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_pat_train)
-	sparse.save_npz('%s.X_pat_test.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_pat_test)
+	sparse.save_npz('%s.X_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train)
+	sparse.save_npz('%s.X_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test)
+	sparse.save_npz('%s.X_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train)
+	sparse.save_npz('%s.X_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test)
 
 	ps_mat = estimate_recombination_rates(X_mat_train, lengths, all_positions)
-	np.save('%s.ps_mat.%.0f.%d' % (args.out_file, args.lamb, batch_num), ps_mat)
-	np.save('%s.crossover_ps_mat_train.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(ps_mat))
-	np.save('%s.crossover_ps_mat_test.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(ps_mat))
+	np.save('%s.ps_mat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_mat)
+	np.save('%s.crossover_ps_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(ps_mat))
+	np.save('%s.crossover_ps_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(ps_mat))
 
 	ps_pat = estimate_recombination_rates(X_pat_train, lengths, all_positions)
-	np.save('%s.ps_pat.%.0f.%d' % (args.out_file, args.lamb, batch_num), ps_pat)
-	np.save('%s.crossover_ps_pat_train.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(ps_pat))
-	np.save('%s.crossover_ps_pat_test.%.0f.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(ps_pat))
+	np.save('%s.ps_pat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_pat)
+	np.save('%s.crossover_ps_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(ps_pat))
+	np.save('%s.crossover_ps_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(ps_pat))
 
            

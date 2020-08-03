@@ -233,6 +233,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
 	sample_file = '%s/samples.json' % data_dir
 
+	print(len(gen_files), len(coord_files), len(af_files))
 	assert len(gen_files) == len(coord_files)
 	assert len(gen_files) == len(af_files)
 
@@ -290,6 +291,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	snp_positions = np.hstack(snp_positions)
 	afs = np.hstack(afs)
 	collapseds = np.hstack(collapseds)
+	print(gens.shape, snp_positions.shape, afs.shape, collapseds.shape)
 	#print(total_pos, np.sum(collapseds)+gens.shape[1])
 
 	assert np.all(snp_positions <= chrom_length)
@@ -304,6 +306,11 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	indices = np.where(snp_positions[:-1] == snp_positions[1:])[0]
 	is_multiallelic[indices] = True
 	is_multiallelic[indices+1] = True
+	print(np.sum(is_multiallelic))
+
+	collapseds_multiallelic = np.zeros((np.sum(~is_multiallelic)+1,), dtype=int)
+	collapseds_multiallelic[0] = collapseds[0]
+	collapseds_multiallelic[np.cumsum(~is_multiallelic)] += collapseds[1:]
 
 	n = 2*np.sum(~is_multiallelic)+1
 	family_genotypes = np.zeros((len(has_seq), n), dtype=np.int8)
@@ -311,7 +318,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 		
 	observed = np.zeros((n,), dtype=int)
 	observed[np.arange(1, n-1, 2)] = 1
-	observed[np.arange(0, n, 2)] = collapseds
+	observed[np.arange(0, n, 2)] = collapseds_multiallelic
 		
 	family_snp_positions = np.zeros((n, 2), dtype=np.int)
 	family_snp_positions[np.arange(1, n-1, 2), 0] = snp_positions[~is_multiallelic]
