@@ -142,7 +142,7 @@ def X_from_crossovers(crossovers, pos_to_index):
 		data.extend([1,]*(end_index-start_index))
 		row_ind.extend([row_i,]*(end_index-start_index))
 		col_ind.extend(range(start_index, end_index))
-	return sparse.csr_matrix((data, (row_ind, col_ind)), shape=(len(crossovers), len(pos_to_index)))
+	return sparse.csr_matrix((data, (row_ind, col_ind)), shape=(len(crossovers), len(pos_to_index)-1))
 
 # estimate recombination rates
 def estimate_recombination_rates(X, lengths, positions):
