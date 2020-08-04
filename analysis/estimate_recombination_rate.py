@@ -250,19 +250,23 @@ for batch_num in range(args.kfold_crossvalidation):
 	X_pat_train = X_from_crossovers(crossovers_pat_train+crossovers_pat_train_kong, pos_to_index)
 	X_pat_test = X_from_crossovers(crossovers_pat_test+crossovers_pat_test_kong, pos_to_index)
 
-	sparse.save_npz('%s.X_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train)
-	sparse.save_npz('%s.X_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test)
-	sparse.save_npz('%s.X_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train)
-	sparse.save_npz('%s.X_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test)
+	#sparse.save_npz('%s.X_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train)
+	#sparse.save_npz('%s.X_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test)
+	#sparse.save_npz('%s.X_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train)
+	#sparse.save_npz('%s.X_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test)
 
 	ps_mat = estimate_recombination_rates(X_mat_train, lengths, all_positions, kong_region, len(crossovers_mat_train_kong))
 	np.save('%s.ps_mat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_mat)
 	np.save('%s.crossover_ps_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(ps_mat))
 	np.save('%s.crossover_ps_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(ps_mat))
+	np.save('%s.crossover_lengths_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(lengths))
+	np.save('%s.crossover_lengths_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(lengths))
 
 	ps_pat = estimate_recombination_rates(X_pat_train, lengths, all_positions, kong_region, len(crossovers_pat_train_kong))
 	np.save('%s.ps_pat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_pat)
 	np.save('%s.crossover_ps_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(ps_pat))
 	np.save('%s.crossover_ps_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(ps_pat))
+	np.save('%s.crossover_lengths_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(lengths))
+	np.save('%s.crossover_lengths_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(lengths))
 
            
