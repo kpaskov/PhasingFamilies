@@ -196,12 +196,11 @@ def estimate_recombination_rates(X, lengths, positions, kong_region, num_kong):
 	print('Estimating...', m, n)
 
 	p = cp.Variable(n)
+	offset = cp.Variable()
 
 	# maximize likelihood of multinomial loss...
 	expr = cp.sum(cp.log(X@p))/m
 
-	if num_kong>0:
-		expr -= num_kong*cp.log(cp.sum(p[kong_region]))/m
 
 	# and regularize the difference between neighboring intervals (within each chromosome)
 	current_chrom = positions[0][0]
