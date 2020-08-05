@@ -13,6 +13,7 @@ parser.add_argument('out_file', type=str, help='Output filename.')
 parser.add_argument('kfold_crossvalidation', type=int, help='Number of fold to be used for cross validation.')
 parser.add_argument('lamb', type=float, help='Regularization weight.')
 parser.add_argument('phase_dirs', type=str, nargs='+', help='Directories with phase information.')
+parser.add_argument('--link_mat_pat', action='store_true', default=False, help='Link mat and pat together.')
 
 args = parser.parse_args()
 
@@ -145,35 +146,43 @@ def X_from_crossovers(crossovers, pos_to_index):
 	return sparse.csr_matrix((data, (row_ind, col_ind)), shape=(len(crossovers), len(pos_to_index)-1))
 
 # estimate recombination rates
-def estimate_recombination_rates(X, lengths, positions):
-	m, n = X.shape
-	print('Estimating...', m, n)
+def estimate_recombination_rates(X_mat, X_pat, lengths, positions, link_mat_pat=False):
+	print('Estimating...', X_mat.shape, X_pat.shape, link_mat_pat)
 
-	p = cp.Variable(n)
-	offset = cp.Variable()
+	p_mat = cp.Variable(X_mat.shape[1])
+	p_pat = cp.Variable(X_pat.shape[1])
 
 	# maximize likelihood of multinomial loss...
-	expr = cp.sum(cp.log(X@p))/m
+	expr = cp.sum(cp.log(X_mat@p_mat))/X_mat.shape[0] + cp.sum(cp.log(X_pat@p_pat))/X_pat.shape[0]
 
 	# and regularize the difference between neighboring intervals (within each chromosome)
 	current_chrom = positions[0][0]
 	current_chrom_start = 0
 	for i in range(1, len(positions)):
 		if positions[i][0] != current_chrom:
-			expr -= cp.tv(args.lamb*p[current_chrom_start:i]/lengths[current_chrom_start:i])
+			expr -= cp.tv(args.lamb*p_mat[current_chrom_start:i]/lengths[current_chrom_start:i])
+			expr -= cp.tv(args.lamb*p_pat[current_chrom_start:i]/lengths[current_chrom_start:i])
 			current_chrom, current_chrom_start = positions[i][0], i
-	expr -= cp.tv(args.lamb*p[current_chrom_start:i]/lengths[current_chrom_start:i])
+	expr -= cp.tv(args.lamb*p_mat[current_chrom_start:i]/lengths[current_chrom_start:i])
+	expr -= cp.tv(args.lamb*p_pat[current_chrom_start:i]/lengths[current_chrom_start:i])
+
+	if link_mat_pat:
+		expr -= args.lamb*cp.norm(p_mat-p_pat, 1)
 
 	# now solve
-	prob = cp.Problem(cp.Maximize(expr), [p >= 0, p <= 1, cp.sum(p)==1])
-	result = prob.solve(solver='MOSEK', mosek_params={'MSK_IPAR_INTPNT_MAX_ITERATIONS': 300}, verbose=True)
+	prob = cp.Problem(cp.Maximize(expr), [p_mat >= 0, p_mat <= 1, cp.sum(p_mat)==1,
+										  p_pat >= 0, p_pat <= 1, cp.sum(p_pat)==1,])
+	result = prob.solve(solver='MOSEK', mosek_params={'MSK_IPAR_INTPNT_MAX_ITERATIONS': 500}, verbose=True)
 	#result = prob.solve(solver='ECOS', max_iters=200, verbose=True)
 	print(prob.status)
 
-	ps = np.clip([v for v in p.value], 0, 1) # clip just in case we have some numerical problems
 	if prob.status != 'optimal' and prob.status != 'optimal_inaccurate':
 		raise Error('Parameters not fully estimated.')
-	return ps
+
+	p_mat = np.clip([v for v in p_mat.value], 0, 1) # clip just in case we have some numerical problems
+	p_pat = np.clip([v for v in p_pat.value], 0, 1) # clip just in case we have some numerical problems
+	
+	return p_mat, p_pat
 
 for batch_num in range(args.kfold_crossvalidation):
 	test_quads = set(quads[(batch_size*batch_num):(batch_size*(batch_num+1))])
@@ -202,14 +211,14 @@ for batch_num in range(args.kfold_crossvalidation):
 	#sparse.save_npz('%s.X_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train)
 	#sparse.save_npz('%s.X_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test)
 
-	ps_mat = estimate_recombination_rates(X_mat_train, lengths, all_positions)
+	ps_mat, ps_pat = estimate_recombination_rates(X_mat_train, X_pat_train, lengths, all_positions, args.link_mat_pat)
+	
 	np.save('%s.ps_mat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_mat)
 	np.save('%s.crossover_ps_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(ps_mat))
 	np.save('%s.crossover_ps_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(ps_mat))
 	np.save('%s.crossover_lengths_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(lengths))
 	np.save('%s.crossover_lengths_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(lengths))
 
-	ps_pat = estimate_recombination_rates(X_pat_train, lengths, all_positions)
 	np.save('%s.ps_pat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_pat)
 	np.save('%s.crossover_ps_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(ps_pat))
 	np.save('%s.crossover_ps_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(ps_pat))
