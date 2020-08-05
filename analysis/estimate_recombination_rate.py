@@ -167,7 +167,7 @@ def estimate_recombination_rates(X_mat, X_pat, lengths, positions, link_mat_pat=
 	expr -= cp.tv(args.lamb*p_pat[current_chrom_start:i]/lengths[current_chrom_start:i])
 
 	if link_mat_pat:
-		expr -= args.lamb*cp.norm(p_mat-p_pat, 1)
+		expr -= args.lamb*cp.norm((p_mat[lengths!=0]/lengths[lengths!=0])-(p_pat[lengths!=0]/lengths[lengths!=0]), 1)
 
 	# now solve
 	prob = cp.Problem(cp.Maximize(expr), [p_mat >= 0, p_mat <= 1, cp.sum(p_mat)==1,
