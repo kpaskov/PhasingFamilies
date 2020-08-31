@@ -97,6 +97,7 @@ class LazyLoss:
 
 
 	def __call__(self, gen): 
+		# -------------- any changes must also be made in ancestral_variant_probabilities() ----------------------
 		if np.all(gen[:-1] <= 0) & ~np.all(gen[:-1] == 0):
 			raise Exception('Genotypes without variants must be (0,)')
 
@@ -128,6 +129,34 @@ class LazyLoss:
 				self.already_calculated[gen_index] = True
 			
 			return loss
+
+	def ancestral_variant_probabilities(self, gen, state_index):
+		# -------------- any changes must also be made in __call__() ----------------------
+		if np.all(gen[:-1] <= 0) & ~np.all(gen[:-1] == 0):
+			raise Exception('Genotypes without variants must be (0,)')
+
+		gen_index = self.gen_to_index.get(tuple(gen), None)
+		
+		af_region_index = gen[-1]
+		if np.all(gen[:-1]==0):
+			gen_options = list(product(*([[0] if x else [0, -1] for x in self.no_data])))
+		else:
+			gen_options = [gen[:-1]]
+
+		loss_region_index = self.states[state_index].loss_region()
+
+		ancvar_probs = np.zeros((self.perfect_match_indices.shape[1],), dtype=float)
+		for gen in gen_options:
+			for i, pm in enumerate(self.perfect_matches):
+				self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
+
+			ancvar_probs += np.power(10, -(self.s[loss_region_index, self.perfect_match_indices[state_index, :]] + \
+																   (self.ref_costs[af_region_index]*self.perfect_match_ref_alleles[state_index, :]) + \
+																   (self.alt_costs[af_region_index]*self.perfect_match_alt_alleles[state_index, :]) + \
+																   (self.miss_costs[af_region_index]*self.perfect_match_missing_alleles[state_index, :])))
+
+		return np.clip(ancvar_probs, 0, 1) # handles numerical instability
+
 
 
 	def __build_perfect_matches__(self, states):

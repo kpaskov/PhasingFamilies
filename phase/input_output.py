@@ -227,7 +227,7 @@ def pull_phenotype(ped_file):
 				sample_id_to_aff[child_id] = aff
 	return sample_id_to_aff
 
-def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals):
+def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals, start_pos=None, end_pos=None):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
 	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
 	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
@@ -256,21 +256,29 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 
 	gens, snp_positions, afs, collapseds = [], [], [], []
 	total_pos = 0
+	print('af_boundaries', af_boundaries)
 	for gen_file, coord_file, af_file in zip(gen_files, coord_files, af_files):
 		coords = np.load('%s/%s' % (data_dir, coord_file))
+
 		if coords.shape[0]>0:
 			poss = coords[:, 1]
 			is_snp = coords[:, 2]==1
 			is_pass = coords[:, 3]==1
-			if np.sum(is_snp & is_pass)>0:
+
+			if start_pos is not None and end_pos is not None:
+				in_interval = (coords[:, 1]>=start_pos) & (coords[:, 1]<=end_pos)
+			else:
+				in_interval = np.ones((is_snp.shape[0],), dtype=bool)
+
+			if np.sum(is_snp & is_pass & in_interval)>0:
 				gen = sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :]
 				total_pos += np.sum(is_snp & is_pass)
 				af = np.load('%s/%s' % (data_dir, af_file))
 				family_has_variant = ((gen>0).sum(axis=0)>0).A.flatten()
-				has_data = np.where(is_snp & is_pass & family_has_variant)[0]
+				has_data = np.where(is_snp & is_pass & in_interval & family_has_variant)[0]
 				
 				# count the number of observed sites in between snps with data
-				c = np.cumsum(is_snp & is_pass & ~family_has_variant)
+				c = np.cumsum(is_snp & is_pass & in_interval & ~family_has_variant)
 				collapsed = np.zeros((len(has_data),), dtype=int)
 				collapsed_front = c[has_data[0]]
 				collapsed[:-1] = c[has_data][1:]-c[has_data][:-1]
@@ -363,7 +371,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	#print(c[-1], np.sum(mult_factor))
 	#assert np.all(mult_factor>=0)
 
-	print('genotypes pulled', new_family_genotypes.shape, new_family_genotypes)
+	print('genotypes pulled', new_family_genotypes.shape)
 	#print(mult_factor)
 
 	return new_family_genotypes, new_family_snp_positions, mult_factor
@@ -380,6 +388,23 @@ def write_to_file(phasef, chrom, family, final_states, family_snp_positions):
 					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
 
 	print('Write to file complete')
+
+
+def pull_states_from_file(phasef, chrom, family_snp_positions):
+	coords = []
+	states = []
+	next(phasef) # skip header
+	for line in phasef:
+		pieces = line.strip().split('\t')
+		if pieces[0][3:] == chrom:
+			states.append([int(x) for x in pieces[1:-2]])
+			coords.append([int(x) for x in pieces[-2:]])
+
+	coords = np.array(coords)
+	states = np.array(states).T
+
+	return states[:, np.searchsorted(coords[:, 0], family_snp_positions[:, 0], side='right')-1]
+
 
 def convert_to_csr(A, family_snp_positions, mult_factor, chrom_length):
 	nonzeros = np.sum(mult_factor*np.sum(A!=0, axis=0))

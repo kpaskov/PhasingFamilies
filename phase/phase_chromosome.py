@@ -18,12 +18,12 @@ import argparse
 parser = argparse.ArgumentParser(description='Phase chromosome.')
 parser.add_argument('ped_file', type=str, help='Ped file of family structure.')
 parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
-parser.add_argument('assembly', type=str, help='Reference genome assembly for data.')
 parser.add_argument('out_dir', type=str, help='Output directory.')
 parser.add_argument('param_file', type=str, help='Parameters for model.')
 parser.add_argument('num_loss_regions', type=int, help='Number of loss regions in model.')
 
 parser.add_argument('--detect_deletions', action='store_true', default=False, help='Detect deletions while phasing.')
+parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
 parser.add_argument('--family_size', type=int, default=None, help='Size of family to phase.')
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
 parser.add_argument('--batch_size', type=int, default=None, help='Restrict number of families to batch_size.')
@@ -34,7 +34,10 @@ parser.add_argument('--max_af_cost', type=float, default=np.log10(71702*2/3), he
 
 args = parser.parse_args()
 
-chroms = [str(x) for x in range(1, 23)]
+if args.chrom is not None:
+	chroms = [args.chrom]
+else:
+	chroms = [str(x) for x in range(1, 23)]
 
 if args.detect_deletions:
 	print('Detecting deletions while phasing ...')
@@ -44,6 +47,21 @@ if args.detect_consanguinity:
 
 with open(args.param_file, 'r') as f:
 	params = json.load(f)
+
+with open('%s/info.json' % args.data_dir, 'r') as f:
+	assembly = json.load(f)['assembly']
+
+with open('%s/info.json' % args.out_dir, 'w+') as f:
+	json.dump({
+		'ped_file': args.ped_file,
+		'data_dir': args.data_dir,
+		'param_file': args.param_file,
+		'num_loss_regions': args.num_loss_regions,
+		'detect_deletions': args.detect_deletions,
+		'chrom': args.chrom,
+		'detect_consanguinity': args.detect_consanguinity,
+		'max_af_cost': args.max_af_cost
+		}, f)
 
 
 # --------------- pull families of interest ---------------
@@ -122,7 +140,7 @@ for family in families:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
-				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, args.assembly, chrom, family.individuals)
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, assembly, chrom, family.individuals)
 
 				# update loss cache
 				loss.set_cache(family_genotypes)

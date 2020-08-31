@@ -140,6 +140,9 @@ class InheritanceStates:
 	def index(self, state):
 		return self._state_to_index[state]
 
+	def index_from_full_state_tuple(self, state_tuple):
+		return self.index(self.get_original_state(state_tuple))
+
 	def __getitem__(self, index):
 		return State(self._states[index, :], self)
 
@@ -229,7 +232,6 @@ class InheritanceStates:
 
 	def get_original_state(self, full_state):
 		return self[self._full_state_to_index[tuple(full_state)]]
-
 
 	def get_perfect_matches(self, state):
 		phase = self._phase[self.index(state), :]

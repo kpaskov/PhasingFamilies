@@ -4,48 +4,57 @@ import numpy as np
 import scipy.stats
 import sys
 from os import listdir
+import json
 
-#chrom = sys.argv[1]
+#phase_dirs = ['phased_ihart.ms2_quads']
+#ped_files = ['../DATA/ihart.ms2/ihart.ped.quads.ped']
+#identicals_files = ['sibpair_similarity/ihart.ms2_quads_identicals.txt']
+#out_dir = 'phased_ihart.ms2_quads'
+#build = '38'
 
-##phase_dir = 'phased_spark'
-#ped_file = 'data/spark.ped'
-#family_sizes = [4, 5, 6, 7]
-#identicals_file = 'sibpair_similarity/spark_identicals.txt'
+#phase_dirs = ['phased_ssc.hg38']
+#ped_files = ['../DATA/ssc.hg38/ssc.ped']
+#identicals_files = ['sibpair_similarity/ssc.hg38_identicals.txt']
+#out_dir = 'phased_ssc.hg38'
+#build = '38'
 
+#phase_dirs = ['phased_mssng_quads']
+#ped_files = ['../DATA/mssng/mssng.ped.quads.ped']
+#identicals_files = ['sibpair_similarity/mssng_quads_identicals.txt']
+#out_dir = 'phased_mssng_quads'
+#build = '38'
 
-#phase_dir = 'phased_ssc'
-#ped_file = 'data/ssc.ped'
-#family_sizes = [4]
-#identicals_file = 'sibpair_similarity/ssc_identicals.txt'
+phase_dirs = ['phased_spark_quads']
+ped_files = ['../DATA/spark/spark.ped.quads.ped']
+identicals_files = ['sibpair_similarity/spark_quads_identicals.txt']
+out_dir = 'phased_spark_quads'
+build = '38'
+save_contingency = True
 
-#phase_dir = 'phased_ihart'
-#ped_file = 'data/v34.vcf.ped'
-#family_sizes = [4, 5, 6]
-#identicals_file = 'sibpair_similarity/ihart_identicals.txt'
+#phase_dirs = ['phased_ancestry_quads']
+#ped_files = ['../DATA/ancestry/ancestry.ped.quads.ped']
+#identicals_files = ['sibpair_similarity/ancestry_quads_identicals.txt']
+#out_dir = 'phased_ancestry_quads'
+#build = '37'
+#save_contingency = True
 
-#phase_dir = 'phased_ancestry'
-#ped_file = 'data/ancestry.ped'
-#family_sizes = [4, 5, 6, 7]
+#phase_dirs = [
+#'phased_ihart.ms2_quads', 
+#'phased_ssc.hg38', 
+#'phased_mssng_quads', 
+#]
+#ped_files = [
+#'../DATA/ihart.ms2/ihart.ped.quads.ped', 
+#'../DATA/ssc.hg38/ssc.ped',
+#'../DATA/mssng/mssng.ped.quads.ped',
+#]
+#identicals_files = [
+#'sibpair_similarity/ihart.ms2_quads_identicals.txt',
+#'sibpair_similarity/ssc.hg38_identicals.txt',
+#'sibpair_similarity/mssng_quads_identicals.txt',
+#]
+#out_dir = 'sibpair_wgs'
 
-phase_dir = 'phased_spark_quads'
-#phenotype_file = 'phenotypes/scq.csv'
-phenotype_file = 'data/spark.ped.quads.ped'
-identicals_file = 'sibpair_similarity/spark_quads_identicals.txt'
-phenotype = ''
-##phenotype = 'q10_hand_tool'
-
-#phase_dir = 'phased_ancestry_quads'
-##phenotype_file = 'phenotypes/scq.csv'
-#phenotype_file = '../DATA/ancestry/ancestryDNA.ped.quads.ped'
-#identicals_file = 'sibpair_similarity/ssc_identicals.txt'
-#phenotype = ''
-##phenotype = 'q10_hand_tool'
-
-#phase_dir = 'phased_ihart_quads'
-#phenotype_file = 'data/v34.vcf.ped'
-#phenotype = ''
-#family_sizes = [4]
-#identicals_file = 'sibpair_similarity/ihart_identicals.txt'
 
 chroms = [str(x) for x in range(1, 23)]
 #chroms = ['10']
@@ -61,21 +70,8 @@ def pull_phenotype_ped(ped_file):
 			sample_to_affected[pieces[1]] = pieces[5]
 	return sample_to_affected, sample_to_sex
 
-def pull_phenotype_scq(scq_file):
-	sample_to_sex = dict()
-	sample_to_affected = dict()
-	with open(scq_file, 'r') as f:
-		header = next(f).strip().split(',')
-		sex_index = header.index('sex')
-		phenotype_index = header.index(phenotype)
-		for line in f:
-			pieces = line.strip().split(',')
-			sample_to_sex[pieces[0]] = '1' if pieces[sex_index]=='Male' else '2'
-			sample_to_affected[pieces[0]] = '2' if (pieces[phenotype_index]=='TRUE' or pieces[phenotype_index]=='1') else '1'
-	return sample_to_affected, sample_to_sex
-
-Sibpair = namedtuple('Sibpair', ['family', 'sibling1', 'sibling2', 'mom', 'dad', 'num_affected', 'num_males'])
-def pull_sibpairs(phase_dir, identicals_file, chrom, sample_to_affected, sample_to_sex):
+Sibpair = namedtuple('Sibpair', ['family', 'sibling1', 'sibling2', 'mom', 'dad', 'phase_dir', 'num_affected', 'num_males'])
+def pull_sibpairs(phase_dir, identicals_file, sample_to_affected, sample_to_sex):
 
 	# pull identicals
 	leave_out = set()
@@ -99,301 +95,193 @@ def pull_sibpairs(phase_dir, identicals_file, chrom, sample_to_affected, sample_
 					for child1, child2 in combinations(individuals[2:], 2):
 						if child1 not in leave_out and child2 not in leave_out and child1 in sample_to_affected and child2 in sample_to_affected:
 							sibpairs.append(Sibpair(family_key, child1, child2, individuals[0], individuals[1], 
+								phase_dir,
 								int(sample_to_affected[child1]=='2')+int(sample_to_affected[child2]=='2'),
 								int(sample_to_sex[child1]=='1')+int(sample_to_sex[child2]=='1')))
 
 	sibpairs = sorted(sibpairs)
 
-	print('num_affected', Counter([x.num_affected for x in sibpairs]))
-	print('num_males', Counter([x.num_males for x in sibpairs]))
-	print('num_affected/num_males', Counter([(x.num_affected, x.num_males) for x in sibpairs]))
-
 	assert len(sibpairs) == len(set(sibpairs)) # should have no duplicates
 	return family_to_inds, sibpairs
 
-def pull_sibpair_matches(phase_dir, chrom, sibpairs, family_to_inds, interval):
+def pull_sibpair_matches(phase_dirs, chrom, sibpairs, family_to_inds, interval_bins):
 	sibpair_to_index = dict([((x.family, x.sibling1, x.sibling2), i) for i, x in enumerate(sibpairs)])
 
-	# pull positions
-	positions = set()
-	for filename in listdir(phase_dir):
-		if filename.endswith('.phased.txt'):
-			with open('%s/%s' % (phase_dir, filename), 'r')  as f:
-				next(f) # skip header
-
-				for line in f:
-					pieces = line.strip().split('\t')
-					if pieces[0][3:] == chrom:
-						start_pos, end_pos = [int(x) for x in pieces[-2:]]
-						assert end_pos >= start_pos
-
-						positions.add(start_pos)
-						positions.add(end_pos)
-
-	positions.update(np.arange(0, max(positions), interval))
-	positions = np.array(sorted(positions))
-	position_to_index = dict([(x, i) for i, x in enumerate(positions)])
-	regions = np.hstack((positions[:-1, np.newaxis], positions[1:, np.newaxis]))
-	print(regions.shape)
-
 	# pull phase data
-	# sibpair, position
-	mat_match_data = -np.ones((len(sibpair_to_index), regions.shape[0]), dtype=int)
-	pat_match_data = -np.ones((len(sibpair_to_index), regions.shape[0]), dtype=int)
-	for filename in listdir(phase_dir):
-		if filename.endswith('.phased.txt'):
-			family_key = filename[:-11]
-			with open('%s/%s' % (phase_dir, filename), 'r')  as f:
-				next(f) # skip header
+	# sibpair, interval, nomatch/match
+	is_mat_match = -np.ones((len(sibpair_to_index), len(interval_bins)-1), dtype=int)
+	is_pat_match = -np.ones((len(sibpair_to_index), len(interval_bins)-1), dtype=int)
 
-				for line in f:
-					pieces = line.strip().split('\t')
-					if pieces[0][3:] == chrom:
-						start_pos, end_pos = [int(x) for x in pieces[-2:]]
-						state = np.array([int(x) for x in pieces[1:-2]])
-
-						inds = family_to_inds[family_key]
-
-						sibpair_indices = np.array([sibpair_to_index[(family_key, child1, child2)] for child1, child2 in combinations(inds[2:], 2) if (family_key, child1, child2) in sibpair_to_index])
-						if len(sibpair_indices) > 0:
-							pos_indices = np.arange(position_to_index[start_pos], position_to_index[end_pos])
-
-							mat_phase = np.array(list(combinations(state[np.arange(8, 4+2*len(inds), 2)], 2)))
-							no_missing = np.all(mat_phase>=0, axis=1)
-							for sibpair_index in sibpair_indices[no_missing & (mat_phase[:, 0]==mat_phase[:, 1])]:
-								mat_match_data[sibpair_index, pos_indices] = 1
-							for sibpair_index in sibpair_indices[no_missing & (mat_phase[:, 0]!=mat_phase[:, 1])]:
-								mat_match_data[sibpair_index, pos_indices] = 0
-							
-							pat_phase = np.array(list(combinations(state[np.arange(9, 4+2*len(inds), 2)], 2)))
-							no_missing = np.all(pat_phase>=0, axis=1)
-							for sibpair_index in sibpair_indices[no_missing & (pat_phase[:, 0]==pat_phase[:, 1])]:
-								pat_match_data[sibpair_index, pos_indices] = 1
-							for sibpair_index in sibpair_indices[no_missing & (pat_phase[:, 0]!=pat_phase[:, 1])]:
-								pat_match_data[sibpair_index, pos_indices] = 0
-				
-	return regions, mat_match_data, pat_match_data
-
-def reduce_to_intervals(intervals, mat_match_data, pat_match_data, regions):
-	assert mat_match_data.shape == pat_match_data.shape
-	mat_match_data_interval = -np.ones((mat_match_data.shape[0], intervals.shape[0]), dtype=int)
-	pat_match_data_interval = -np.ones((pat_match_data.shape[0], intervals.shape[0]), dtype=int)
-
-	region_length = regions[:, 1]-regions[:, 0]
-
-	for i, (interval_start, interval_end) in enumerate(intervals):
-		overlap = np.minimum(regions[:, 1], interval_end) - np.maximum(regions[:, 0], interval_start)
-		assert np.all((overlap<= 0) | (overlap == region_length))
-
-		is_overlapped = overlap>0
-
-		is_mat_matched = np.sum(region_length[is_overlapped] * (mat_match_data[:, is_overlapped]==1), axis=1) > (interval_end-interval_start)*0.9
-		mat_match_data_interval[is_mat_matched, i] = 1
-
-		is_mat_mismatched = np.sum(region_length[is_overlapped] * (mat_match_data[:, is_overlapped]==0), axis=1) > (interval_end-interval_start)*0.9
-		mat_match_data_interval[is_mat_mismatched, i] = 0
-
-		is_pat_matched = np.sum(region_length[is_overlapped] * (pat_match_data[:, is_overlapped]==1), axis=1) > (interval_end-interval_start)*0.9
-		pat_match_data_interval[is_pat_matched, i] = 1
-
-		is_pat_mismatched = np.sum(region_length[is_overlapped] * (pat_match_data[:, is_overlapped]==0), axis=1) > (interval_end-interval_start)*0.9
-		pat_match_data_interval[is_pat_mismatched, i] = 0
-
-
-	return mat_match_data_interval, pat_match_data_interval
-
-def generate_test_statistic(mat_match_data, pat_match_data, sibpairs):
-
-	#family_type_to_index = dict([('male_simplex', 0), ('female_simplex', 1), ('multiplex', 2)])
-
-	# positions, FF/MF/MM, UU/AU/AA, num match
-	r = np.zeros((mat_match_data.shape[1], 3, 3, 3), dtype=int)
-
-	# positions, FF/MF/MM, UU/AU/AA, num match
-	r_mat = np.zeros((mat_match_data.shape[1], 3, 3, 2), dtype=int)
-
-	# positions, FF/MF/MM, UU/AU/AA, num match
-	r_pat = np.zeros((mat_match_data.shape[1], 3, 3, 2), dtype=int)
+	interval_lengths = interval_bins[1:]-interval_bins[:-1]
 
 	for sibpair_index, sibpair in enumerate(sibpairs):
-		#if sibpair.family_type in family_type_to_index:
-		#family_type_index = family_type_to_index[sibpair.family_type]
+		mat_match_data = np.zeros((len(interval_bins)-1, 2), dtype=int)
+		pat_match_data = np.zeros((len(interval_bins)-1, 2), dtype=int)
+		with open('%s/%s.phased.txt' % (sibpair.phase_dir, sibpair.family), 'r')  as f:
+			next(f) # skip header
 
-		no_missing_mat = mat_match_data[sibpair_index, :]>=0
-		no_missing_pat = pat_match_data[sibpair_index, :]>=0
-		no_missing_all = no_missing_mat & no_missing_pat
+			for line in f:
+				pieces = line.strip().split('\t')
+				if pieces[0][3:] == chrom:
+					start_pos, end_pos = [int(x) for x in pieces[-2:]]
+					state = np.array([int(x) for x in pieces[1:-2]])
 
-		r[np.where(no_missing_all)[0],
-		  sibpair.num_males, 
-		  sibpair.num_affected, 
-		  mat_match_data[sibpair_index, no_missing_all]+pat_match_data[sibpair_index, no_missing_all], 
-		] += 1
+					inds = family_to_inds[sibpair.family]
+					sib1_ind_index, sib2_ind_index = inds.index(sibpair.sibling1), inds.index(sibpair.sibling2)
+					sib1_mat_index, sib2_mat_index = 4+2*sib1_ind_index, 4+2*sib2_ind_index
+					sib1_pat_index, sib2_pat_index = 5+2*sib1_ind_index, 5+2*sib2_ind_index
 
-		r_mat[np.where(no_missing_mat)[0],
-		  sibpair.num_males, 
-		  sibpair.num_affected, 
-		  mat_match_data[sibpair_index, no_missing_mat], 
-		] += 1
+					start_index, end_index = np.searchsorted(interval_bins, [start_pos, end_pos])
 
-		r_pat[np.where(no_missing_pat)[0],
-		  sibpair.num_males, 
-		  sibpair.num_affected, 
-		  pat_match_data[sibpair_index, no_missing_pat], 
-		] += 1
-	return r, r_mat, r_pat
+					for index in range(start_index, end_index):
+						overlap = min(interval_bins[index], end_pos) - max(interval_bins[index-1], start_pos)
+						assert overlap >= 0
+						if (state[sib1_mat_index] != -1) and (state[sib2_mat_index] != -1):
+							mat_match_data[index-1, int(state[sib1_mat_index]==state[sib2_mat_index])] += overlap
 
-def calculate_pvalue(obs):
-	#obs: UU/AU/AA, num match
+						if (state[sib1_pat_index] != -1) and (state[sib2_pat_index] != -1):
+							pat_match_data[index-1, int(state[sib1_pat_index]==state[sib2_pat_index])] += overlap
 
-	n = np.sum(obs, axis=1)
+		assert np.all(np.sum(mat_match_data, axis=1) <= interval_lengths)
+		assert np.all(np.sum(pat_match_data, axis=1) <= interval_lengths)
 
-	p0, p1, p2, p3, p4, p5, p6 = 1, 1, 1, 1, 1, 1, 1
+		is_mat_match[sibpair_index, mat_match_data[:, 0]>=0.9*interval_lengths] = 0
+		is_mat_match[sibpair_index, mat_match_data[:, 1]>=0.9*interval_lengths] = 1
+		is_pat_match[sibpair_index, pat_match_data[:, 0]>=0.9*interval_lengths] = 0
+		is_pat_match[sibpair_index, pat_match_data[:, 1]>=0.9*interval_lengths] = 1
+				
+	return is_mat_match, is_pat_match
 
-	if n[0] != 0:
-		p0 = scipy.stats.binom_test(obs[0, 1] + 2*obs[0, 2], 2*n[0], p=0.5, alternative='greater')
+def calculate_pvalues(sibpairs, is_mat_match, is_pat_match):
 
-	if n[1] != 0:
-		p1 = scipy.stats.binom_test(obs[1, 1] + 2*obs[1, 2], 2*n[1], p=0.5, alternative='less')
+	is_aff_aff = np.array([sp.num_affected==2 for sp in sibpairs])
+	is_aff_typ = np.array([sp.num_affected==1 for sp in sibpairs])
+	is_typ_typ = np.array([sp.num_affected==0 for sp in sibpairs])
+	print(np.sum(is_aff_aff), np.sum(is_aff_typ), np.sum(is_typ_typ))
 
-	if n[2] != 0:
-		p2 = scipy.stats.binom_test(obs[2, 1] + 2*obs[2, 2], 2*n[2], p=0.5, alternative='greater')
-
-	if n[1] != 0 and n[2] != 0:
+	# pos, UU/AU/AA/UUvsAU/AAvsAU/UU+AAvsAU
+	pvalues = np.ones((is_mat_match.shape[1], 6))
+	contingency = np.zeros((is_mat_match.shape[1], 3, 2))
+	for interval_index in range(is_mat_match.shape[1]):
+		# UU vs 0.5
 		try:
-			p3 = scipy.stats.chi2_contingency([[obs[1, 1] + 2*obs[1, 2], obs[1, 1] + 2*obs[1, 0]],
-											   [obs[2, 1] + 2*obs[2, 2], obs[2, 1] + 2*obs[2, 0]]])[1]
+			#print(np.sum(is_mat_match[is_typ_typ, interval_index]==1), np.sum(is_pat_match[is_typ_typ, interval_index]==1), 
+			#	np.sum(is_mat_match[is_typ_typ, interval_index]!=-1), np.sum(is_pat_match[is_typ_typ, interval_index]!=-1))
+			pvalues[interval_index, 0] = scipy.stats.binom_test(
+				np.sum(is_mat_match[is_typ_typ, interval_index]==1) + np.sum(is_pat_match[is_typ_typ, interval_index]==1), 
+				np.sum(is_mat_match[is_typ_typ, interval_index]!=-1) + np.sum(is_pat_match[is_typ_typ, interval_index]!=-1), 
+				p=0.5, alternative='greater')
+			contingency[interval_index, 0, 0] = np.sum(is_mat_match[is_typ_typ, interval_index]==1) + np.sum(is_pat_match[is_typ_typ, interval_index]==1)
+			contingency[interval_index, 0, 1] = np.sum(is_mat_match[is_typ_typ, interval_index]!=-1) + np.sum(is_pat_match[is_typ_typ, interval_index]!=-1)
 		except:
 			pass
 
-	if n[1] != 0 and n[0] != 0:
+		# UA vs 0.5
 		try:
-			p4 = scipy.stats.chi2_contingency([[obs[1, 1] + 2*obs[1, 2], obs[1, 1] + 2*obs[1, 0]],
-											   [obs[0, 1] + 2*obs[0, 2], obs[0, 1] + 2*obs[0, 0]]])[1]
+			pvalues[interval_index, 1] = scipy.stats.binom_test(
+				np.sum(is_mat_match[is_aff_typ, interval_index]==1) + np.sum(is_pat_match[is_aff_typ, interval_index]==1), 
+				np.sum(is_mat_match[is_aff_typ, interval_index]!=-1) + np.sum(is_pat_match[is_aff_typ, interval_index]!=-1), 
+				p=0.5, alternative='less')
+			contingency[interval_index, 1, 0] = np.sum(is_mat_match[is_aff_typ, interval_index]==1) + np.sum(is_pat_match[is_aff_typ, interval_index]==1)
+			contingency[interval_index, 1, 1] = np.sum(is_mat_match[is_aff_typ, interval_index]!=-1) + np.sum(is_pat_match[is_aff_typ, interval_index]!=-1)
 		except:
 			pass
 
-	if n[1] != 0 and (n[0]+n[2]) != 0:
+		# AA vs 0.5
 		try:
-			p5 = scipy.stats.chi2_contingency([[obs[1, 1] + 2*obs[1, 2], obs[1, 1] + 2*obs[1, 0]],
-											   [obs[0, 1] + 2*obs[0, 2]+obs[2, 1] + 2*obs[2, 2], obs[0, 1] + 2*obs[0, 0]+obs[2, 1] + 2*obs[2, 0]]])[1]
+			pvalues[interval_index, 2] = scipy.stats.binom_test(
+				np.sum(is_mat_match[is_aff_aff, interval_index]==1) + np.sum(is_pat_match[is_aff_aff, interval_index]==1), 
+				np.sum(is_mat_match[is_aff_aff, interval_index]!=-1) + np.sum(is_pat_match[is_aff_aff, interval_index]!=-1), 
+				p=0.5, alternative='greater')
+			contingency[interval_index, 2, 0] = np.sum(is_mat_match[is_aff_aff, interval_index]==1) + np.sum(is_pat_match[is_aff_aff, interval_index]==1)
+			contingency[interval_index, 2, 1] = np.sum(is_mat_match[is_aff_aff, interval_index]!=-1) + np.sum(is_pat_match[is_aff_aff, interval_index]!=-1)
 		except:
 			pass
 
-	if (n[0]+n[2]) != 0:
-		p6 = scipy.stats.binom_test(obs[0, 1] + 2*obs[0, 2] + obs[2, 1] + 2*obs[2, 2], 
-									(2*n[0])+(2*n[2]), p=0.5, alternative='greater')
-
-	return p0, p1, p2, p3, p4, p5, p6
-
-def calculate_pvalue_mat_pat(obs):
-	#obs: UU/AU/AA, num match
-
-	n = np.sum(obs, axis=1)
-	#p = (obs.T/n).T
-
-	p0, p1, p2, p3, p4, p5, p6 = 1, 1, 1, 1, 1, 1, 1
-
-	if n[0] != 0:
-		p0 = scipy.stats.binom_test(obs[0, 1], n[0], p=0.5, alternative='greater')
-
-	if n[1] != 0:
-		p1 = scipy.stats.binom_test(obs[1, 1], n[1], p=0.5, alternative='less')
-
-	if n[2] != 0:
-		p2 = scipy.stats.binom_test(obs[2, 1], n[2], p=0.5, alternative='greater')
-
-	if n[1] != 0 and n[2] != 0:
+		# UU vs AU
 		try:
-			p3 = scipy.stats.chi2_contingency([[obs[1, 1], n[1]-obs[1, 1]],
-											 [obs[2, 1], n[2]-obs[2, 1]]])[1]
+			pvalues[interval_index, 3] = scipy.stats.chi2_contingency(
+				[[np.sum(is_mat_match[is_typ_typ, interval_index]==1) + np.sum(is_pat_match[is_typ_typ, interval_index]==1),
+				  np.sum(is_mat_match[is_typ_typ, interval_index]==0) + np.sum(is_pat_match[is_typ_typ, interval_index]==0)],
+				 [np.sum(is_mat_match[is_aff_typ, interval_index]==1) + np.sum(is_pat_match[is_aff_typ, interval_index]==1),
+				  np.sum(is_mat_match[is_aff_typ, interval_index]==0) + np.sum(is_pat_match[is_aff_typ, interval_index]==0)]])[1]
 		except:
 			pass
 
-	if n[1] != 0 and n[0] != 0:
+		# AA vs AU
 		try:
-			p4 = scipy.stats.chi2_contingency([[obs[1, 1], n[1]-obs[1, 1]],
-											 [obs[0, 1], n[0]-obs[0, 1]]])[1]
+			pvalues[interval_index, 4] = scipy.stats.chi2_contingency(
+				[[np.sum(is_mat_match[is_aff_aff, interval_index]==1) + np.sum(is_pat_match[is_aff_aff, interval_index]==1),
+				  np.sum(is_mat_match[is_aff_aff, interval_index]==0) + np.sum(is_pat_match[is_aff_aff, interval_index]==0)],
+				 [np.sum(is_mat_match[is_aff_typ, interval_index]==1) + np.sum(is_pat_match[is_aff_typ, interval_index]==1),
+				  np.sum(is_mat_match[is_aff_typ, interval_index]==0) + np.sum(is_pat_match[is_aff_typ, interval_index]==0)]])[1]
 		except:
 			pass
 
-	if n[1] != 0 and (n[0]+n[2]) != 0:
+		# AA+UU vs AU
 		try:
-			p5 = scipy.stats.chi2_contingency([[obs[1, 1], n[1]-obs[1, 1]],
-											 [obs[0, 1]+obs[2, 1], n[0]+n[2]-obs[0, 1]-obs[2, 1]]])[1]
+			pvalues[interval_index, 5] = scipy.stats.chi2_contingency(
+				[[np.sum(is_mat_match[is_aff_aff, interval_index]==1) + np.sum(is_pat_match[is_aff_aff, interval_index]==1) + \
+				  np.sum(is_mat_match[is_typ_typ, interval_index]==1) + np.sum(is_pat_match[is_typ_typ, interval_index]==1),
+				  np.sum(is_mat_match[is_aff_aff, interval_index]==0) + np.sum(is_pat_match[is_aff_aff, interval_index]==0) + \
+				  np.sum(is_mat_match[is_typ_typ, interval_index]==0) + np.sum(is_pat_match[is_typ_typ, interval_index]==0)],
+				 [np.sum(is_mat_match[is_aff_typ, interval_index]==1) + np.sum(is_pat_match[is_aff_typ, interval_index]==1),
+				  np.sum(is_mat_match[is_aff_typ, interval_index]==0) + np.sum(is_pat_match[is_aff_typ, interval_index]==0)]])[1]
 		except:
 			pass
 
-	if (n[0]+n[2]) != 0:
-		p6 = scipy.stats.binom_test(obs[0, 1] + obs[2, 1], 
-									n[0]+n[2], p=0.5, alternative='greater')
-
-	return p0, p1, p2, p3, p4, p5, p6
-
-def calculate_pvalues(r, r_mat, r_pat):
-	# r: positions, FF/MF/MM, UU/AU/AA, num match
-
-	# pos, FF/MF/MM/all, mat/pat/both, UU/AU/AA/AUvsAA/AUvsUU/AUvsAAUU/all
-	pvalues = np.ones((r.shape[0], 4, 3, 7))
-	for index in range(r.shape[0]):
-		# both
-		pvalues[index, 0, 2, :] = calculate_pvalue(r[index, 0, :, :])
-		pvalues[index, 1, 2, :] = calculate_pvalue(r[index, 1, :, :])
-		pvalues[index, 2, 2, :] = calculate_pvalue(r[index, 2, :, :])
-		pvalues[index, 3, 2, :] = calculate_pvalue(np.sum(r[index, :, :, :], axis=0))
-
-		# mat
-		pvalues[index, 0, 0, :] = calculate_pvalue_mat_pat(r_mat[index, 0, :, :])
-		pvalues[index, 1, 0, :] = calculate_pvalue_mat_pat(r_mat[index, 1, :, :])
-		pvalues[index, 2, 0, :] = calculate_pvalue_mat_pat(r_mat[index, 2, :, :])
-		pvalues[index, 3, 0, :] = calculate_pvalue_mat_pat(np.sum(r_mat[index, :, :, :], axis=0))
-
-		# pat
-		pvalues[index, 0, 1, :] = calculate_pvalue_mat_pat(r_pat[index, 0, :, :])
-		pvalues[index, 1, 1, :] = calculate_pvalue_mat_pat(r_pat[index, 1, :, :])
-		pvalues[index, 2, 1, :] = calculate_pvalue_mat_pat(r_pat[index, 2, :, :])
-		pvalues[index, 3, 1, :] = calculate_pvalue_mat_pat(np.sum(r_pat[index, :, :, :], axis=0))
-
-
-	return pvalues
+	return pvalues, contingency
 
 
 if __name__ == "__main__":
 
-	if phenotype_file.endswith('.ped'):
-		sample_to_affected, sample_to_sex = pull_phenotype_ped(phenotype_file)
-	else:
-		sample_to_affected, sample_to_sex = pull_phenotype_scq(phenotype_file)
+	# pull sample info
+	sample_to_affected, sample_to_sex = dict(), dict()
+	for ped_file in ped_files:
+		aff, sex = pull_phenotype_ped(ped_file)
+		sample_to_affected.update(aff)
+		sample_to_sex.update(sex)
 
+	# pull sibpairs
+	family_to_inds, sibpairs = dict(), []
+	for phase_dir, identicals_file in zip(phase_dirs, identicals_files):
+		print(phase_dir)
+		faminds, sps = pull_sibpairs(phase_dir, identicals_file, sample_to_affected, sample_to_sex)
+		duplicate_families = set()
+		for famkey, inds in faminds.items():
+			if famkey not in family_to_inds:
+				family_to_inds[famkey] = inds
+			else:
+				duplicate_families.add(famkey)
+
+		sibpairs.extend([x for x in sps if x.family not in duplicate_families])
+		print('duplicates', len(duplicate_families))
+
+	print('Overall')
+	print('families', len(family_to_inds))
+	print('sibpairs', len(sibpairs))
+	print('num_affected', Counter([x.num_affected for x in sibpairs]))
+
+	with open('data/chrom_lengths%s.json' % build, 'r') as f:
+		chrom_lengths = json.load(f)
+	
 	for chrom in chroms:
-		outfile = '%s/chr.%s.IST.pvalues.be.%sintervals.%d' % (phase_dir, chrom, phenotype, interval)
+		outfile = '%s/chr.%s.IST.pvalues.be.intervals.%d' % (out_dir, chrom, interval)
 
-		family_to_inds, sibpairs = pull_sibpairs(phase_dir, identicals_file, chrom, sample_to_affected, sample_to_sex)
-		print('sibpairs', len(sibpairs))
-		print('families', len(family_to_inds))
+		interval_bins = np.arange(0, chrom_lengths[chrom]+interval, interval)
+		print('intervals', len(interval_bins)-1)
 
-		regions, mat_match_data, pat_match_data = pull_sibpair_matches(phase_dir, chrom, sibpairs, family_to_inds, interval)
-		print('regions', regions.shape[0])
-		print(np.unique(mat_match_data, return_counts=True), np.unique(pat_match_data, return_counts=True))
+		is_mat_match, is_pat_match = pull_sibpair_matches(phase_dirs, chrom, sibpairs, family_to_inds, interval_bins)
 
-		interval_positions = np.arange(0, regions[-1, 1], interval)
-		intervals = np.hstack((interval_positions[:-1, np.newaxis], interval_positions[1:, np.newaxis]))
-		intervals[-1, 1] = regions[-1, 1]
-		print('intervals', intervals.shape[0])
-
-		mat_match_data_interval, pat_match_data_interval = reduce_to_intervals(intervals, mat_match_data, pat_match_data, regions)
-		print(mat_match_data_interval.shape)
-		print(np.unique(mat_match_data_interval, return_counts=True), np.unique(pat_match_data_interval, return_counts=True))
-
-		r, r_mat, r_pat = generate_test_statistic(mat_match_data_interval, pat_match_data_interval, sibpairs)
-		np.save(outfile + '.contingency', np.sum(r, axis=1))
-		print('statistic computed')
-
-		pvalues = calculate_pvalues(r, r_mat, r_pat)
+		pvalues, contingency = calculate_pvalues(sibpairs, is_mat_match, is_pat_match)
 		print('pvalues computed')
 
 		print(pvalues.shape)
 		np.save(outfile, pvalues)
-		np.save(outfile + '.regions', intervals)
+		np.save(outfile + '.regions', interval_bins)
+
+		if save_contingency:
+			np.save(outfile + '.contingency', contingency)
 		print('results saved to %s' % outfile)
 
 
