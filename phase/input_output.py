@@ -72,7 +72,7 @@ class Family():
 		self.ordered_couples = []
 		self.individuals = []
 
-	def add_child(self, child_id, mother_id, father_id):
+	def add_child(self, child_id, mother_id, father_id, retain_order=False):
 		if child_id in self.mat_ancestors:
 			self.mat_ancestors.remove(child_id)
 		if child_id in self.pat_ancestors:
@@ -83,7 +83,8 @@ class Family():
 		if father_id not in self.individuals:
 			self.pat_ancestors.append(father_id)
 		self.parents_to_children[(mother_id, father_id)].append(child_id)
-		random.shuffle(self.parents_to_children[(mother_id, father_id)])
+		if not retain_order:
+			random.shuffle(self.parents_to_children[(mother_id, father_id)])
 
 		self._reset_individuals()
 
@@ -165,7 +166,7 @@ class Family():
 		return len(self.descendents)
 
 
-def pull_families(ped_file):
+def pull_families(ped_file, retain_order=False):
 	# pull families from ped file
 	families = dict()
 	with open(ped_file, 'r') as f:	
@@ -179,7 +180,7 @@ def pull_families(ped_file):
 				if f_id != '0' and m_id != '0':
 					if fam_id not in families:
 						families[fam_id] = Family(fam_id)
-					families[fam_id].add_child(child_id, m_id, f_id)
+					families[fam_id].add_child(child_id, m_id, f_id, retain_order)
 	families = sorted([x for x in families.values()])
 		
 	print('families pulled %d' % len(families))

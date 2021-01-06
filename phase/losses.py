@@ -16,7 +16,7 @@ class LazyLoss:
 	def __init__(self, states, family, params, num_loss_regions, af_boundaries):
 
 		obss = ['0/0', '0/1', '1/1', './.']
-		preds = ['0/0', '0/1', '1/1', '-/0', '-/1', '-/-']
+		preds = ['0/0', '0/1', '1/1', '-/0', '-/1', '-/-']#, '01/0', '01/1', '01/01']
 
 		# loss region, individual, pred, obs
 		self.emission_params = np.zeros((num_loss_regions, len(family), len(preds), len(obss)))
@@ -59,10 +59,10 @@ class LazyLoss:
 		print(af_boundaries)
 		self.alt_costs = np.array(af_boundaries[af_boundaries > -np.log10(0.5)].tolist() + [-np.log10(0.5)] + af_boundaries[af_boundaries < -np.log10(0.5)].tolist())
 		self.ref_costs = np.array([-np.log10(1-(10**-alt_cost)) for alt_cost in self.alt_costs])
-		self.miss_costs = np.array([-np.log10(0.5) for _ in self.alt_costs])
+		#self.miss_costs = np.array([-np.log10(0.5) for _ in self.alt_costs])
 		print('alt costs', self.alt_costs)
 		print('ref costs', self.ref_costs)
-		print('miss costs', self.miss_costs)
+		#print('miss costs', self.miss_costs)
 
 		self.losses = np.zeros((states.num_states, 2))
 		self.already_calculated = np.zeros((2,), dtype=bool)
@@ -118,10 +118,10 @@ class LazyLoss:
 					self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
 
 				for k in range(self.num_loss_regions):
-					loss[self.loss_region==k] += np.sum(np.power(10, -(self.s[k, self.perfect_match_indices[self.loss_region==k, :]] + \
-																		   (self.ref_costs[af_region_index]*self.perfect_match_ref_alleles[self.loss_region==k, :]) + \
-																		   (self.alt_costs[af_region_index]*self.perfect_match_alt_alleles[self.loss_region==k, :]) + \
-																		   (self.miss_costs[af_region_index]*self.perfect_match_missing_alleles[self.loss_region==k, :]))), axis=1)
+					rc, ac = self.ref_costs[af_region_index], self.alt_costs[af_region_index]
+					loss[self.loss_region==k] += np.sum(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
+														(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, 1, rc*rc, 2*rc*ac, ac*ac])).T) * \
+														self.not_filler[self.loss_region==k, :], axis=1)
 			loss = -np.log10(np.clip(loss, 0, 1)) # handles numerical instability
 
 			if gen_index is not None:
@@ -150,10 +150,7 @@ class LazyLoss:
 			for i, pm in enumerate(self.perfect_matches):
 				self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
 
-			ancvar_probs += np.power(10, -(self.s[loss_region_index, self.perfect_match_indices[state_index, :]] + \
-																   (self.ref_costs[af_region_index]*self.perfect_match_ref_alleles[state_index, :]) + \
-																   (self.alt_costs[af_region_index]*self.perfect_match_alt_alleles[state_index, :]) + \
-																   (self.miss_costs[af_region_index]*self.perfect_match_missing_alleles[state_index, :])))
+			ancvar_probs += np.power(10, -self.s[loss_region_index, self.perfect_match_indices[state_index, :]])
 
 		return np.clip(ancvar_probs, 0, 1) # handles numerical instability
 
@@ -177,21 +174,22 @@ class LazyLoss:
 		perfect_match_to_index = dict([(x, i) for i, x in enumerate(self.perfect_matches)])
 		print('perfect matches', len(self.perfect_matches))
 
-		self.perfect_match_indices = []
-		self.perfect_match_ref_alleles = []
-		self.perfect_match_alt_alleles = []
-		self.perfect_match_missing_alleles = []
-		for s in states:
-			pms, allele_combinations = state_to_perfect_matches[s]
-			self.perfect_match_indices.append([perfect_match_to_index[pm] for pm in pms])
-			self.perfect_match_ref_alleles.append([len([x for x in ac if x==0]) for ac in allele_combinations])
-			self.perfect_match_alt_alleles.append([len([x for x in ac if x==1]) for ac in allele_combinations])
-			self.perfect_match_missing_alleles.append([len([x for x in ac if x==2]) for ac in allele_combinations])
+		max_perfect_matches = max([len(x[0]) for x in state_to_perfect_matches.values()])
+		self.perfect_match_indices = np.zeros((states.num_states, max_perfect_matches), dtype=int)
+		self.perfect_match_allele_counts = np.zeros((6, states.num_states, max_perfect_matches), dtype=int)
+		self.not_filler = np.zeros((states.num_states, max_perfect_matches), dtype=int)
 
-		self.perfect_match_indices = np.array(self.perfect_match_indices)
-		self.perfect_match_ref_alleles = np.array(self.perfect_match_ref_alleles)
-		self.perfect_match_alt_alleles = np.array(self.perfect_match_alt_alleles)
-		self.perfect_match_missing_alleles = np.array(self.perfect_match_missing_alleles)
+		for i, s in enumerate(states):
+			pms, allele_combinations = state_to_perfect_matches[s]
+			self.perfect_match_indices[i, :len(pms)] = [perfect_match_to_index[pm] for pm in pms]
+			for j in range(6):
+				self.perfect_match_allele_counts[j, i, :len(pms)] = [len([x for x in ac if x==j]) for ac in allele_combinations]
+			self.not_filler[i, :len(pms)] = 1
+
+		#self.perfect_match_indices = np.array(self.perfect_match_indices)
+		#self.perfect_match_ref_alleles = np.array(self.perfect_match_ref_alleles)
+		#self.perfect_match_alt_alleles = np.array(self.perfect_match_alt_alleles)
+		#self.perfect_match_missing_alleles = np.array(self.perfect_match_missing_alleles)
 
 		print('perfect_match_indices', self.perfect_match_indices.shape)
 

@@ -47,6 +47,12 @@ class State:
 		else:
 			return self._data[self._inheritance_states.deletion_indices[index]]==0
 
+	def has_duplication(self, index=None):
+		if index is None:
+			return np.any([self._data[i]==2 for i in self._inheritance_states.deletion_indices])
+		else:
+			return self._data[self._inheritance_states.deletion_indices[index]]==2
+
 	def is_hard_to_sequence(self, state):
 		return self._data[loss_region_index] != 0
 
@@ -77,16 +83,26 @@ class State:
 
 class InheritanceStates:
 
-	def __init__(self, family, detect_deletions_mat, detect_deletions_pat, num_loss_states):
+	def __init__(self, family, detect_deletions_mat, detect_deletions_pat, 
+								detect_duplications_mat, detect_duplications_pat, 
+								num_loss_states):
 		self.family = family
 
 		del_options = []
-		if detect_deletions_mat:
+		if detect_deletions_mat and detect_duplications_mat:
+			del_options.extend([[0, 1, 2]]*(2*len(family.mat_ancestors)))
+		elif detect_deletions_mat:
 			del_options.extend([[0, 1]]*(2*len(family.mat_ancestors)))
+		elif detect_duplications_mat:
+			del_options.extend([[0, 2]]*(2*len(family.mat_ancestors)))
 		else:
 			del_options.extend([[1]]*(2*len(family.mat_ancestors)))
-		if detect_deletions_pat:
+		if detect_deletions_pat and detect_duplications_pat:
+			del_options.extend([[0, 1, 2]]*(2*len(family.pat_ancestors)))
+		elif detect_deletions_pat:
 			del_options.extend([[0, 1]]*(2*len(family.pat_ancestors)))
+		elif detect_duplications_pat:
+			del_options.extend([[0, 2]]*(2*len(family.pat_ancestors)))
 		else:
 			del_options.extend([[1]]*(2*len(family.pat_ancestors)))
 
@@ -125,6 +141,14 @@ class InheritanceStates:
 		self.num_loss_states = num_loss_states
 
 		self._states = np.asarray(list(product(*(del_options + phase_options + loss_regions))), dtype=np.int8)
+
+		# can only have one deletion or duplication in the family at any position
+		self._states = self._states[np.sum(self._states[:, self.deletion_indices]!=1, axis=1) <= 1, :]
+
+		# deletion must be inherited
+		#for i in self.deletion_indices:
+		#	self._states = self._states[(self._states[:, i]==1) | (np.sum(self._states[:, self.maternal_phase_indices[self.family.num_ancestors():]+self.paternal_phase_indices[self.family.num_ancestors():]]==i, axis=1)>0), :]
+
 		self.num_states = self._states.shape[0]
 		self._phase = self.get_phase()
 		self._full_states = np.hstack((self._states[:, self.deletion_indices], 
@@ -209,10 +233,10 @@ class InheritanceStates:
 		return neighbor_indices
 
 	def is_ok_start(self, state):
-		return not state.has_deletion()
+		return (not state.has_deletion()) and (not state.has_duplication())
 
 	def is_ok_end(self, state):
-		return (not state.has_deletion())
+		return (not state.has_deletion()) and (not state.has_duplication())
 
 	def get_phase(self):
 		individual_to_index = dict([(x, i) for i, x in enumerate(self.family.individuals)])
@@ -235,17 +259,31 @@ class InheritanceStates:
 
 	def get_perfect_matches(self, state):
 		phase = self._phase[self.index(state), :]
-		allele_combinations = list(product(*([[2, 2] if state.has_deletion(i) else [0, 1] for i in range(2*self.family.num_ancestors())])))
+		allele_combinations = list(product(*([[2] if state.has_deletion(i) else [3, 4, 5] if state.has_duplication(i) else [0, 1] for i in range(2*self.family.num_ancestors())])))
 		
 		perfect_matches = list()
 		for alleles in allele_combinations:
 			perfect_matches.append(tuple(alleles_to_gen[(alleles[phase[2*i]], alleles[phase[2*i + 1]])] for i in range(len(self.family))))
 		return perfect_matches, allele_combinations
 
-# 0=no variant, 1=variant, 2=deletion
+# 0=no variant, 1=variant, 2=deletion, 3=duplication00, 4=duplication01, 5=duplication11
+# gens 0=0/0, 1=0/1, 2=1/1, 3=0/-, 4=1/-, 5=-/-, 6=0/
 alleles_to_gen = {
-	(2, 2): 5, (2, 0): 3, (2, 1): 4,
-	(0, 2): 3, (0, 0): 0, (0, 1): 1,
-	(1, 2): 4, (1, 0): 1, (1, 1): 2,
+	(0, 0): 0, (0, 1): 1, (0, 2): 0, (0, 3): 0, (0, 4): 1, (0, 5): 1,
+	(1, 0): 1, (1, 1): 2, (1, 2): 2, (1, 3): 1, (1, 4): 1, (1, 5): 2,
+	(2, 0): 0, (2, 1): 2,
+	(3, 0): 0, (3, 1): 1,
+	(4, 0): 1, (4, 1): 1,
+	(5, 0): 1, (5, 1): 2,
 }
 
+# 0, 1, 3
+# 00 -> 0
+# 01 -> 1
+# 03 -> 1
+# 10 -> 1
+# 11 -> 2
+# 13 -> 1
+# 30 -> 1
+# 31 -> 1
+# 33 -> 1

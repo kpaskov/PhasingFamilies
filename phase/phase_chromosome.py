@@ -31,6 +31,7 @@ parser.add_argument('--batch_num', type=int, default=0, help='To be used along w
 parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
 parser.add_argument('--detect_consanguinity', action='store_true', default=False, help='Detect consanguinity between parents. Can model basic consanguinity produced from a single shared ancestor. This option is only available for nuclear families.')
 parser.add_argument('--max_af_cost', type=float, default=np.log10(71702*2/3), help='Maximum allele frequency cost to consider. Should be set to something like np.log10(2*n/3) where n is the number of individuals used when estimating allele frequencies in data_dir/chr.*.gen.af.npy.')
+parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
 
 args = parser.parse_args()
 
@@ -65,7 +66,7 @@ with open('%s/info.json' % args.out_dir, 'w+') as f:
 
 
 # --------------- pull families of interest ---------------
-families = pull_families(args.ped_file)
+families = pull_families(args.ped_file, retain_order=args.retain_order)
 
 # make sure at least one individual has genetic data (chromosome 1 chosen arbitrarily)
 sample_file = '%s/samples.json' % args.data_dir
