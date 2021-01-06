@@ -23,6 +23,7 @@ parser.add_argument('param_file', type=str, help='Parameters for model.')
 parser.add_argument('num_loss_regions', type=int, help='Number of loss regions in model.')
 
 parser.add_argument('--detect_deletions', action='store_true', default=False, help='Detect deletions while phasing.')
+parser.add_argument('--detect_duplications', action='store_true', default=False, help='Detect duplications while phasing.')
 parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
 parser.add_argument('--family_size', type=int, default=None, help='Size of family to phase.')
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
@@ -120,7 +121,8 @@ for family in families:
 		print('family', family.id)
 
 		# create inheritance states
-		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, args.num_loss_regions)
+		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, 
+												args.detect_duplications, args.detect_duplications, args.num_loss_regions)
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, params)
