@@ -54,9 +54,8 @@ def pull_af_from_gnomad(records, positions, refs, alts, is_snp, is_pass, n):
 
 	print('% missing', np.sum(afs[is_snp & is_pass]==0)/np.sum(is_snp & is_pass))
 	print('backwards', was_backwards)
-	indices = is_snp & is_pass & (afs==0)
 
-	return np.clip(np.array(afs), 3/(2*n), 1-(3/(2*n))) # rule of 3
+	return np.array(afs)
 
 if args.batch_num < num_batches:
 	# pull positions of interest
