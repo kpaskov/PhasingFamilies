@@ -108,6 +108,15 @@ class LazyLoss:
 			loss = np.zeros((self.states.num_states,), dtype=float)
 
 			af_region_index = gen[-1]
+			
+			#rc, ac = -np.log10(0.5), -np.log10(0.5)
+			rc, ac = self.ref_costs[af_region_index], self.alt_costs[af_region_index]
+			#if len([x for x in gen if x==1 or x==2])>0 and len([x for x in gen if x==1 or x==0])>0:
+			#	#rc, ac = -np.log10(0.5), -np.log10(0.5)
+			#	rc, ac = self.ref_costs[af_region_index], self.alt_costs[af_region_index]
+			#else:
+			#	rc, ac = 0, 0
+
 			if np.all(gen[:-1]==0):
 				gen_options = list(product(*([[0] if x else [0, -1] for x in self.no_data])))
 			else:
@@ -118,9 +127,8 @@ class LazyLoss:
 					self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
 
 				for k in range(self.num_loss_regions):
-					rc, ac = self.ref_costs[af_region_index], self.alt_costs[af_region_index]
 					loss[self.loss_region==k] += np.sum(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
-														(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, 1, rc*rc, 2*rc*ac, ac*ac])).T) * \
+														(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, 0, rc+rc, -np.log10(2)+rc+ac, ac+ac])).T) * \
 														self.not_filler[self.loss_region==k, :], axis=1)
 			loss = -np.log10(np.clip(loss, 0, 1)) # handles numerical instability
 
@@ -150,7 +158,9 @@ class LazyLoss:
 			for i, pm in enumerate(self.perfect_matches):
 				self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
 
-			ancvar_probs += np.power(10, -self.s[loss_region_index, self.perfect_match_indices[state_index, :]])
+			ancvar_probs += np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
+														(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, -np.log10(1), rc+rc, -np.log10(2)+rc+ac, ac+ac])).T) * \
+														self.not_filler[self.loss_region==k, :]
 
 		return np.clip(ancvar_probs, 0, 1) # handles numerical instability
 

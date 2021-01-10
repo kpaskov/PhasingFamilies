@@ -1,5 +1,5 @@
 import numpy as np
-from itertools import product, combinations
+from itertools import product, combinations, chain
 from collections import defaultdict
 
 # inheritance states
@@ -53,6 +53,21 @@ class State:
 		else:
 			return self._data[self._inheritance_states.deletion_indices[index]]==2
 
+	def has_haplotype(self, index=None):
+		if index is None:
+			return np.any([self._data[i]>=3 for i in self._inheritance_states.deletion_indices])
+		else:
+			return self._data[self._inheritance_states.deletion_indices[index]]>=3
+
+	def haplotype_off(self):
+		updated_data = np.array(self._data)
+		indices = [i for i in self._inheritance_states.deletion_indices if self._data[i]>=3]
+		updated_data[indices] = 1
+		return State(updated_data, self._inheritance_states)
+
+	def get_haplotype(self, index):
+		return None if not self.has_haplotype(index) else self._data[self._inheritance_states.deletion_indices[index]]-3
+
 	def is_hard_to_sequence(self, state):
 		return self._data[loss_region_index] != 0
 
@@ -70,7 +85,7 @@ class State:
 
 	def toggle_ancestral_deletions(self, deletion_states):
 		updated_data = np.array(self._data)
-		num_dels_changed = np.sum(updated_data != np.array(deletion_states))
+		num_dels_changed = np.sum(updated_data[self._inheritance_states.deletion_indices] != np.array(deletion_states))
 		updated_data[self._inheritance_states.deletion_indices] = deletion_states
 		return State(updated_data, self._inheritance_states), num_dels_changed
 
@@ -88,23 +103,34 @@ class InheritanceStates:
 								num_loss_states):
 		self.family = family
 
+		s = np.arange(2*family.num_ancestors())
+		haplotype_combinations = list(chain.from_iterable(combinations(s, r) for r in range(2, len(s)+1)))
+
+		# 0=deletion, 2=duplication, 3+=haplotype
 		del_options = []
 		if detect_deletions_mat and detect_duplications_mat:
-			del_options.extend([[0, 1, 2]]*(2*len(family.mat_ancestors)))
+			base_options = [0, 1, 2]
 		elif detect_deletions_mat:
-			del_options.extend([[0, 1]]*(2*len(family.mat_ancestors)))
+			base_options = [0, 1]
 		elif detect_duplications_mat:
-			del_options.extend([[0, 2]]*(2*len(family.mat_ancestors)))
+			base_options = [0, 2]
 		else:
-			del_options.extend([[1]]*(2*len(family.mat_ancestors)))
+			base_options = [1]
+		#del_options.extend([base_options]*(2*len(family.mat_ancestors)))
+		del_options.extend([base_options + (3+np.arange(i)).tolist() for i in np.arange(2*len(family.mat_ancestors))])
+
 		if detect_deletions_pat and detect_duplications_pat:
-			del_options.extend([[0, 1, 2]]*(2*len(family.pat_ancestors)))
+			base_options = [0, 1, 2]
 		elif detect_deletions_pat:
-			del_options.extend([[0, 1]]*(2*len(family.pat_ancestors)))
+			base_options = [0, 1]
 		elif detect_duplications_pat:
-			del_options.extend([[0, 2]]*(2*len(family.pat_ancestors)))
+			base_options = [0, 2]
 		else:
-			del_options.extend([[1]]*(2*len(family.pat_ancestors)))
+			base_options = [1]
+		#del_options.extend([base_options]*(2*len(family.pat_ancestors)))
+		del_options.extend([base_options + (3+np.arange(2*len(family.mat_ancestors)+i)).tolist() for i in np.arange(2*len(family.pat_ancestors))])
+
+		print(del_options)
 
 		mom_to_children, dad_to_children = defaultdict(list), defaultdict(list)
 		for (mom, dad), children in self.family.parents_to_children.items():
@@ -143,11 +169,23 @@ class InheritanceStates:
 		self._states = np.asarray(list(product(*(del_options + phase_options + loss_regions))), dtype=np.int8)
 
 		# can only have one deletion or duplication in the family at any position
-		self._states = self._states[np.sum(self._states[:, self.deletion_indices]!=1, axis=1) <= 1, :]
+		# self._states = self._states[np.sum(np.isin(self._states[:, self.deletion_indices], [0, 2]), axis=1) <= 1, :]
 
-		# deletion must be inherited
-		#for i in self.deletion_indices:
-		#	self._states = self._states[(self._states[:, i]==1) | (np.sum(self._states[:, self.maternal_phase_indices[self.family.num_ancestors():]+self.paternal_phase_indices[self.family.num_ancestors():]]==i, axis=1)>0), :]
+		# can't have a deletion/duplication at the same position
+		#self._states = self._states[np.all(self._states[:, self.deletion_indices]<3, axis=1) | np.all(~np.isin(self._states[:, self.deletion_indices], [0, 2]), axis=1), :]
+
+		# must chain multiple haplotypes - can't have two pointing to the same place
+		for i in np.arange(2*family.num_ancestors()):
+			self._states = self._states[np.sum(self._states[:, self.deletion_indices]==3+i, axis=1)<=1, :]
+
+		# deletion/duplication must be inherited
+		self.num_states = self._states.shape[0]
+		phase = self.get_phase()
+		print(self._states.shape, phase.shape)
+		is_inherited = np.ones((self.num_states,), dtype=bool)
+		for i in self.deletion_indices:
+			is_inherited[((self._states[:, i]==0) | (self._states[:, i]==2)) & (np.sum(phase[:, 2*self.family.num_ancestors():]==i, axis=1)==0)] = False
+		self._states = self._states[is_inherited, :]
 
 		self.num_states = self._states.shape[0]
 		self._phase = self.get_phase()
@@ -217,12 +255,42 @@ class InheritanceStates:
 	def get_deletion_neighbors(self, state):
 		neighbor_indices = []
 		neighbor_differences = []
-		for deletion_combination in list(product(*([[0, 1]]*len(self.deletion_indices)))):
+
+		for deletion_combination in list(product(*([[0, 1] if state[i] == 1 or state[i] == 0 else [state[i]] for i in self.deletion_indices]))):
 			new_state, num_dels_changed = state.toggle_ancestral_deletions(deletion_combination)
 			if new_state != state and new_state in self:
 				neighbor_indices.append(self.index(new_state))
 				neighbor_differences.append(num_dels_changed)
-		return neighbor_indices, neighbor_differences
+		neighbor_indices = np.array(neighbor_indices)
+		neighbor_differences = np.array(neighbor_differences)
+		return neighbor_indices[neighbor_differences==1], neighbor_differences[neighbor_differences==1]
+
+	def get_duplication_neighbors(self, state):
+		neighbor_indices = []
+		neighbor_differences = []
+
+		for deletion_combination in list(product(*([[2, 1] if state[i] == 1 or state[i] == 2 else [state[i]] for i in self.deletion_indices]))):
+			new_state, num_dels_changed = state.toggle_ancestral_deletions(deletion_combination)
+			if new_state != state and new_state in self:
+				neighbor_indices.append(self.index(new_state))
+				neighbor_differences.append(num_dels_changed)
+		neighbor_indices = np.array(neighbor_indices)
+		neighbor_differences = np.array(neighbor_differences)
+		return neighbor_indices[neighbor_differences==1], neighbor_differences[neighbor_differences==1]
+
+	def get_haplotype_neighbors(self, state):
+		neighbor_indices = []
+		if state.has_haplotype():
+			new_state = state.haplotype_off()
+			if new_state != state and new_state in self:
+				neighbor_indices.append(self.index(new_state))
+		else:
+			for hap_combination in list(product(*([[1] + (3+np.arange(len(self.deletion_indices))).tolist() if state[i]==1 else [state[i]] for i in self.deletion_indices]))):
+				new_state, num_dels_changed = state.toggle_ancestral_deletions(hap_combination)
+				if new_state != state and new_state in self:
+					neighbor_indices.append(self.index(new_state))
+		neighbor_indices = np.array(neighbor_indices)
+		return neighbor_indices
 
 	def get_loss_neighbors(self, state):
 		neighbor_indices = set()
@@ -241,6 +309,7 @@ class InheritanceStates:
 	def get_phase(self):
 		individual_to_index = dict([(x, i) for i, x in enumerate(self.family.individuals)])
 		phase = np.tile(np.arange(2*self.family.num_ancestors()), (self.num_states,1))
+
 		for mom, dad in self.family.ordered_couples:
 			mom_index, dad_index = individual_to_index[mom], individual_to_index[dad]
 
@@ -259,10 +328,17 @@ class InheritanceStates:
 
 	def get_perfect_matches(self, state):
 		phase = self._phase[self.index(state), :]
-		allele_combinations = list(product(*([[2] if state.has_deletion(i) else [3, 4, 5] if state.has_duplication(i) else [0, 1] for i in range(2*self.family.num_ancestors())])))
-		
+		allele_combinations = np.array(list(product(*([[2] if state.has_deletion(i) else [3, 4, 5] if state.has_duplication(i) else [-1] if state.has_haplotype(i) else [0, 1] for i in range(2*self.family.num_ancestors())]))), dtype=int)
+
+		# replace haplotypes
+		allele_combinations_haplotype_replaced = allele_combinations.copy()
+		for i in np.arange(2*self.family.num_ancestors()):
+			if state.has_haplotype(i):
+				indices = allele_combinations_haplotype_replaced[:, i]==-1
+				allele_combinations_haplotype_replaced[indices, i] = allele_combinations_haplotype_replaced[indices, state.get_haplotype(i)] 
+
 		perfect_matches = list()
-		for alleles in allele_combinations:
+		for alleles in allele_combinations_haplotype_replaced:
 			perfect_matches.append(tuple(alleles_to_gen[(alleles[phase[2*i]], alleles[phase[2*i + 1]])] for i in range(len(self.family))))
 		return perfect_matches, allele_combinations
 
@@ -271,10 +347,10 @@ class InheritanceStates:
 alleles_to_gen = {
 	(0, 0): 0, (0, 1): 1, (0, 2): 0, (0, 3): 0, (0, 4): 1, (0, 5): 1,
 	(1, 0): 1, (1, 1): 2, (1, 2): 2, (1, 3): 1, (1, 4): 1, (1, 5): 2,
-	(2, 0): 0, (2, 1): 2,
-	(3, 0): 0, (3, 1): 1,
-	(4, 0): 1, (4, 1): 1,
-	(5, 0): 1, (5, 1): 2,
+	(2, 0): 0, (2, 1): 2, (2, 2): 5, (2, 3): 0, (2, 4): 1, (2, 5): 2,
+	(3, 0): 0, (3, 1): 1, (3, 2): 0, (3, 3): 0, (3, 4): 1, (3, 5): 1,
+	(4, 0): 1, (4, 1): 1, (4, 2): 1, (4, 3): 1, (4, 4): 1, (4, 5): 1,
+	(5, 0): 1, (5, 1): 2, (5, 2): 2, (5, 3): 1, (5, 4): 1, (5, 5): 2
 }
 
 # 0, 1, 3

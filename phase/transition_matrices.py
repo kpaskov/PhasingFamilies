@@ -23,6 +23,16 @@ class TransitionMatrix:
 			transitions[state_index].extend(neighbors)
 			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']*n for n in num_changed])
 
+			# allow a transition into or out of one or more inherited duplications
+			neighbors, num_changed = states.get_duplication_neighbors(state)
+			transitions[state_index].extend(neighbors)
+			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']*n for n in num_changed])
+
+			# allow a transition into or out of one or more haplotypes
+			neighbors = states.get_haplotype_neighbors(state)
+			transitions[state_index].extend(neighbors)
+			transition_costs[state_index].extend([params['-log10(P[haplotype_entry_exit])']]*len(neighbors))
+
 			# allow a single recombination event
 			neighbors = states.get_maternal_recombination_neighbors(state)
 			transitions[state_index].extend(neighbors)
