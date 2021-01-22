@@ -39,7 +39,7 @@ args = parser.parse_args()
 if args.chrom is not None:
 	chroms = [args.chrom]
 else:
-	chroms = [str(x) for x in range(1, 23)]
+	chroms = [str(x) for x in range(1, 23)] + ['X']
 
 if args.detect_deletions:
 	print('Detecting deletions while phasing ...')
