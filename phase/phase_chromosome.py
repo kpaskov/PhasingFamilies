@@ -33,6 +33,7 @@ parser.add_argument('--no_overwrite', action='store_true', default=False, help='
 parser.add_argument('--detect_consanguinity', action='store_true', default=False, help='Detect consanguinity between parents. Can model basic consanguinity produced from a single shared ancestor. This option is only available for nuclear families.')
 parser.add_argument('--max_af_cost', type=float, default=np.log10(71702*2/3), help='Maximum allele frequency cost to consider. Should be set to something like np.log10(2*n/3) where n is the number of individuals used when estimating allele frequencies in data_dir/chr.*.gen.af.npy.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
+parser.add_argument('--continue_writing', action='store_true', default=False, help='Continue writing to phasing file - do not overwrite previous phasing data.')
 
 args = parser.parse_args()
 
@@ -131,13 +132,14 @@ for family in families:
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions, af_boundaries)
 		#print('loss created')
 
-		with open('%s/%s.phased.txt' % (args.out_dir, family), 'w+') as statef:
-			# write header
-			statef.write('\t'.join(['chrom'] + \
-	                           ['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
-	                           ['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
-	                           sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
-	                           ['loss_region', 'start_pos', 'end_pos']) + '\n')
+		with open('%s/%s.phased.txt' % (args.out_dir, family), 'a' if args.continue_writing else 'w+') as statef:
+			if not args.continue_writing:
+				# write header
+				statef.write('\t'.join(['chrom'] + \
+									['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
+									['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
+									sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
+									['loss_region', 'start_pos', 'end_pos']) + '\n')
 
 			for chrom in chroms:
 				print('chrom', chrom)
