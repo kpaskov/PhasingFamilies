@@ -33,7 +33,6 @@ parser.add_argument('--no_overwrite', action='store_true', default=False, help='
 parser.add_argument('--detect_consanguinity', action='store_true', default=False, help='Detect consanguinity between parents. Can model basic consanguinity produced from a single shared ancestor. This option is only available for nuclear families.')
 parser.add_argument('--max_af_cost', type=float, default=np.log10(71702*2/3), help='Maximum allele frequency cost to consider. Should be set to something like np.log10(2*n/3) where n is the number of individuals used when estimating allele frequencies in data_dir/chr.*.gen.af.npy.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
-parser.add_argument('--continue_writing', action='store_true', default=False, help='Continue writing to phasing file - do not overwrite previous phasing data.')
 
 args = parser.parse_args()
 
@@ -70,7 +69,7 @@ with open('%s/info.json' % args.out_dir, 'w+') as f:
 # --------------- pull families of interest ---------------
 families = pull_families(args.ped_file, retain_order=args.retain_order)
 
-# make sure at least one individual has genetic data (chromosome 1 chosen arbitrarily)
+# make sure at least one individual has genetic data
 sample_file = '%s/samples.json' % args.data_dir
 with open(sample_file, 'r') as f:
 	sample_ids = set(json.load(f))
@@ -94,11 +93,6 @@ if args.family_size is not None:
 # limit to family
 if args.family is not None:
 	families = [x for x in families if x.id==args.family]
-
-# no over-writing files
-if args.no_overwrite:
-	current_families = set([x[:-11] for x in listdir(args.out_dir) if x.endswith('.phased.txt')])
-	families = [x for x in families if x.id not in current_families]
 
 # limit to batch
 if args.batch_size is not None:
@@ -132,8 +126,24 @@ for family in families:
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions, af_boundaries)
 		#print('loss created')
 
-		with open('%s/%s.phased.txt' % (args.out_dir, family), 'a' if args.continue_writing else 'w+') as statef:
-			if not args.continue_writing:
+		# to avoid overwriting previous data, check which chromosomes have already been phased
+		has_header = False
+		already_phased_chroms = set()
+		if args.no_overwrite:
+			try:
+				with open('%s/%s.phased.txt' % (args.out_dir, family), 'r') as f:
+					header = next(f).strip().split('\t')[1:-2] # skip header
+					individuals = [x[:-4] for x in header if x.endswith('_mat')]
+					family.set_individual_order(individuals)
+					has_header = True
+
+					for line in f:
+						already_phased_chroms.add(line[3:])
+			except FileNotFoundError:
+				pass
+
+		with open('%s/%s.phased.txt' % (args.out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
+			if not has_header:
 				# write header
 				statef.write('\t'.join(['chrom'] + \
 									['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
@@ -141,7 +151,7 @@ for family in families:
 									sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
 									['loss_region', 'start_pos', 'end_pos']) + '\n')
 
-			for chrom in chroms:
+			for chrom in [x for x in chroms if x not in already_phased_chroms]:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
