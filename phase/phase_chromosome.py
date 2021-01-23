@@ -138,9 +138,11 @@ for family in families:
 					has_header = True
 
 					for line in f:
-						already_phased_chroms.add(line[3:])
+						pieces = line.split('\t', maxsplit=1)
+						already_phased_chroms.add(pieces[0][3:])
 			except FileNotFoundError:
 				pass
+		print('already phased', sorted(already_phased_chroms))
 
 		with open('%s/%s.phased.txt' % (args.out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
 			if not has_header:
