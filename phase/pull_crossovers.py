@@ -12,6 +12,7 @@ parser.add_argument('phase_dir', type=str, help='Directory with phase data.')
 parser.add_argument('ped_file', type=str, help='Ped file for data.')
 parser.add_argument('assembly', type=str, help='Reference genome assembly for data.')
 
+chroms_of_interest = [str(x) for x in range(1, 23)] + ['X']
 args = parser.parse_args()
 
 # start by pulling families, only consider nuclear families
@@ -37,7 +38,7 @@ def pull_phase(filename):
 		ends = []
 		for line in f:
 			pieces = line.strip().split('\t')
-			chrs.append(int(pieces[0][3:]))
+			chrs.append(pieces[0][3:])
 			states.append(list(map(int, pieces[1:-2])))
 			starts.append(int(pieces[-2]))
 			ends.append(int(pieces[-1]))
@@ -61,19 +62,18 @@ def pull_phase(filename):
 			   raise Exception('This family contains identical twins.')
 
 
-	return states, np.array(chrs), starts, ends, individuals, mat_indices, pat_indices
+	return states, chrs, starts, ends, individuals, mat_indices, pat_indices
 		
 
 # extracts all recombination points from phase
 Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size', 'mom', 'dad'])
 def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  indices, is_mat):
     recombinations = []
-    for chrom in range(1, 23):
+    for chrom in chroms_of_interest:
         # block out 
-        
+        is_chrom = np.array([x==chrom for x in chroms])
         for individual, index in zip(individuals, indices):
-
-            change_indices = np.where((chroms[:-1]==chrom) & (chroms[1:]==chrom) & (states[index, :-1] != states[index, 1:]))[0]+1
+            change_indices = np.where(is_chrom[:-1] & is_chrom[1:] & (states[index, :-1] != states[index, 1:]))[0]+1
                         
             if change_indices.shape[0]>0:
                 current_index = change_indices[0]
@@ -131,7 +131,7 @@ for file in sorted(os.listdir(args.phase_dir)):
 			print(family_id)
 			states, chroms, starts, ends, individuals, mat_indices, pat_indices = pull_phase('%s/%s.phased.txt' % (args.phase_dir, family_id))
 			
-			missing_chroms = set(range(1, 23)) - set(np.unique(chroms))
+			missing_chroms = set(chroms_of_interest) - set(np.unique(chroms))
 			if len(missing_chroms)>0:
 				raise Exception('missing %s' % str(missing_chroms))
 
@@ -146,7 +146,7 @@ for file in sorted(os.listdir(args.phase_dir)):
 			# now identify crossovers and gene conversions
 			gene_conversions, crossovers = [], []
 			children = set([x.child for x in recombinations])
-			for chrom in range(1, 23):
+			for chrom in chroms_of_interest:
 				for child in children:
 					gc, co = match_recombinations(recombinations, chrom, child, True)
 					gene_conversions.extend(gc)

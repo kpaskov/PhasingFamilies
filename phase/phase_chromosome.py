@@ -126,32 +126,40 @@ for family in families:
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions, af_boundaries)
 		#print('loss created')
 
-		# to avoid overwriting previous data, check which chromosomes have already been phased
-		has_header = False
-		already_phased_chroms = set()
-		if args.no_overwrite:
-			try:
-				with open('%s/%s.phased.txt' % (args.out_dir, family), 'r') as f:
-					header = next(f).strip().split('\t')[1:-2] # skip header
-					individuals = [x[:-4] for x in header if x.endswith('_mat')]
-					family.set_individual_order(individuals)
-					has_header = True
+		# start by pulling header, or writing one if the file doesn't exist
+		existing_phase_data = []
+		needs_header = False
+		try:
+			with open('%s/%s.phased.txt' % (args.out_dir, family), 'r') as f:
+				header = next(f)
+				header_pieces = header.strip().split('\t')[1:-2]
+				individuals = [x[:-4] for x in header_pieces if x.endswith('_mat')]
+				family.set_individual_order(individuals)
+				existing_phase_data = [x for x in f]
+		except (FileNotFoundError, StopIteration):
+			header = '\t'.join(['chrom'] + \
+				['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
+				['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
+				sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
+				['loss_region', 'start_pos', 'end_pos']) + '\n'
+			needs_header = True
 
-					for line in f:
-						pieces = line.split('\t', maxsplit=1)
-						already_phased_chroms.add(pieces[0][3:])
-			except FileNotFoundError:
-				pass
+		# to avoid overwriting previous data, check which chromosomes have already been phased
+		already_phased_chroms = set([line.split('\t', maxsplit=1)[0][3:] for line in existing_phase_data])
 		print('already phased', sorted(already_phased_chroms))
 
 		with open('%s/%s.phased.txt' % (args.out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
-			if not has_header:
-				# write header
-				statef.write('\t'.join(['chrom'] + \
-									['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
-									['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
-									sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
-									['loss_region', 'start_pos', 'end_pos']) + '\n')
+			if args.no_overwrite:
+				print('no overwrite')
+				if needs_header:
+					statef.write(header)
+			else:
+				print('overwriting', list(set(chroms) & already_phased_chroms))
+				statef.write(header)
+				for line in existing_phase_data:
+					if line.split('\t', maxsplit=1)[0][3:] not in chroms:
+						statef.write(line)
+				already_phased_chroms = already_phased_chroms - set(chroms)
 
 			for chrom in [x for x in chroms if x not in already_phased_chroms]:
 				print('chrom', chrom)

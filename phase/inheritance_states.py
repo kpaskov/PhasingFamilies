@@ -179,13 +179,13 @@ class InheritanceStates:
 			self._states = self._states[np.sum(self._states[:, self.deletion_indices]==3+i, axis=1)<=1, :]
 
 		# deletion/duplication must be inherited
-		self.num_states = self._states.shape[0]
-		phase = self.get_phase()
-		print(self._states.shape, phase.shape)
-		is_inherited = np.ones((self.num_states,), dtype=bool)
-		for i in self.deletion_indices:
-			is_inherited[((self._states[:, i]==0) | (self._states[:, i]==2)) & (np.sum(phase[:, 2*self.family.num_ancestors():]==i, axis=1)==0)] = False
-		self._states = self._states[is_inherited, :]
+		#self.num_states = self._states.shape[0]
+		#phase = self.get_phase()
+		#print(self._states.shape, phase.shape)
+		#is_inherited = np.ones((self.num_states,), dtype=bool)
+		#for i in self.deletion_indices:
+		#	is_inherited[((self._states[:, i]==0) | (self._states[:, i]==2)) & (np.sum(phase[:, 2*self.family.num_ancestors():]==i, axis=1)==0)] = False
+		#self._states = self._states[is_inherited, :]
 
 		self.num_states = self._states.shape[0]
 		self._phase = self.get_phase()
