@@ -53,25 +53,29 @@ def pull_phased_chroms(filename):
 			
 	return chrs, individuals
 
-
+has_no_data = []
 has_missing_chroms = []
 has_missing_individuals = []
 is_missing_phase_data = []
 all_good = 0
 
 for family in families:
-    if os.path.isfile('%s/%s.phased.txt' % (args.phase_dir, family.id)):
-        chroms, individuals = pull_phased_chroms('%s/%s.phased.txt' % (args.phase_dir, family.id))
-        missing_chroms = set([str(x) for x in range(1, 23)]) - chroms
-        if len(missing_chroms)>0:
-            has_missing_chroms.append(family.id)
-        elif len(individuals) != len(family.individuals):
-            has_missing_individuals.append((family.id, set(family.individuals)-set(individuals)))
-        else:
-            all_good += 1
-    else:
-        is_missing_phase_data.append(family.id)
+	if os.path.isfile('%s/%s.phased.txt' % (args.phase_dir, family.id)):
+		try:
+			chroms, individuals = pull_phased_chroms('%s/%s.phased.txt' % (args.phase_dir, family.id))
+			missing_chroms = set([str(x) for x in range(1, 23)]) - chroms
+			if len(missing_chroms)>0:
+				has_missing_chroms.append(family.id)
+			elif len(individuals) != len(family.individuals):
+				has_missing_individuals.append((family.id, set(family.individuals)-set(individuals)))
+			else:
+				all_good += 1
+		except StopIteration:
+			has_no_data.append(family.id)
+	else:
+		is_missing_phase_data.append(family.id)
 
+print('has no dad', has_no_data)
 print('has missing chroms', has_missing_chroms)
 print('has missing individuals', has_missing_individuals)
 print('is missing phase data', is_missing_phase_data)
