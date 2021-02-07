@@ -75,7 +75,7 @@ for family in families:
 	else:
 		is_missing_phase_data.append(family.id)
 
-print('has no dad', has_no_data)
+print('has no data', has_no_data)
 print('has missing chroms', has_missing_chroms)
 print('has missing individuals', has_missing_individuals)
 print('is missing phase data', is_missing_phase_data)
