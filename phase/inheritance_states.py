@@ -179,9 +179,9 @@ class InheritanceStates:
 			self._states = self._states[np.sum(self._states[:, self.deletion_indices]==3+i, axis=1)<=1, :]
 
 		# can't combine haplotypes and deletions
-		num_deletions = np.sum(self._states[:, self.deletion_indices]==0, axis=1)
-		num_haplotypes = np.sum(self._states[:, self.deletion_indices]>=3, axis=1)
-		self._states = self._states[(num_deletions==0) | (num_haplotypes==0), :]
+		#num_deletions = np.sum(self._states[:, self.deletion_indices]==0, axis=1)
+		#num_haplotypes = np.sum(self._states[:, self.deletion_indices]>=3, axis=1)
+		#self._states = self._states[(num_deletions==0) | (num_haplotypes==0), :]
 
 		# deletion/duplication must be inherited
 		#self.num_states = self._states.shape[0]
