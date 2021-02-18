@@ -156,7 +156,6 @@ for family in families:
 				print('no overwrite')
 				if needs_header:
 					statef.write(header)
-					phasef.write(header)
 			else:
 				print('overwriting', list(set(chroms) & already_phased_chroms))
 				statef.write(header)
