@@ -94,6 +94,8 @@ if args.family_size is not None:
 if args.family is not None:
 	families = [x for x in families if x.id==args.family]
 
+print('Families of interest', len(families))
+
 # limit to batch
 if args.batch_size is not None:
 	families = families[(args.batch_num*args.batch_size):((args.batch_num+1)*args.batch_size)]
@@ -108,7 +110,7 @@ if args.detect_consanguinity:
 	for family in families:
 		family.add_child(family.mat_ancestors[0], 'mat_shared_ancestor', 'pat_shared_ancestor')
 		family.add_child(family.pat_ancestors[0], 'mat_shared_ancestor', 'pat_shared_ancestor')
-print('Families of interest', len(families))
+print('Families of interest, limited to batch', len(families))
 
 # phase each family
 for family in families:
