@@ -55,7 +55,6 @@ class LazyLoss:
 		self.num_loss_regions = num_loss_regions
 		self.family_size = len(family)
 		self.states = states
-		# the 100 below is an arbitrary large number; this af is only used for sites where the family is all homref, we essentially assume the af is 0
 		print(af_boundaries)
 		self.alt_costs = np.array(af_boundaries[af_boundaries > -np.log10(0.5)].tolist() + [-np.log10(0.5)] + af_boundaries[af_boundaries < -np.log10(0.5)].tolist())
 		self.ref_costs = np.array([-np.log10(1-(10**-alt_cost)) for alt_cost in self.alt_costs])
@@ -123,8 +122,9 @@ class LazyLoss:
 				gen_options = [gen[:-1]]
 
 			for gen in gen_options:
+				non_missing_indices = np.where([x!=-1 for x in gen])[0]
 				for i, pm in enumerate(self.perfect_matches):
-					self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
+					self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size)[non_missing_indices], [pm[i] for i in non_missing_indices], [gen[i] for i in non_missing_indices]], axis=1)
 
 				for k in range(self.num_loss_regions):
 					loss[self.loss_region==k] += np.sum(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
@@ -155,8 +155,9 @@ class LazyLoss:
 
 		ancvar_probs = np.zeros((self.perfect_match_indices.shape[1],), dtype=float)
 		for gen in gen_options:
+			non_missing_indices = np.where([x!=-1 for x in gen])[0]
 			for i, pm in enumerate(self.perfect_matches):
-				self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size), list(pm), list(gen)], axis=1)
+				self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size)[non_missing_indices], [pm[i] for i in non_missing_indices], [gen[i] for i in non_missing_indices]], axis=1)
 
 			ancvar_probs += np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
 														(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, -np.log10(1), rc+rc, -np.log10(2)+rc+ac, ac+ac])).T) * \

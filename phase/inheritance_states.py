@@ -59,6 +59,21 @@ class State:
 		else:
 			return self._data[self._inheritance_states.deletion_indices[index]]>=3
 
+	#def has_maternal_denovo_deletion(self, index=None):
+	#	if index is None:
+	#		return np.any([self._data[i]==1 for i in self._inheritance_states.maternal_denovo_deletion_indices])
+	#	else:
+	#		return self._data[self._inheritance_states.maternal_denovo_deletion_indices[index]]==1
+
+	#def has_paternal_denovo_deletion(self, index=None):
+	#	if index is None:
+	#		return np.any([self._data[i]==1 for i in self._inheritance_states.paternal_denovo_deletion_indices])
+	#	else:
+	#		return self._data[self._inheritance_states.paternal_denovo_deletion_indices[index]]==1
+	#
+	#def has_denovo_deletion(self):
+	#	return self.has_maternal_denovo_deletion() or self.has_paternal_denovo_deletion()
+
 	def haplotype_off(self):
 		updated_data = np.array(self._data)
 		indices = [i for i in self._inheritance_states.deletion_indices if self._data[i]>=3]
@@ -81,6 +96,18 @@ class State:
 		updated_data = np.array(self._data)
 		indices = [self._inheritance_states.paternal_phase_indices[self._inheritance_states.family.individuals.index(individual)] for individual in individuals]
 		updated_data[indices] = 1-updated_data[indices]
+		return State(updated_data, self._inheritance_states)
+
+	def toggle_maternal_denovo(self, individual):
+		updated_data = np.array(self._data)
+		index = self._inheritance_states.maternal_denovo_deletion_indices[self._inheritance_states.family.individuals.index(individual)]
+		updated_data[index] = 1-updated_data[index]
+		return State(updated_data, self._inheritance_states)
+
+	def toggle_paternal_denovo(self, individual):
+		updated_data = np.array(self._data)
+		index = self._inheritance_states.paternal_denovo_deletion_indices[self._inheritance_states.family.individuals.index(individual)]
+		updated_data[index] = 1-updated_data[index]
 		return State(updated_data, self._inheritance_states)
 
 	def toggle_ancestral_deletions(self, deletion_states):
@@ -157,15 +184,21 @@ class InheritanceStates:
 					parents_with_fixed_child.add(dad)
 					self.fixed_children.append((child, 'pat'))
 
+		#denovo_options = [[0]]*(2*self.family.num_ancestors()) + [[0, 1]]*(2*self.family.num_descendents())
+
 		loss_regions = [list(np.arange(num_loss_states))]
 		print('fixed', self.fixed_children)
 
 		self.deletion_indices = np.arange(len(del_options))
 		self.maternal_phase_indices = [None]*self.family.num_ancestors() + np.arange(len(del_options), len(del_options)+len(phase_options), 2).tolist()
 		self.paternal_phase_indices = [None]*self.family.num_ancestors() + np.arange(len(del_options)+1, len(del_options)+len(phase_options), 2).tolist()
-		self.loss_region_index = len(del_options)+len(phase_options)
+		#self.denovo_deletion_indices = np.arange(len(del_options)+len(phase_options), len(del_options)+len(phase_options)+len(denovo_options)).tolist()
+		#self.maternal_denovo_deletion_indices = np.arange(len(del_options)+len(phase_options), len(del_options)+len(phase_options)+len(denovo_options), 2).tolist()
+		#self.paternal_denovo_deletion_indices = np.arange(len(del_options)+len(phase_options)+1, len(del_options)+len(phase_options)+len(denovo_options), 2).tolist()
+		self.loss_region_index = len(del_options)+len(phase_options) #+ len(denovo_options)
 		self.num_loss_states = num_loss_states
 
+		#print(len(del_options), len(phase_options), len(denovo_options), len(loss_regions))
 		self._states = np.asarray(list(product(*(del_options + phase_options + loss_regions))), dtype=np.int8)
 
 		# can only have one deletion or duplication in the family at any position
@@ -183,6 +216,9 @@ class InheritanceStates:
 		#num_haplotypes = np.sum(self._states[:, self.deletion_indices]>=3, axis=1)
 		#self._states = self._states[(num_deletions==0) | (num_haplotypes==0), :]
 
+		# allow only a single de novo deletion
+		#self._states = self._states[np.sum(self._states[:, self.maternal_denovo_deletion_indices+self.paternal_denovo_deletion_indices]==1, axis=1)<=1, :]
+
 		# deletion/duplication must be inherited
 		#self.num_states = self._states.shape[0]
 		#phase = self.get_phase()
@@ -196,11 +232,12 @@ class InheritanceStates:
 		self._phase = self.get_phase()
 		self._full_states = np.hstack((self._states[:, self.deletion_indices], 
 			self._phase, 
+			#self._states[:, self.denovo_deletion_indices],
 			self._states[:, self.loss_region_index, np.newaxis]))
 
 		print('inheritance states', self._states.shape)
 
-		self.full_state_length = len(del_options) + 2*len(self.family) + 1
+		self.full_state_length = len(del_options) + 2*len(self.family) + 1 #+ len(self.denovo_deletion_indices)
 		self._state_to_index = dict([(State(x, self), i) for i, x in enumerate(self._states)])
 		self._full_state_to_index = dict([(tuple(x), i) for i, x in enumerate(self._full_states)])
 
@@ -257,6 +294,24 @@ class InheritanceStates:
 					neighbor_indices.add(self.index(new_state))
 		return neighbor_indices
 
+	#def get_maternal_denovo_deletion_neighbors(self, state):
+	#	neighbor_indices = set()
+	#	for siblings in self.family.parents_to_children.values():
+	#		for sibling in siblings:
+	#			new_state = state.toggle_maternal_denovo(sibling)
+	#			if new_state in self:
+	#				neighbor_indices.add(self.index(new_state))
+	#	return neighbor_indices
+
+	#def get_paternal_denovo_deletion_neighbors(self, state):
+	#	neighbor_indices = set()
+	#	for siblings in self.family.parents_to_children.values():
+	#		for sibling in siblings:
+	#			new_state = state.toggle_paternal_denovo(sibling)
+	#			if new_state in self:
+	#				neighbor_indices.add(self.index(new_state))
+	#	return neighbor_indices
+
 	def get_deletion_neighbors(self, state):
 		neighbor_indices = []
 		neighbor_differences = []
@@ -306,10 +361,10 @@ class InheritanceStates:
 		return neighbor_indices
 
 	def is_ok_start(self, state):
-		return (not state.has_deletion()) and (not state.has_duplication())
+		return (not state.has_deletion()) and (not state.has_duplication()) #and (not state.has_denovo_deletion())
 
 	def is_ok_end(self, state):
-		return (not state.has_deletion()) and (not state.has_duplication())
+		return (not state.has_deletion()) and (not state.has_duplication()) #and (not state.has_denovo_deletion())
 
 	def get_phase(self):
 		individual_to_index = dict([(x, i) for i, x in enumerate(self.family.individuals)])
@@ -341,10 +396,12 @@ class InheritanceStates:
 			if state.has_haplotype(i):
 				indices = allele_combinations_haplotype_replaced[:, i]==-1
 				allele_combinations_haplotype_replaced[indices, i] = allele_combinations_haplotype_replaced[indices, state.get_haplotype(i)] 
-
+		assert np.all(allele_combinations_haplotype_replaced[:, :2*self.family.num_ancestors()]>-1)
+		
 		perfect_matches = list()
 		for alleles in allele_combinations_haplotype_replaced:
-			perfect_matches.append(tuple(alleles_to_gen[(alleles[phase[2*i]], alleles[phase[2*i + 1]])] for i in range(len(self.family))))
+			perfect_matches.append(tuple(alleles_to_gen[(alleles[phase[2*i]], 
+														 alleles[phase[2*i + 1]])] for i in range(len(self.family))))
 		return perfect_matches, allele_combinations
 
 # 0=no variant, 1=variant, 2=deletion, 3=duplication00, 4=duplication01, 5=duplication11

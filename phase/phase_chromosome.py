@@ -1,6 +1,6 @@
 import sys
 import json
-from itertools import product
+from itertools import product, combinations
 import traceback
 from os import listdir
 import numpy as np
@@ -135,7 +135,8 @@ for family in families:
 				header_pieces = header.strip().split('\t')[1:-2]
 				individuals = [x[:-4] for x in header_pieces if x.endswith('_mat')]
 				family.set_individual_order(individuals)
-				existing_phase_data = [x for x in f]
+				existing_phase_data = [x for x in f] 
+
 		except (FileNotFoundError, StopIteration):
 			header = '\t'.join(['chrom'] + \
 				['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
@@ -153,6 +154,7 @@ for family in families:
 				print('no overwrite')
 				if needs_header:
 					statef.write(header)
+					phasef.write(header)
 			else:
 				print('overwriting', list(set(chroms) & already_phased_chroms))
 				statef.write(header)
