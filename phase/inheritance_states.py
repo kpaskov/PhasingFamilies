@@ -383,6 +383,9 @@ class InheritanceStates:
 	def get_full_states(self, state_indices):
 		return self._full_states[state_indices, :]
 
+	def get_full_state(self, state_index):
+		return self._full_states[state_index, :]
+
 	def get_original_state(self, full_state):
 		return self[self._full_state_to_index[tuple(full_state)]]
 

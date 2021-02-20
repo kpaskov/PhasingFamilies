@@ -33,6 +33,7 @@ parser.add_argument('--no_overwrite', action='store_true', default=False, help='
 parser.add_argument('--detect_consanguinity', action='store_true', default=False, help='Detect consanguinity between parents. Can model basic consanguinity produced from a single shared ancestor. This option is only available for nuclear families.')
 parser.add_argument('--max_af_cost', type=float, default=np.log10(71702*2/3), help='Maximum allele frequency cost to consider. Should be set to something like np.log10(2*n/3) where n is the number of individuals used when estimating allele frequencies in data_dir/chr.*.gen.af.npy.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
+parser.add_argument('--low_memory', action='store_true', default=False, help='Reduce memory consumption, but no uncertainty regions.')
 
 args = parser.parse_args()
 
@@ -173,11 +174,19 @@ for family in families:
 				# update loss cache
 				loss.set_cache(family_genotypes)
 
-				# forward sweep
-				v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+				if args.low_memory:
+					# forward sweep
+					v_path, v_cost = viterbi_forward_sweep_low_memory(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
 
-				# backward sweep
-				final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
+					# backward sweep
+					final_states = viterbi_backward_sweep_low_memory(v_path, v_cost, inheritance_states, transition_matrix)
+
+				else:
+					# forward sweep
+					v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+
+					# backward sweep
+					final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
 
 				# write to file
 				write_to_file(statef, chrom, family, final_states, family_snp_positions)

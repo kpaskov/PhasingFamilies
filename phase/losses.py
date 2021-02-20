@@ -93,6 +93,7 @@ class LazyLoss:
 		assert self.already_calculated[-1] == False
 		assert len(self.gen_to_index) == self.losses.shape[1]-1
 		print('cached losses', self.losses.shape, 'already_calculated', np.sum(self.already_calculated))
+		print('losses', self.losses.shape, self.losses.nbytes/10**6, 'MB')
 
 
 	def __call__(self, gen): 
@@ -187,21 +188,22 @@ class LazyLoss:
 
 		max_perfect_matches = max([len(x[0]) for x in state_to_perfect_matches.values()])
 		self.perfect_match_indices = np.zeros((states.num_states, max_perfect_matches), dtype=int)
-		self.perfect_match_allele_counts = np.zeros((6, states.num_states, max_perfect_matches), dtype=int)
-		self.not_filler = np.zeros((states.num_states, max_perfect_matches), dtype=int)
+		print('perfect_match_indices', self.perfect_match_indices.shape, self.perfect_match_indices.nbytes/10**6, 'MB')
+		self.perfect_match_allele_counts = np.zeros((6, states.num_states, max_perfect_matches), dtype=np.int8)
+		print('perfect_match_allele_counts', self.perfect_match_allele_counts.shape, self.perfect_match_allele_counts.nbytes/10**6, 'MB')
+		self.not_filler = np.zeros((states.num_states, max_perfect_matches), dtype=bool)
+		print('not_filler', self.not_filler.shape, self.not_filler.nbytes/10**6, 'MB')
 
 		for i, s in enumerate(states):
 			pms, allele_combinations = state_to_perfect_matches[s]
 			self.perfect_match_indices[i, :len(pms)] = [perfect_match_to_index[pm] for pm in pms]
 			for j in range(6):
 				self.perfect_match_allele_counts[j, i, :len(pms)] = [len([x for x in ac if x==j]) for ac in allele_combinations]
-			self.not_filler[i, :len(pms)] = 1
+			self.not_filler[i, :len(pms)] = True
 
 		#self.perfect_match_indices = np.array(self.perfect_match_indices)
 		#self.perfect_match_ref_alleles = np.array(self.perfect_match_ref_alleles)
 		#self.perfect_match_alt_alleles = np.array(self.perfect_match_alt_alleles)
 		#self.perfect_match_missing_alleles = np.array(self.perfect_match_missing_alleles)
-
-		print('perfect_match_indices', self.perfect_match_indices.shape)
 
 

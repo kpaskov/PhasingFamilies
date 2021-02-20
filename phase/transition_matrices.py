@@ -18,10 +18,17 @@ class TransitionMatrix:
 			transitions[state_index].append(state_index)
 			transition_costs[state_index].append(0)
 
+			# allow a transition into or out of one or more haplotypes
+			neighbors = states.get_haplotype_neighbors(state)
+			transitions[state_index].extend(neighbors)
+			transition_costs[state_index].extend([params['-log10(P[haplotype_entry_exit])']]*len(neighbors))
+			num_hap_neighbors = len(neighbors)
+
 			# allow a transition into or out of one or more inherited deletions
 			neighbors, num_changed = states.get_deletion_neighbors(state)
 			transitions[state_index].extend(neighbors)
 			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']*n for n in num_changed])
+			num_del_neighbors = len(neighbors)
 
 			# allow a transition into or out of one or more denovo deletions
 			#neighbors = states.get_maternal_denovo_deletion_neighbors(state)
@@ -35,25 +42,26 @@ class TransitionMatrix:
 			neighbors, num_changed = states.get_duplication_neighbors(state)
 			transitions[state_index].extend(neighbors)
 			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']*n for n in num_changed])
-
-			# allow a transition into or out of one or more haplotypes
-			neighbors = states.get_haplotype_neighbors(state)
-			transitions[state_index].extend(neighbors)
-			transition_costs[state_index].extend([params['-log10(P[haplotype_entry_exit])']]*len(neighbors))
-
+			num_dup_neighbors = len(neighbors)
+			
 			# allow a single recombination event
 			neighbors = states.get_maternal_recombination_neighbors(state)
 			transitions[state_index].extend(neighbors)
 			transition_costs[state_index].extend([params['-log10(P[maternal_crossover])']]*len(neighbors))
+			num_recomb_neighbors = len(neighbors)
 
 			neighbors = states.get_paternal_recombination_neighbors(state)
 			transitions[state_index].extend(neighbors)
 			transition_costs[state_index].extend([params['-log10(P[paternal_crossover])']]*len(neighbors))
+			num_recomb_neighbors += len(neighbors)
 
 			# allow a transition into or out of a new loss region
 			neighbors = states.get_loss_neighbors(state)
 			transitions[state_index].extend(neighbors)
 			transition_costs[state_index].extend([params['-log10(P[loss_transition])']]*len(neighbors))
+			num_loss_neighbors = len(neighbors)
+
+			print(num_hap_neighbors, num_del_neighbors, num_dup_neighbors, num_recomb_neighbors, num_loss_neighbors)
 
 			# update cost of not transitioning (it will be close to 0, but not exactly)
 			p_transition = np.sum([10**(-x) for x in transition_costs[state_index][1:]])
@@ -61,8 +69,10 @@ class TransitionMatrix:
 		            
 		# transitions is a ragged matrix - square it off
 		max_trans = max([len(x) for x in transitions])
-		for t, c in zip(transitions, transition_costs):
+		self.is_filler = np.zeros((len(transitions), max_trans))
+		for i, (t, c) in enumerate(zip(transitions, transition_costs)):
 			while len(t) < max_trans:
+				self.is_filler[i, len(t)] = True
 				t.append(t[-1])
 				c.append(c[-1])
 
