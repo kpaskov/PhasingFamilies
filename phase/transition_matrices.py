@@ -61,7 +61,7 @@ class TransitionMatrix:
 			transition_costs[state_index].extend([params['-log10(P[loss_transition])']]*len(neighbors))
 			num_loss_neighbors = len(neighbors)
 
-			print(num_hap_neighbors, num_del_neighbors, num_dup_neighbors, num_recomb_neighbors, num_loss_neighbors)
+			#print(num_hap_neighbors, num_del_neighbors, num_dup_neighbors, num_recomb_neighbors, num_loss_neighbors)
 
 			# update cost of not transitioning (it will be close to 0, but not exactly)
 			p_transition = np.sum([10**(-x) for x in transition_costs[state_index][1:]])
