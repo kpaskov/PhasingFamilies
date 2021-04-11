@@ -127,11 +127,11 @@ class InheritanceStates:
 
 	def __init__(self, family, detect_deletions_mat, detect_deletions_pat, 
 								detect_duplications_mat, detect_duplications_pat, 
+								model_haplotypes,
 								num_loss_states):
 		self.family = family
 
 		s = np.arange(2*family.num_ancestors())
-		haplotype_combinations = list(chain.from_iterable(combinations(s, r) for r in range(2, len(s)+1)))
 
 		# 0=deletion, 2=duplication, 3+=haplotype
 		del_options = []
@@ -144,7 +144,10 @@ class InheritanceStates:
 		else:
 			base_options = [1]
 		#del_options.extend([base_options]*(2*len(family.mat_ancestors)))
-		del_options.extend([base_options + (3+np.arange(i)).tolist() for i in np.arange(2*len(family.mat_ancestors))])
+		if model_haplotypes:
+			del_options.extend([base_options + (3+np.arange(i)).tolist() for i in np.arange(2*len(family.mat_ancestors))])
+		else:
+			del_options.extend([base_options for i in np.arange(2*len(family.mat_ancestors))])
 
 		if detect_deletions_pat and detect_duplications_pat:
 			base_options = [0, 1, 2]
@@ -155,8 +158,10 @@ class InheritanceStates:
 		else:
 			base_options = [1]
 		#del_options.extend([base_options]*(2*len(family.pat_ancestors)))
-		del_options.extend([base_options + (3+np.arange(2*len(family.mat_ancestors)+i)).tolist() for i in np.arange(2*len(family.pat_ancestors))])
-
+		if model_haplotypes:
+			del_options.extend([base_options + (3+np.arange(2*len(family.mat_ancestors)+i)).tolist() for i in np.arange(2*len(family.pat_ancestors))])
+		else:
+			del_options.extend([base_options for i in np.arange(2*len(family.pat_ancestors))])
 		print(del_options)
 
 		mom_to_children, dad_to_children = defaultdict(list), defaultdict(list)

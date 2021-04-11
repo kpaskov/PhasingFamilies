@@ -277,24 +277,26 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 				af = np.load('%s/%s' % (data_dir, af_file))
 				family_has_variant = ((gen>0).sum(axis=0)>0).A.flatten()
 				has_data = np.where(is_snp & is_pass & in_interval & family_has_variant)[0]
+
+				if len(has_data)>0:
 				
-				# count the number of observed sites in between snps with data
-				c = np.cumsum(is_snp & is_pass & in_interval & ~family_has_variant)
-				collapsed = np.zeros((len(has_data),), dtype=int)
-				collapsed_front = c[has_data[0]]
-				collapsed[:-1] = c[has_data][1:]-c[has_data][:-1]
-				collapsed[-1] = c[-1]-c[has_data[-1]]
-				#print(c[-1]+len(has_data), np.sum(is_snp & is_pass), np.sum(collapsed)+len(has_data)+collapsed_front)
+					# count the number of observed sites in between snps with data
+					c = np.cumsum(is_snp & is_pass & in_interval & ~family_has_variant)
+					collapsed = np.zeros((len(has_data),), dtype=int)
+					collapsed_front = c[has_data[0]]
+					collapsed[:-1] = c[has_data][1:]-c[has_data][:-1]
+					collapsed[-1] = c[-1]-c[has_data[-1]]
+					#print(c[-1]+len(has_data), np.sum(is_snp & is_pass), np.sum(collapsed)+len(has_data)+collapsed_front)
 
-				if len(collapseds) == 0:
-					collapseds.append([collapsed_front])
-				else:
-					collapseds[-1][-1] += collapsed_front
+					if len(collapseds) == 0:
+						collapseds.append([collapsed_front])
+					else:
+						collapseds[-1][-1] += collapsed_front
 
-				gens.append(gen[:, has_data].A)
-				snp_positions.append(poss[has_data])
-				afs.append(np.digitize(-np.log10(np.clip(af[has_data], 10**-(af_boundaries[0]+1), None)), af_boundaries))
-				collapseds.append(collapsed)
+					gens.append(gen[:, has_data].A)
+					snp_positions.append(poss[has_data])
+					afs.append(np.digitize(-np.log10(np.clip(af[has_data], 10**-(af_boundaries[0]+1), None)), af_boundaries))
+					collapseds.append(collapsed)
 
 	gens = np.hstack(gens)
 	snp_positions = np.hstack(snp_positions)

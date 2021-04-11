@@ -53,6 +53,70 @@ def pull_phased_chroms(filename):
 			
 	return chrs, individuals
 
+def write_to_file(outf, chrom, positions, states):
+	# write final states to file
+	change_indices = [-1] + np.where(np.any(states[1:, :]!=states[:-1, :], axis=1))[0].tolist() + [positions.shape[0]-1]
+	for j in range(1, len(change_indices)):
+		start_index, end_index = change_indices[j-1]+1, change_indices[j]
+		outf.write('%s\t%s\t%d\t%d\n' % (
+						'chr' + chrom, 
+						'\t'.join(map(str, states[start_index, :])), 
+						positions[start_index, 0], positions[end_index, 1]))
+
+# writes a recomb only file
+def create_recomb_file(filename):
+	states = []
+	positions = []
+	current_chrom = None
+	with open(filename, 'r') as f, open(filename + '.recomb.txt', 'w+') as outf:
+		header = next(f).strip().split('\t')[1:-2] # skip header
+
+		for line in f:
+			pieces = line.strip().split('\t')
+			chrom = pieces[0][3:]
+			if current_chrom is None: 
+				current_chrom = chrom
+				positions.append([int(x) for x in pieces[-2:]])
+				states.append([int(x) for x in pieces[1:-2]])
+			elif chrom == current_chrom:
+				positions.append([int(x) for x in pieces[-2:]])
+				states.append([int(x) for x in pieces[1:-2]])
+			else:
+				# write data from previous chrom
+				states = np.array(states)
+				positions = np.array(positions)
+				
+				# ignore deletions and haplotypes, we only care about crossovers
+				states[:, :4] = -1
+
+				# if this is a hard to sequences region, we don't know the exact location of crossovers
+				states[states[:, -1]==1, :] = -1
+
+				# ignore hard to sequence regions as well
+				#states[:, -1] = -1
+
+				write_to_file(outf, current_chrom, positions, states)
+
+				# reset for next chrom
+				current_chrom = chrom
+				positions = [[int(x) for x in pieces[-2:]]]
+				states = [[int(x) for x in pieces[1:-2]]]
+
+		# write data from last chrom
+		states = np.array(states)
+		positions = np.array(positions)
+					
+		# ignore deletions and haplotypes, we only care about crossovers
+		states[:, :4] = -1
+
+		# if this is a hard to sequences region, we don't know the exact location of crossovers
+		states[states[:, -1]==1, :] = -1
+
+		# ignore hard to sequence regions as well
+		#states[:, -1] = -1
+
+		write_to_file(outf, current_chrom, positions, states)
+			
 has_no_data = []
 has_missing_chroms = []
 has_missing_individuals = []
@@ -60,9 +124,10 @@ is_missing_phase_data = []
 all_good = 0
 
 for family in families:
-	if os.path.isfile('%s/%s.phased.txt' % (args.phase_dir, family.id)):
+	phase_filename = '%s/%s.phased.txt' % (args.phase_dir, family.id)
+	if os.path.isfile(phase_filename):
 		try:
-			chroms, individuals = pull_phased_chroms('%s/%s.phased.txt' % (args.phase_dir, family.id))
+			chroms, individuals = pull_phased_chroms(phase_filename)
 			missing_chroms = set([str(x) for x in range(1, 23)]) - chroms
 			if len(missing_chroms)>0:
 				has_missing_chroms.append(family.id)
@@ -70,6 +135,7 @@ for family in families:
 				has_missing_individuals.append((family.id, set(family.individuals)-set(individuals)))
 			else:
 				all_good += 1
+				create_recomb_file(phase_filename)
 		except StopIteration:
 			has_no_data.append(family.id)
 	else:

@@ -25,8 +25,8 @@ print('ped loaded')
 print('children', len(child_id_to_affected))
 
 # pull collections
-with open('%s/chr.%s.collections.json' % (deletion_dir, chrom), 'r') as f:
-	collections = json.load(f)
+with open('%s/collections.json' % deletion_dir, 'r') as f:
+	collections = [x for x in json.load(f) if x['deletion']['chrom'] == chrom]
 print('collections loaded', len(collections))
 
 # pull familysizes
@@ -172,10 +172,7 @@ all_posteriors_mf = np.zeros((len(collections), grid.shape[0], 4))
 all_transrates_mf = np.zeros((len(collections), 4))
 
 for i, collection in enumerate(collections):
-    deletions = [x for x in remove_double_deletions(collection['matches']) if not x['is_denovo']]
-
-    if chrom == 'X':
-        deletions = [d for d in deletions if d['is_mat'] and not d['is_denovo']]
+    deletions = [x for x in remove_double_deletions(collection['matches'])]
     
     # all
     vs, cs = create_transmission_table(deletions)

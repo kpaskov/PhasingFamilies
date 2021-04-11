@@ -10,7 +10,7 @@ import random
 parser = argparse.ArgumentParser(description='Estimate recombination rate.')
 parser.add_argument('assembly', type=str, help='Reference genome assembly for data.')
 parser.add_argument('out_file', type=str, help='Output filename.')
-parser.add_argument('kfold_crossvalidation', type=int, help='Number of fold to be used for cross validation.')
+parser.add_argument('kfold_crossvalidation', type=int, help='Number of fold to be used for cross validation. 1 means no cross validation')
 parser.add_argument('lamb', type=float, help='Regularization weight.')
 parser.add_argument('phase_dirs', type=str, nargs='+', help='Directories with phase information.')
 parser.add_argument('--link_mat_pat', action='store_true', default=False, help='Link mat and pat together.')
@@ -87,7 +87,7 @@ for phase_dir in args.phase_dirs:
 		if file.endswith('.crossovers.json'):
 			with open('%s/%s' % (phase_dir, file), 'r') as f:
 				cos = json.load(f)
-				if len(cos)>=250:
+				if len(cos)>=250 or len(cos)==0:
 					#print('Are they related?', cos[0]['child'][0], cos[0]['child'][1], file)
 					pass
 				elif cos[0]['child'][0] in already_included or cos[0]['child'][1] in already_included:
@@ -104,7 +104,10 @@ print('children with phase information', 2*len(quad_to_crossovers))
 # split quads into train/test
 quads = sorted(quad_to_crossovers.keys())
 random.shuffle(quads)
-batch_size = int(np.floor(len(quads)/args.kfold_crossvalidation))
+if args.kfold_crossvalidation == 1:
+	batch_size = None
+else:
+	batch_size = int(np.floor(len(quads)/args.kfold_crossvalidation))
 print('batch_size', batch_size)
 
 # pull intervals
@@ -125,7 +128,7 @@ for quad, crossovers in quad_to_crossovers.items():
 			num_crossovers_pat += 1
 
 
-all_positions = sorted(all_positions_mat | all_positions_pat | set([(chrom, 1) for chrom in chroms]) | set([(chrom, chrom_lengths[str(chrom)]) for chrom in chroms]))
+all_positions = sorted(all_positions_mat | all_positions_pat | set([(chrom, 1) for chrom in chroms]) | set([(chrom, chrom_lengths[chrom]) for chrom in chroms]))
 pos_to_index = dict([(x, i) for i, x in enumerate(all_positions)])
 lengths = np.array([0 if all_positions[i][0] != all_positions[i+1][0] else all_positions[i+1][1]-all_positions[i][1] for i in range(len(all_positions)-1)])
 print('num_crossovers', num_crossovers_mat+num_crossovers_pat, 'positions', len(all_positions))
@@ -133,7 +136,7 @@ print('num_crossovers', num_crossovers_mat+num_crossovers_pat, 'positions', len(
 np.save('%s.lengths' % (args.out_file), lengths)
 with open('%s.positions.txt' % (args.out_file), 'w+') as f:
 	for p in all_positions:
-		f.write('%d\t%d\n' % p)
+		f.write('%s\t%d\n' % p)
 
 # create feature matrix
 def X_from_crossovers(crossovers, pos_to_index):
@@ -162,16 +165,20 @@ def estimate_recombination_rates(X_mat, X_pat, lengths, positions, link_mat_pat=
 		if positions[i][0] != current_chrom:
 			expr -= cp.tv(args.lamb*p_mat[current_chrom_start:i]/lengths[current_chrom_start:i])
 			expr -= cp.tv(args.lamb*p_pat[current_chrom_start:i]/lengths[current_chrom_start:i])
+
+			if link_mat_pat:
+				expr -= cp.tv(args.lamb*(p_mat[current_chrom_start:i]-p_pat[current_chrom_start:i])/lengths[current_chrom_start:i])
 			current_chrom, current_chrom_start = positions[i][0], i
 	expr -= cp.tv(args.lamb*p_mat[current_chrom_start:i]/lengths[current_chrom_start:i])
 	expr -= cp.tv(args.lamb*p_pat[current_chrom_start:i]/lengths[current_chrom_start:i])
 
 	if link_mat_pat:
-		expr -= args.lamb*cp.norm((p_mat[lengths!=0]/lengths[lengths!=0])-(p_pat[lengths!=0]/lengths[lengths!=0]), 1)
+		expr -= cp.tv(args.lamb*(p_mat[current_chrom_start:i]-p_pat[current_chrom_start:i])/lengths[current_chrom_start:i])
 
 	# now solve
-	prob = cp.Problem(cp.Maximize(expr), [p_mat >= 0, p_mat <= 1, cp.sum(p_mat)==1,
-										  p_pat >= 0, p_pat <= 1, cp.sum(p_pat)==1,])
+	print('length range', np.max(lengths), np.min(lengths))
+	prob = cp.Problem(cp.Maximize(expr), [p_mat >= lengths*(10**-11), p_mat<=1, cp.sum(p_mat)==1,
+										  p_pat >= lengths*(10**-11), p_pat<=1, cp.sum(p_pat)==1,])
 	result = prob.solve(solver='MOSEK', mosek_params={'MSK_IPAR_INTPNT_MAX_ITERATIONS': 500}, verbose=True)
 	#result = prob.solve(solver='ECOS', max_iters=200, verbose=True)
 	print(prob.status)
@@ -185,16 +192,25 @@ def estimate_recombination_rates(X_mat, X_pat, lengths, positions, link_mat_pat=
 	return p_mat, p_pat
 
 for batch_num in range(args.kfold_crossvalidation):
-	test_quads = set(quads[(batch_size*batch_num):(batch_size*(batch_num+1))])
-	train_quads = set(quads)-test_quads
+	if args.kfold_crossvalidation==1:
+		test_quads = set(quads)
+		train_quads = set(quads)
+	else:
+		test_quads = set(quads[(batch_size*batch_num):(batch_size*(batch_num+1))])
+		train_quads = set(quads)-test_quads
 
-	with open('%s.train_quads.%g.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
-		for quad in train_quads:
-			f.write('\t'.join(quad) + '\n')
+	if args.kfold_crossvalidation == 1:
+		with open('%s.train_quads.%g.txt' % (args.out_file, args.lamb), 'w+') as f:
+			for quad in train_quads:
+				f.write('\t'.join(quad) + '\n')
+	else:
+		with open('%s.train_quads.%g.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
+			for quad in train_quads:
+				f.write('\t'.join(quad) + '\n')
 
-	with open('%s.test_quads.%g.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
-		for quad in test_quads:
-			f.write('\t'.join(quad) + '\n')
+		with open('%s.test_quads.%g.%d.txt' % (args.out_file, args.lamb, batch_num), 'w+') as f:
+			for quad in test_quads:
+				f.write('\t'.join(quad) + '\n')
 
 	crossovers_mat_train = sum([[co for co in quad_to_crossovers[quad] if co['is_mat']] for quad in train_quads], [])
 	crossovers_mat_test = sum([[co for co in quad_to_crossovers[quad] if co['is_mat']] for quad in test_quads], [])
@@ -213,16 +229,25 @@ for batch_num in range(args.kfold_crossvalidation):
 
 	ps_mat, ps_pat = estimate_recombination_rates(X_mat_train, X_pat_train, lengths, all_positions, args.link_mat_pat)
 	
-	np.save('%s.ps_mat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_mat)
-	np.save('%s.crossover_ps_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(ps_mat))
-	np.save('%s.crossover_ps_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(ps_mat))
-	np.save('%s.crossover_lengths_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(lengths))
-	np.save('%s.crossover_lengths_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(lengths))
+	if args.kfold_crossvalidation == 1:
+		np.save('%s.ps_mat.%g' % (args.out_file, args.lamb), ps_mat)
+		np.save('%s.crossover_ps_mat_train.%g' % (args.out_file, args.lamb), X_mat_train.dot(ps_mat))
+		np.save('%s.crossover_lengths_mat_train.%g' % (args.out_file, args.lamb), X_mat_train.dot(lengths))
 
-	np.save('%s.ps_pat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_pat)
-	np.save('%s.crossover_ps_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(ps_pat))
-	np.save('%s.crossover_ps_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(ps_pat))
-	np.save('%s.crossover_lengths_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(lengths))
-	np.save('%s.crossover_lengths_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(lengths))
+		np.save('%s.ps_pat.%g' % (args.out_file, args.lamb), ps_pat)
+		np.save('%s.crossover_ps_pat_train.%g' % (args.out_file, args.lamb), X_pat_train.dot(ps_pat))
+		np.save('%s.crossover_lengths_pat_train.%g' % (args.out_file, args.lamb), X_pat_train.dot(lengths))
+	else:
+		np.save('%s.ps_mat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_mat)
+		np.save('%s.crossover_ps_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(ps_mat))
+		np.save('%s.crossover_ps_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(ps_mat))
+		np.save('%s.crossover_lengths_mat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_train.dot(lengths))
+		np.save('%s.crossover_lengths_mat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_mat_test.dot(lengths))
+
+		np.save('%s.ps_pat.%g.%d' % (args.out_file, args.lamb, batch_num), ps_pat)
+		np.save('%s.crossover_ps_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(ps_pat))
+		np.save('%s.crossover_ps_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(ps_pat))
+		np.save('%s.crossover_lengths_pat_train.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_train.dot(lengths))
+		np.save('%s.crossover_lengths_pat_test.%g.%d' % (args.out_file, args.lamb, batch_num), X_pat_test.dot(lengths))
 
            

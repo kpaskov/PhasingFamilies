@@ -24,6 +24,7 @@ parser.add_argument('num_loss_regions', type=int, help='Number of loss regions i
 
 parser.add_argument('--detect_deletions', action='store_true', default=False, help='Detect deletions while phasing.')
 parser.add_argument('--detect_duplications', action='store_true', default=False, help='Detect duplications while phasing.')
+parser.add_argument('--model_haplotypes', action='store_true', default=False, help='Model haplotypes while phasing.')
 parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
 parser.add_argument('--family_size', type=int, default=None, help='Size of family to phase.')
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
@@ -41,6 +42,9 @@ if args.chrom is not None:
 	chroms = [args.chrom]
 else:
 	chroms = [str(x) for x in range(1, 23)] + ['X']
+
+if args.model_haplotypes:
+	print('Modeling haplotypes while phasing ...')
 
 if args.detect_deletions:
 	print('Detecting deletions while phasing ...')
@@ -61,6 +65,7 @@ with open('%s/info.json' % args.out_dir, 'w+') as f:
 		'param_file': args.param_file,
 		'num_loss_regions': args.num_loss_regions,
 		'detect_deletions': args.detect_deletions,
+		'model_haplotypes': args.model_haplotypes,
 		'chrom': args.chrom,
 		'detect_consanguinity': args.detect_consanguinity,
 		'max_af_cost': args.max_af_cost
@@ -120,7 +125,8 @@ for family in families:
 
 		# create inheritance states
 		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, 
-												args.detect_duplications, args.detect_duplications, args.num_loss_regions)
+												args.detect_duplications, args.detect_duplications, 
+												args.model_haplotypes, args.num_loss_regions)
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, params)
