@@ -186,6 +186,29 @@ def pull_families(ped_file, retain_order=False):
 	print('families pulled %d' % len(families))
 	return families
 
+def pull_families_missing_parent(ped_file, data_dir, retain_order=False):
+	with open('%s/samples.json' % data_dir, 'r') as f:
+		samples = set(json.load(f))
+
+	# pull families from ped file that are missing a single parent
+	families = dict()
+	with open(ped_file, 'r') as f:	
+		for line in f:
+			pieces = line.strip().split('\t')
+			if len(pieces) < 4:
+				print('ped parsing error', line)
+			else:
+				fam_id, child_id, f_id, m_id = pieces[0:4]
+
+				if child_id in samples and ((m_id in samples and f_id not in samples) or (m_id in samples and f_id not in samples)):
+					if fam_id not in families:
+						families[fam_id] = Family(fam_id)
+					families[fam_id].add_child(child_id, m_id, f_id, retain_order)
+	families = sorted([x for x in families.values() if len(x)==4])
+		
+	print('families pulled %d' % len(families))
+	return families
+
 def pull_families_from_file(fam_file):
 	families = []
 	with open(fam_file, 'r') as f:
@@ -228,7 +251,7 @@ def pull_phenotype(ped_file):
 				sample_id_to_aff[child_id] = aff
 	return sample_id_to_aff
 
-def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals, start_pos=None, end_pos=None):
+def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
 	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
 	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
@@ -276,7 +299,11 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 				total_pos += np.sum(is_snp & is_pass)
 				af = np.load('%s/%s' % (data_dir, af_file))
 				family_has_variant = ((gen>0).sum(axis=0)>0).A.flatten()
-				has_data = np.where(is_snp & is_pass & in_interval & family_has_variant)[0]
+
+				if use_pass:
+					has_data = np.where(is_snp & is_pass & in_interval & family_has_variant)[0]
+				else:
+					has_data = np.where(is_snp & in_interval & family_has_variant)[0]
 
 				if len(has_data)>0:
 				

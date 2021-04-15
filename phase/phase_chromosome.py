@@ -6,7 +6,7 @@ from os import listdir
 import numpy as np
 
 from inheritance_states import InheritanceStates
-from input_output import write_to_file, pull_families, pull_gen_data_for_individuals
+from input_output import write_to_file, pull_families, pull_families_missing_parent, pull_gen_data_for_individuals
 from transition_matrices import TransitionMatrix
 from losses import LazyLoss
 from viterbi import viterbi_forward_sweep, viterbi_backward_sweep, viterbi_forward_sweep_low_memory, viterbi_backward_sweep_low_memory
@@ -35,6 +35,8 @@ parser.add_argument('--detect_consanguinity', action='store_true', default=False
 parser.add_argument('--max_af_cost', type=float, default=np.log10(71702*2/3), help='Maximum allele frequency cost to consider. Should be set to something like np.log10(2*n/3) where n is the number of individuals used when estimating allele frequencies in data_dir/chr.*.gen.af.npy.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
 parser.add_argument('--low_memory', action='store_true', default=False, help='Reduce memory consumption, but no uncertainty regions.')
+parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
+parser.add_argument('--no_pass', action='store_true', default=False, help='Use PASS to filter snps.')
 
 args = parser.parse_args()
 
@@ -73,7 +75,10 @@ with open('%s/info.json' % args.out_dir, 'w+') as f:
 
 
 # --------------- pull families of interest ---------------
-families = pull_families(args.ped_file, retain_order=args.retain_order)
+if args.missing_parent:
+	families = pull_families_missing_parent(args.ped_file, args.data_dir, retain_order=args.retain_order)
+else:
+	families = pull_families(args.ped_file, retain_order=args.retain_order)
 
 # make sure at least one individual has genetic data
 sample_file = '%s/samples.json' % args.data_dir
@@ -175,7 +180,7 @@ for family in families:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
-				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, assembly, chrom, family.individuals)
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, assembly, chrom, family.individuals, use_pass=(not args.no_pass))
 
 				# update loss cache
 				loss.set_cache(family_genotypes)
