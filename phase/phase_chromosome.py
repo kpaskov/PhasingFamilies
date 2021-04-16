@@ -37,7 +37,7 @@ parser.add_argument('--retain_order', action='store_true', default=False, help='
 parser.add_argument('--low_memory', action='store_true', default=False, help='Reduce memory consumption, but no uncertainty regions.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
 parser.add_argument('--no_pass', action='store_true', default=False, help='Use PASS to filter snps.')
-parser.add_argument('--af_cutoff', action='store_true', default=False, help='Remove SNPs with gnomad AF lower than this threshold.')
+parser.add_argument('--af_cutoff', type=float, default=None, help='Remove SNPs with gnomad AF lower than this threshold.')
 
 args = parser.parse_args()
 
