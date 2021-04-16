@@ -251,7 +251,7 @@ def pull_phenotype(ped_file):
 				sample_id_to_aff[child_id] = aff
 	return sample_id_to_aff
 
-def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True):
+def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True, af_cutoff=None):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
 	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
 	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
@@ -288,9 +288,14 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 			poss = coords[:, 1]
 			is_snp = coords[:, 2]==1
 			is_pass = coords[:, 3]==1
+			af = np.load('%s/%s' % (data_dir, af_file))
 
 			if not use_pass:
 				is_pass = np.ones(is_pass.shape, dtype=bool)
+
+			if af_cutoff is not None:
+				is_pass = is_pass & (af>=af_cutoff)
+			
 
 			if start_pos is not None and end_pos is not None:
 				in_interval = (coords[:, 1]>=start_pos) & (coords[:, 1]<=end_pos)
@@ -300,7 +305,6 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 			if np.sum(is_snp & is_pass & in_interval)>0:
 				gen = sparse.load_npz('%s/%s' % (data_dir, gen_file))[ind_indices, :]
 				total_pos += np.sum(is_snp & is_pass)
-				af = np.load('%s/%s' % (data_dir, af_file))
 				family_has_variant = ((gen>0).sum(axis=0)>0).A.flatten()
 
 				has_data = np.where(is_snp & is_pass & in_interval & family_has_variant)[0]
