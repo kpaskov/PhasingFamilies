@@ -289,6 +289,9 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 			is_snp = coords[:, 2]==1
 			is_pass = coords[:, 3]==1
 
+			if not use_pass:
+				is_pass = np.ones(is_pass.shape, dtype=bool)
+
 			if start_pos is not None and end_pos is not None:
 				in_interval = (coords[:, 1]>=start_pos) & (coords[:, 1]<=end_pos)
 			else:
@@ -300,10 +303,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 				af = np.load('%s/%s' % (data_dir, af_file))
 				family_has_variant = ((gen>0).sum(axis=0)>0).A.flatten()
 
-				if use_pass:
-					has_data = np.where(is_snp & is_pass & in_interval & family_has_variant)[0]
-				else:
-					has_data = np.where(is_snp & in_interval & family_has_variant)[0]
+				has_data = np.where(is_snp & is_pass & in_interval & family_has_variant)[0]
 
 				if len(has_data)>0:
 				
