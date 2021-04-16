@@ -181,7 +181,7 @@ for family in families:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
-				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, assembly, chrom, family.individuals, use_pass=(not args.no_pass), af_cutoff=af_cutoff)
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, assembly, chrom, family.individuals, use_pass=(not args.no_pass), af_cutoff=args.af_cutoff)
 
 				# update loss cache
 				loss.set_cache(family_genotypes)
