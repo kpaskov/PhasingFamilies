@@ -109,8 +109,8 @@ class LazyLoss:
 
 			af_region_index = gen[-1]
 			
-			#rc, ac = -np.log10(0.5), -np.log10(0.5)
-			rc, ac = self.ref_costs[af_region_index], self.alt_costs[af_region_index]
+			rc, ac = -np.log10(0.5), -np.log10(0.5)
+			#rc, ac = self.ref_costs[af_region_index], self.alt_costs[af_region_index]
 			#if len([x for x in gen if x==1 or x==2])>0 and len([x for x in gen if x==1 or x==0])>0:
 			#	#rc, ac = -np.log10(0.5), -np.log10(0.5)
 			#	rc, ac = self.ref_costs[af_region_index], self.alt_costs[af_region_index]
@@ -128,10 +128,17 @@ class LazyLoss:
 					self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size)[non_missing_indices], [pm[i] for i in non_missing_indices], [gen[i] for i in non_missing_indices]], axis=1)
 
 				for k in range(self.num_loss_regions):
-					loss[self.loss_region==k] += np.sum(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
-														(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, 0, rc+rc, -np.log10(2)+rc+ac, ac+ac])).T) * \
-														self.not_filler[self.loss_region==k, :], axis=1)
-			loss = -np.log10(np.clip(loss, 0, 1)) # handles numerical instability
+					#loss[self.loss_region==k] += np.sum(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
+					#									(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, 0, rc+rc, -np.log10(2)+rc+ac, ac+ac])).T) * \
+					#									self.not_filler[self.loss_region==k, :], axis=1)
+
+					#print(np.max(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]]) * self.not_filler[self.loss_region==k, :], axis=1))
+					loss[self.loss_region==k] = np.maximum(loss[self.loss_region==k],
+							np.max(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]]) * self.not_filler[self.loss_region==k, :], axis=1))
+			#loss = -np.log10(np.clip(loss, 0, 1)) # handles numerical instability
+			loss = -np.log10(loss) # handles numerical instability
+			#print(gen, loss)
+			assert np.all(loss>=0)
 
 			if gen_index is not None:
 				self.losses[:, gen_index] = loss

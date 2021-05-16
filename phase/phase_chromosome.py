@@ -61,6 +61,8 @@ with open(args.param_file, 'r') as f:
 with open('%s/info.json' % args.data_dir, 'r') as f:
 	assembly = json.load(f)['assembly']
 
+print('assembly', assembly)
+
 with open('%s/info.json' % args.out_dir, 'w+') as f:
 	json.dump({
 		'ped_file': args.ped_file,
