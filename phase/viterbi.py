@@ -80,7 +80,7 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 	num_forks = 0
 	ok_end = np.array([states.is_ok_end(x) for x in states])
 	min_value = np.min(v_cost[ok_end, -1])
-	paths = np.where(np.isclose(v_cost[:, -1], min_value, rtol=0, atol=0.1) & ok_end)[0]
+	paths = np.where(np.isclose(v_cost[:, -1], min_value, rtol=0, atol=0.01) & ok_end)[0]
 	print('Num solutions', paths.shape, min_value, states[paths])
 
 	if paths.shape[0]>1:
@@ -96,7 +96,7 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 		min_value = np.min(total_cost, axis=1)
 		new_paths = set()
 		for i, k in enumerate(paths):
-			min_indices = transition_matrix.transitions[k, np.isclose(total_cost[i, :], min_value[i], rtol=0, atol=0.1)]	
+			min_indices = transition_matrix.transitions[k, np.isclose(total_cost[i, :], min_value[i], rtol=0, atol=0.01)]	
 			new_paths.update(min_indices.tolist())
 			
 		paths = list(new_paths)

@@ -254,12 +254,12 @@ def pull_phenotype(ped_file):
 def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True, af_cutoff=None):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
 	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
-	af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
+	#af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
 	sample_file = '%s/samples.json' % data_dir
 
-	print(len(gen_files), len(coord_files), len(af_files))
+	print(len(gen_files), len(coord_files))
 	assert len(gen_files) == len(coord_files)
-	assert len(gen_files) == len(af_files)
+	#assert len(gen_files) == len(af_files)
 
 	# pull samples
 	with open(sample_file, 'r') as f:
@@ -275,26 +275,25 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	# use only variants that PASS GATK
 	# pull data only for individuals
 	m = len(individuals)
-	has_seq = np.array(np.where([x in sample_id_to_index for x in individuals])[0].tolist() + [m])
+	has_seq = np.array(np.where([x in sample_id_to_index for x in individuals])[0].tolist())
 	ind_indices = [sample_id_to_index[x] for x in individuals if x in sample_id_to_index]
 
-	gens, snp_positions, afs, collapseds = [], [], [], []
+	gens, snp_positions, collapseds = [], [], []
 	total_pos = 0
-	print('af_boundaries', af_boundaries)
-	for gen_file, coord_file, af_file in zip(gen_files, coord_files, af_files):
+	for gen_file, coord_file in zip(gen_files, coord_files):
 		coords = np.load('%s/%s' % (data_dir, coord_file))
 
 		if coords.shape[0]>0:
 			poss = coords[:, 1]
 			is_snp = coords[:, 2]==1
 			is_pass = coords[:, 3]==1
-			af = np.load('%s/%s' % (data_dir, af_file))
+			#af = np.load('%s/%s' % (data_dir, af_file))
 
 			if not use_pass:
 				is_pass = np.ones(is_pass.shape, dtype=bool)
 
-			if af_cutoff is not None:
-				is_pass = is_pass & (af>=af_cutoff)
+			#if af_cutoff is not None:
+			#	is_pass = is_pass & (af>=af_cutoff)
 			
 
 			if start_pos is not None and end_pos is not None:
@@ -326,22 +325,22 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 
 					gens.append(gen[:, has_data].A)
 					snp_positions.append(poss[has_data])
-					afs.append(np.digitize(-np.log10(np.clip(af[has_data], 10**-(af_boundaries[0]+1), None)), af_boundaries))
+					#afs.append(np.digitize(-np.log10(np.clip(af[has_data], 10**-(af_boundaries[0]+1), None)), af_boundaries))
 					collapseds.append(collapsed)
 
 	gens = np.hstack(gens)
 	snp_positions = np.hstack(snp_positions)
-	afs = np.hstack(afs)
+	#afs = np.hstack(afs)
 	collapseds = np.hstack(collapseds)
-	print(gens.shape, snp_positions.shape, afs.shape, collapseds.shape)
+	print(gens.shape, snp_positions.shape, collapseds.shape)
 	#print(total_pos, np.sum(collapseds)+gens.shape[1])
 
 	assert np.all(snp_positions <= chrom_length)
 	assert np.all(collapseds >= 0)
 
 	# append af to end of family genotypes to get our observed data
-	print(gens.shape, afs.shape)
-	data = np.vstack((gens, afs))
+	print(gens.shape)
+	data = gens
 
 	# remove multiallelic sites
 	is_multiallelic = np.zeros((snp_positions.shape[0],), dtype=bool)
@@ -384,7 +383,7 @@ def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, indi
 	n = rep_indices.shape[0]+1
 	#print('n', n)
 
-	new_family_genotypes = np.zeros((m+1, n), dtype=np.int8)
+	new_family_genotypes = np.zeros((m, n), dtype=np.int8)
 	mult_factor = np.zeros((n,), dtype=np.int)
 
 	new_family_genotypes[np.ix_(has_seq, np.arange(n-1))] = family_genotypes[:, rep_indices]
