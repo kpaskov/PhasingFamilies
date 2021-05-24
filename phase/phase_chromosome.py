@@ -79,14 +79,26 @@ if args.missing_parent:
 else:
 	families = pull_families(args.ped_file, retain_order=args.retain_order)
 
+print(families[0], families[0].individuals)
+
 # make sure at least one individual has genetic data
 sample_file = '%s/samples.json' % args.data_dir
 with open(sample_file, 'r') as f:
 	sample_ids = set(json.load(f))
 
+samples_not_in_sample_ids = set()
+samples_not_in_params = set()
+
 for family in families:
-	to_be_removed = [x for x in family.individuals if x not in sample_ids or (x not in params and '%s.%s' % (family.id, x) not in params)]
-	family.prune(to_be_removed)
+	not_in_sample_ids = [x for x in family.individuals if x not in sample_ids]
+	not_in_params = [x for x in family.individuals if x not in params and '%s.%s' % (family.id, x) not in params]
+	
+	family.prune(list(set(not_in_sample_ids+not_in_params)))
+	samples_not_in_sample_ids.update(not_in_sample_ids)
+	samples_not_in_params.update(not_in_params)
+
+print('samples not in sample_ids %d' % len(samples_not_in_sample_ids))
+print('samples not in params %d' % len(samples_not_in_params))
 
 families = [x for x in families if x.num_descendents()>0]
 print(len(families), 'have genomic data and parameters')

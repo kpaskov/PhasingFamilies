@@ -186,6 +186,9 @@ def pull_families(ped_file, retain_order=False):
 				print('ped parsing error', line)
 			else:
 				fam_id, child_id, f_id, m_id = pieces[0:4]
+				child_id = child_id.replace('.', '_')
+				f_id = f_id.replace('.', '_')
+				m_id = m_id.replace('.', '_')
 
 				if f_id != '0' and m_id != '0':
 					if fam_id not in families:
