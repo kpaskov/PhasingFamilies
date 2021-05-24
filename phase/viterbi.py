@@ -81,7 +81,7 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 	ok_end = np.array([states.is_ok_end(x) for x in states])
 	min_value = np.min(v_cost[ok_end, -1])
 	paths = np.where(np.isclose(v_cost[:, -1], min_value, rtol=0, atol=0.01) & ok_end)[0]
-	print('Num solutions', paths.shape, min_value, states[paths])
+	print('Num solutions', paths.shape, min_value)
 
 	if paths.shape[0]>1:
 		paths = [random.choice(paths)]

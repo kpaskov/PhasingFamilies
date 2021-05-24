@@ -71,6 +71,7 @@ class Family():
 		self.descendents = []
 		self.ordered_couples = []
 		self.individuals = []
+		self.individual_to_index = dict()
 
 	def add_child(self, child_id, mother_id, father_id, retain_order=False):
 		if child_id in self.mat_ancestors:
@@ -124,6 +125,8 @@ class Family():
 			if len(already_added) == 0:
 				raise Exception('Circular pedigree.')
 		self.individuals = self.mat_ancestors + self.pat_ancestors + self.descendents
+		self.individual_to_index = dict([(x, i) for i, x in enumerate(self.individuals)])
+
 
 	def set_individual_order(self, individuals):	
 		assert sorted(individuals) == sorted(self.individuals)	
@@ -143,6 +146,7 @@ class Family():
 					break
 		
 		self.individuals = self.mat_ancestors + self.pat_ancestors + self.descendents
+		self.individual_to_index = dict([(x, i) for i, x in enumerate(self.individuals)])
 
 	def __lt__(self, other):
 		return self.id < other.id
@@ -164,6 +168,12 @@ class Family():
 
 	def num_descendents(self):
 		return len(self.descendents)
+
+	def ind_filter(self, individuals):
+		ind_filter = np.zeros((len(self),), dtype=bool)
+		ind_filter[[self.individual_to_index[ind] for ind in individuals]] = True
+		return ind_filter 
+
 
 
 def pull_families(ped_file, retain_order=False):
@@ -251,7 +261,7 @@ def pull_phenotype(ped_file):
 				sample_id_to_aff[child_id] = aff
 	return sample_id_to_aff
 
-def pull_gen_data_for_individuals(data_dir, af_boundaries, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True, af_cutoff=None):
+def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True):
 	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
 	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
 	#af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))

@@ -22,9 +22,8 @@ parser.add_argument('out_dir', type=str, help='Output directory.')
 parser.add_argument('param_file', type=str, help='Parameters for model.')
 parser.add_argument('num_loss_regions', type=int, help='Number of loss regions in model.')
 
-parser.add_argument('--detect_deletions', action='store_true', default=False, help='Detect deletions while phasing.')
-parser.add_argument('--detect_duplications', action='store_true', default=False, help='Detect duplications while phasing.')
-parser.add_argument('--model_haplotypes', action='store_true', default=False, help='Model haplotypes while phasing.')
+parser.add_argument('--detect_inherited_deletions', action='store_true', default=False, help='Detect inherited deletions while phasing.')
+parser.add_argument('--detect_denovo_deletions', action='store_true', default=False, help='Detect de novo deletions in the children.')
 parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
 parser.add_argument('--family_size', type=int, default=None, help='Size of family to phase.')
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
@@ -32,12 +31,10 @@ parser.add_argument('--batch_size', type=int, default=None, help='Restrict numbe
 parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of families. Will use families[(batch_num*batch_size):((batch_num+1)*batch_size)]')
 parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
 parser.add_argument('--detect_consanguinity', action='store_true', default=False, help='Detect consanguinity between parents. Can model basic consanguinity produced from a single shared ancestor. This option is only available for nuclear families.')
-parser.add_argument('--max_af_cost', type=float, default=np.log10(71702*2/3), help='Maximum allele frequency cost to consider. Should be set to something like np.log10(2*n/3) where n is the number of individuals used when estimating allele frequencies in data_dir/chr.*.gen.af.npy.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
 parser.add_argument('--low_memory', action='store_true', default=False, help='Reduce memory consumption, but no uncertainty regions.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
 parser.add_argument('--no_pass', action='store_true', default=False, help='Use PASS to filter snps.')
-parser.add_argument('--af_cutoff', type=float, default=None, help='Remove SNPs with gnomad AF lower than this threshold.')
 
 args = parser.parse_args()
 
@@ -46,11 +43,11 @@ if args.chrom is not None:
 else:
 	chroms = [str(x) for x in range(1, 23)] + ['X']
 
-if args.model_haplotypes:
-	print('Modeling haplotypes while phasing ...')
+if args.detect_inherited_deletions:
+	print('Detecting inherited deletions while phasing ...')
 
-if args.detect_deletions:
-	print('Detecting deletions while phasing ...')
+if args.detect_denovo_deletions:
+	print('Detecting de novo deletions while phasing ...')
 
 if args.detect_consanguinity:
 	print('Detecting parental consanguinity while phasing ...')
@@ -69,11 +66,10 @@ with open('%s/info.json' % args.out_dir, 'w+') as f:
 		'data_dir': args.data_dir,
 		'param_file': args.param_file,
 		'num_loss_regions': args.num_loss_regions,
-		'detect_deletions': args.detect_deletions,
-		'model_haplotypes': args.model_haplotypes,
+		'detect_inherited_deletions': args.detect_inherited_deletions,
+		'detect_denovo_deletions': args.detect_denovo_deletions,
 		'chrom': args.chrom,
 		'detect_consanguinity': args.detect_consanguinity,
-		'max_af_cost': args.max_af_cost
 		}, f)
 
 
@@ -95,10 +91,6 @@ for family in families:
 families = [x for x in families if x.num_descendents()>0]
 print(len(families), 'have genomic data and parameters')
 
-af_boundaries = np.arange(-np.log10(0.25), args.max_af_cost, np.log10(2)).tolist()
-af_boundaries.extend([-np.log10(1-(10.0**-x)) for x in af_boundaries[1:]])
-af_boundaries = np.array(sorted(af_boundaries, reverse=True))
-print('af boundaries', af_boundaries)
 
 # limit by size
 if args.family_size is not None:
@@ -132,15 +124,13 @@ for family in families:
 		print('family', family.id)
 
 		# create inheritance states
-		inheritance_states = InheritanceStates(family, args.detect_deletions, args.detect_deletions, 
-												args.detect_duplications, args.detect_duplications, 
-												args.model_haplotypes, args.num_loss_regions)
+		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_denovo_deletions, args.num_loss_regions)
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, params)
 
 		# create loss function for this family
-		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions, af_boundaries)
+		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions)
 		#print('loss created')
 
 		# start by pulling header, or writing one if the file doesn't exist
@@ -183,7 +173,7 @@ for family in families:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
-				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, af_boundaries, assembly, chrom, family.individuals, use_pass=(not args.no_pass), af_cutoff=args.af_cutoff)
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, assembly, chrom, family.individuals, use_pass=(not args.no_pass))
 
 				# update loss cache
 				loss.set_cache(family_genotypes)

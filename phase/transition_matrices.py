@@ -18,31 +18,28 @@ class TransitionMatrix:
 			transitions[state_index].append(state_index)
 			transition_costs[state_index].append(0)
 
-			# allow a transition into or out of one or more haplotypes
-			neighbors = states.get_haplotype_neighbors(state)
-			transitions[state_index].extend(neighbors)
-			transition_costs[state_index].extend([params['-log10(P[haplotype_entry_exit])']]*len(neighbors))
-			num_hap_neighbors = len(neighbors)
+			## allow a transition into or out of one or more haplotypes
+			#neighbors = states.get_haplotype_neighbors(state)
+			#transitions[state_index].extend(neighbors)
+			#transition_costs[state_index].extend([params['-log10(P[haplotype_entry_exit])']]*len(neighbors))
+			#num_hap_neighbors = len(neighbors)
 
 			# allow a transition into or out of one or more inherited deletions
-			neighbors, num_changed = states.get_deletion_neighbors(state)
+			neighbors = states.get_inh_deletion_neighbors(state)
 			transitions[state_index].extend(neighbors)
-			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']*n for n in num_changed])
+			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']]*len(neighbors))
 			num_del_neighbors = len(neighbors)
 
 			# allow a transition into or out of one or more denovo deletions
-			#neighbors = states.get_maternal_denovo_deletion_neighbors(state)
-			#transitions[state_index].extend(neighbors)
-			#transition_costs[state_index].extend([params['-log10(P[denovo_deletion_entry_exit])']]*len(neighbors))
-			#neighbors = states.get_paternal_denovo_deletion_neighbors(state)
-			#transitions[state_index].extend(neighbors)
-			#transition_costs[state_index].extend([params['-log10(P[denovo_deletion_entry_exit])']]*len(neighbors))
-
-			# allow a transition into or out of one or more inherited duplications
-			neighbors, num_changed = states.get_duplication_neighbors(state)
+			neighbors = states.get_denovo_deletion_neighbors(state)
 			transitions[state_index].extend(neighbors)
-			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']*n for n in num_changed])
-			num_dup_neighbors = len(neighbors)
+			transition_costs[state_index].extend([params['-log10(P[denovo_deletion_entry_exit])']]*len(neighbors))
+			
+			# allow a transition into or out of one or more inherited duplications
+			#neighbors, num_changed = states.get_duplication_neighbors(state)
+			#transitions[state_index].extend(neighbors)
+			#transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']*n for n in num_changed])
+			#num_dup_neighbors = len(neighbors)
 			
 			# allow a single recombination event
 			neighbors = states.get_maternal_recombination_neighbors(state)
