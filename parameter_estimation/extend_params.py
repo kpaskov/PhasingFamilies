@@ -23,13 +23,15 @@ pat_crossover = -np.log10(28)+np.log10(genome_size)
 
 num_deletions = 100
 del_trans = -np.log10(2*num_deletions)+np.log10(genome_size)
+num_denovo_deletions = 0.02
+denovo_del_trans = -np.log10(2*num_denovo_deletions)+np.log10(genome_size)
 loss_trans = -np.log10(2*1000)+np.log10(genome_size)
 
 new_params['-log10(P[inherited_deletion_entry_exit])'] = del_trans
 new_params['-log10(P[maternal_crossover])'] = mat_crossover
 new_params['-log10(P[paternal_crossover])'] = pat_crossover
 new_params['-log10(P[loss_transition])'] = loss_trans
-new_params['-log10(P[haplotype_entry_exit])'] = 2
+new_params['-log10(P[denovo_deletion_entry_exit])'] = denovo_del_trans
 
 # first pull individuals that exist in all params
 individuals = set([k for k, v in all_params[0].items() if isinstance(v, dict)])

@@ -265,23 +265,13 @@ def pull_phenotype(ped_file):
 	return sample_id_to_aff
 
 def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True):
-	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
-	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
-	#af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
+	
 	sample_file = '%s/samples.json' % data_dir
-
-	print(len(gen_files), len(coord_files))
-	assert len(gen_files) == len(coord_files)
-	#assert len(gen_files) == len(af_files)
-
 	# pull samples
 	with open(sample_file, 'r') as f:
 		sample_ids = json.load(f)
 	sample_id_to_index = dict([(sample_id, i) for i, sample_id in enumerate(sample_ids)])
 
-	# pull chrom length
-	assert assembly == '37' or assembly == '38'
-	chrom_length = chrom_lengths37[chrom] if assembly == '37' else chrom_lengths38[chrom] if assembly == '38' else None
 
 	# pull coordinates
 	# use only SNPs, no indels
@@ -290,6 +280,22 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 	m = len(individuals)
 	has_seq = np.array(np.where([x in sample_id_to_index for x in individuals])[0].tolist())
 	ind_indices = [sample_id_to_index[x] for x in individuals if x in sample_id_to_index]
+
+	if len(ind_indices)==0:
+		return np.zeros((m, 0)), np.zeros((0, 2)), np.zeros((0,)) 
+
+
+	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
+	coord_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
+	#af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
+
+	#print(len(gen_files), len(coord_files))
+	assert len(gen_files) == len(coord_files)
+	#assert len(gen_files) == len(af_files)
+
+	# pull chrom length
+	assert assembly == '37' or assembly == '38'
+	chrom_length = chrom_lengths37[chrom] if assembly == '37' else chrom_lengths38[chrom] if assembly == '38' else None
 
 	gens, snp_positions, collapseds = [], [], []
 	total_pos = 0
@@ -341,26 +347,28 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 					#afs.append(np.digitize(-np.log10(np.clip(af[has_data], 10**-(af_boundaries[0]+1), None)), af_boundaries))
 					collapseds.append(collapsed)
 
+	if len(gens)== 0:
+		return np.zeros((m, 0)), np.zeros((0, 2)), np.zeros((0,))
+
 	gens = np.hstack(gens)
 	snp_positions = np.hstack(snp_positions)
 	#afs = np.hstack(afs)
 	collapseds = np.hstack(collapseds)
-	print(gens.shape, snp_positions.shape, collapseds.shape)
+	#print(gens.shape, snp_positions.shape, collapseds.shape)
 	#print(total_pos, np.sum(collapseds)+gens.shape[1])
 
 	assert np.all(snp_positions <= chrom_length)
 	assert np.all(collapseds >= 0)
 
 	# append af to end of family genotypes to get our observed data
-	print(gens.shape)
-	data = gens
+	#print(gens.shape)
 
 	# remove multiallelic sites
 	is_multiallelic = np.zeros((snp_positions.shape[0],), dtype=bool)
 	indices = np.where(snp_positions[:-1] == snp_positions[1:])[0]
 	is_multiallelic[indices] = True
 	is_multiallelic[indices+1] = True
-	print(np.sum(is_multiallelic))
+	#print(np.sum(is_multiallelic))
 
 	collapseds_multiallelic = np.zeros((np.sum(~is_multiallelic)+1,), dtype=int)
 	collapseds_multiallelic[0] = collapseds[0]
@@ -368,7 +376,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 
 	n = 2*np.sum(~is_multiallelic)+1
 	family_genotypes = np.zeros((len(has_seq), n), dtype=np.int8)
-	family_genotypes[:, np.arange(1, n-1, 2)] = data[:, ~is_multiallelic]
+	family_genotypes[:, np.arange(1, n-1, 2)] = gens[:, ~is_multiallelic]
 		
 	observed = np.zeros((n,), dtype=int)
 	observed[np.arange(1, n-1, 2)] = 1
@@ -411,9 +419,12 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 	#print(new_family_snp_positions)
 
 	c = np.cumsum(observed)
-	mult_factor[0] = c[rep_indices[0]]
-	mult_factor[1:-1] = c[rep_indices[1:]] - c[rep_indices[:-1]]
-	mult_factor[-1] = c[-1] - c[rep_indices[-1]]
+	if len(rep_indices)==0:
+		mult_factor[0] = np.sum(observed)
+	else:
+		mult_factor[0] = c[rep_indices[0]]
+		mult_factor[1:-1] = c[rep_indices[1:]] - c[rep_indices[:-1]]
+		mult_factor[-1] = c[-1] - c[rep_indices[-1]]
 	#print(c[-1], np.sum(mult_factor))
 	#assert np.all(mult_factor>=0)
 
