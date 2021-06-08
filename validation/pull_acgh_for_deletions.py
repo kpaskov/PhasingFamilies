@@ -83,8 +83,9 @@ for child, childdels in child_to_deletions.items():
 
     for d in childdels:
         indices = (probe_positions[:, 0]==chrom_to_index[d['chrom']]) & (probe_positions[:, 1]>=d['start_pos']) & (probe_positions[:, 2]<=d['end_pos']) & (~np.isnan(data))
-        d['num_markers_aCGH'] = np.sum(indices)
-        d['%s_aCGH' % child] = data[indices]
+        #print(data[indices])
+        d['%s_num_markers_aCGH' % child] = int(np.sum(indices))
+        d['%s_med_aCGH' % child] = float(np.median(data[indices]))
 
 with open(del_file, 'w+') as f:
     json.dump(deletions, f, indent=4)
