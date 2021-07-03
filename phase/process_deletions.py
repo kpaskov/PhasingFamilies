@@ -106,9 +106,10 @@ for filename in listdir(phase_dir):
 								if np.sum(interval_lengths[start_index:end_index][has_option])>0.9*np.sum(interval_lengths[start_index:end_index]):
 									majority_parental_inheritance = parental_inheritance_option
 
-							#has_hts = chrom_states[start_index:end_index, -1]!=0
-							
-							if majority_parental_inheritance is not None and np.all(majority_parental_inheritance!=-1):
+							is_hts = np.sum((chrom_states[start_index:end_index, -1]==1) * interval_lengths[start_index:end_index])/np.sum(interval_lengths[start_index:end_index]) > 0.5
+							#is_hts = False
+
+							if (not is_hts) and majority_parental_inheritance is not None and np.all(majority_parental_inheritance!=-1):
 								start_pos, end_pos = chrom_positions[start_index], chrom_positions[end_index]
 								opt_start_pos, opt_end_pos = chrom_positions[opt_start_index], chrom_positions[opt_end_index]
 								length = int(end_pos - start_pos + 1)

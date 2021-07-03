@@ -137,9 +137,9 @@ class State:
 
 	def full_state(self):
 		full_state = list(self._inh_deletions) + self.phase()
-		for mat_denovo, pat_denovo in zip(self._maternal_denovo_deletions, self._paternal_denovo_deletions):
-			full_state.append(mat_denovo)
-			full_state.append(pat_denovo)
+		#for mat_denovo, pat_denovo in zip(self._maternal_denovo_deletions, self._paternal_denovo_deletions):
+		#	full_state.append(mat_denovo)
+		#	full_state.append(pat_denovo)
 		full_state.append(self._loss_region)
 		return full_state
 

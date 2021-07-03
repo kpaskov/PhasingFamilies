@@ -12,7 +12,7 @@ parser.add_argument('phase_dir', type=str, help='Directory with phase data.')
 parser.add_argument('ped_file', type=str, help='Ped file for data.')
 parser.add_argument('assembly', type=str, help='Reference genome assembly for data.')
 
-chroms_of_interest = [str(x) for x in range(1, 23)] + ['X']
+chroms_of_interest = [str(x) for x in range(1, 23)] #+ ['X']
 args = parser.parse_args()
 
 # start by pulling families, only consider nuclear families
