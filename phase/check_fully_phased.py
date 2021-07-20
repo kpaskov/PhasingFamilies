@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description='Check that all families were phase
 parser.add_argument('phase_dir', type=str, help='Directory with phase data.')
 parser.add_argument('data_dir', type=str, default=None, help='Directory gen data.')
 parser.add_argument('param_file', type=str, default=None, help='Param file.')
+parser.add_argument('--family_size', type=int, default=None, help='Family size.')
 
 args = parser.parse_args()
 
@@ -27,6 +28,11 @@ if args.param_file is not None:
 # start by pulling families, only consider nuclear families
 families = input_output.pull_families(ped_file)
 families = [x for x in families if x.num_ancestors()==2 and len(x.ordered_couples)==1]
+
+# if we have a family size limit, then enforce
+if args.family_size is not None:
+	families = [x for x in families if len(x)==args.family_size]
+	print(len(families), 'of size', args.family_size)
 
 sample_file = '%s/samples.json' % data_dir
 with open(sample_file, 'r') as f:
@@ -48,6 +54,7 @@ for family in families:
 
 families = [x for x in families if x.num_descendents()>0]
 print(len(families), 'have parameters')
+
 
 #pulls phase data from a file
 def pull_phased_chroms(filename):
