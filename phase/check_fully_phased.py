@@ -22,8 +22,13 @@ ped_file = info['ped_file']
 
 if args.data_dir is None:
 	data_dir = info['data_dir']
+else:
+	data_dir = args.data_dir
+
 if args.param_file is None:
 	param_file = info['param_file']
+else:
+	param_file = args.param_file
 
 # start by pulling families, only consider nuclear families
 families = input_output.pull_families(ped_file)
