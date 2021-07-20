@@ -106,8 +106,8 @@ for filename in listdir(phase_dir):
 								if np.sum(interval_lengths[start_index:end_index][has_option])>0.9*np.sum(interval_lengths[start_index:end_index]):
 									majority_parental_inheritance = parental_inheritance_option
 
-							is_hts = np.sum((chrom_states[start_index:end_index, -1]==1) * interval_lengths[start_index:end_index])/np.sum(interval_lengths[start_index:end_index]) > 0.5
-							#is_hts = False
+							#is_hts = np.sum((chrom_states[start_index:end_index, -1]==1) * interval_lengths[start_index:end_index])/np.sum(interval_lengths[start_index:end_index]) > 0.9
+							is_hts = False
 
 							if (not is_hts) and majority_parental_inheritance is not None and np.all(majority_parental_inheritance!=-1):
 								start_pos, end_pos = chrom_positions[start_index], chrom_positions[end_index]
@@ -134,65 +134,65 @@ for filename in listdir(phase_dir):
 										inds[0], inds[1], 
 										False, True))
 
-					# pull de novo deletions
-					for child_index in range(2, len(inds)):
+					# # pull de novo deletions
+					# for child_index in range(2, len(inds)):
 
-						mat_state = chrom_states[:, 4 + 2*len(inds) + 2*child_index]
-						pat_state = chrom_states[:, 5 + 2*len(inds) + 2*child_index]
+					# 	mat_state = chrom_states[:, 4 + 2*len(inds) + 2*child_index]
+					# 	pat_state = chrom_states[:, 5 + 2*len(inds) + 2*child_index]
 
-						# maternal de novos
-						for opt_start_index, start_index, end_index, opt_end_index in pull_deletion_indices(mat_state):
-							assert np.all(mat_state[start_index:end_index]==0)
-							assert np.all(mat_state[opt_start_index:opt_end_index]<1)
+					# 	# maternal de novos
+					# 	for opt_start_index, start_index, end_index, opt_end_index in pull_deletion_indices(mat_state):
+					# 		assert np.all(mat_state[start_index:end_index]==0)
+					# 		assert np.all(mat_state[opt_start_index:opt_end_index]<1)
 							
-							parental_indices = np.arange(4, 4+(2*family_size), 2)
+					# 		parental_indices = np.arange(4, 4+(2*family_size), 2)
 
-							has_recomb = not np.all(chrom_states[start_index:end_index, :][:, parental_indices] == np.tile(chrom_states[start_index, parental_indices], ((end_index-start_index), 1)))
-							has_unknown_phase = np.any(chrom_states[start_index, parental_indices]==-1)
-							has_hts = np.any(chrom_states[start_index:end_index, -1]!=0)
+					# 		has_recomb = not np.all(chrom_states[start_index:end_index, :][:, parental_indices] == np.tile(chrom_states[start_index, parental_indices], ((end_index-start_index), 1)))
+					# 		has_unknown_phase = np.any(chrom_states[start_index, parental_indices]==-1)
+					# 		has_hts = np.any(chrom_states[start_index:end_index, -1]!=0)
 							
-							if (not has_recomb) and (not has_unknown_phase) and (not has_hts):
-								start_pos, end_pos = chrom_positions[start_index], chrom_positions[end_index]
-								opt_start_pos, opt_end_pos = chrom_positions[opt_start_index], chrom_positions[opt_end_index]
-								length = int(end_pos - start_pos + 1)
+					# 		if (not has_recomb) and (not has_unknown_phase) and (not has_hts):
+					# 			start_pos, end_pos = chrom_positions[start_index], chrom_positions[end_index]
+					# 			opt_start_pos, opt_end_pos = chrom_positions[opt_start_index], chrom_positions[opt_end_index]
+					# 			length = int(end_pos - start_pos + 1)
 
-								assert start_pos <= end_pos
-								assert opt_start_pos <= start_pos
-								assert end_pos <= opt_end_pos
+					# 			assert start_pos <= end_pos
+					# 			assert opt_start_pos <= start_pos
+					# 			assert end_pos <= opt_end_pos
 
-								deletions.append(Deletion(family_key, chrom,
-											int(start_pos), int(end_pos), length,
-											int(opt_start_pos), int(opt_end_pos), (inds[child_index],), tuple([x for x in inds[2:] if x!=inds[child_index]]),
-											len(inds), True, False,
-											inds[0], inds[1], 
-											True, False))
+					# 			deletions.append(Deletion(family_key, chrom,
+					# 						int(start_pos), int(end_pos), length,
+					# 						int(opt_start_pos), int(opt_end_pos), (inds[child_index],), tuple([x for x in inds[2:] if x!=inds[child_index]]),
+					# 						len(inds), True, False,
+					# 						inds[0], inds[1], 
+					# 						True, False))
 
-						# paternal de novos
-						for opt_start_index, start_index, end_index, opt_end_index in pull_deletion_indices(pat_state):
-							assert np.all(pat_state[start_index:end_index]==0)
-							assert np.all(pat_state[opt_start_index:opt_end_index]<1)
+					# 	# paternal de novos
+					# 	for opt_start_index, start_index, end_index, opt_end_index in pull_deletion_indices(pat_state):
+					# 		assert np.all(pat_state[start_index:end_index]==0)
+					# 		assert np.all(pat_state[opt_start_index:opt_end_index]<1)
 							
-							parental_indices = np.arange(5, 4+(2*family_size), 2)
+					# 		parental_indices = np.arange(5, 4+(2*family_size), 2)
 
-							has_recomb = not np.all(chrom_states[start_index:end_index, :][:, parental_indices] == np.tile(chrom_states[start_index, parental_indices], ((end_index-start_index), 1)))
-							has_unknown_phase = np.any(chrom_states[start_index, parental_indices]==-1)
-							has_hts = np.any(chrom_states[start_index:end_index, -1]!=0)
+					# 		has_recomb = not np.all(chrom_states[start_index:end_index, :][:, parental_indices] == np.tile(chrom_states[start_index, parental_indices], ((end_index-start_index), 1)))
+					# 		has_unknown_phase = np.any(chrom_states[start_index, parental_indices]==-1)
+					# 		has_hts = np.any(chrom_states[start_index:end_index, -1]!=0)
 							
-							if (not has_recomb) and (not has_unknown_phase) and (not has_hts):
-								start_pos, end_pos = chrom_positions[start_index], chrom_positions[end_index]
-								opt_start_pos, opt_end_pos = chrom_positions[opt_start_index], chrom_positions[opt_end_index]
-								length = int(end_pos - start_pos + 1)
+					# 		if (not has_recomb) and (not has_unknown_phase) and (not has_hts):
+					# 			start_pos, end_pos = chrom_positions[start_index], chrom_positions[end_index]
+					# 			opt_start_pos, opt_end_pos = chrom_positions[opt_start_index], chrom_positions[opt_end_index]
+					# 			length = int(end_pos - start_pos + 1)
 
-								assert start_pos <= end_pos
-								assert opt_start_pos <= start_pos
-								assert end_pos <= opt_end_pos
+					# 			assert start_pos <= end_pos
+					# 			assert opt_start_pos <= start_pos
+					# 			assert end_pos <= opt_end_pos
 
-								deletions.append(Deletion(family_key, chrom,
-											int(start_pos), int(end_pos), length,
-											int(opt_start_pos), int(opt_end_pos), (inds[child_index],), tuple([x for x in inds[2:] if x!=inds[child_index]]),
-											len(inds), False, True,
-											inds[0], inds[1], 
-											True, False))
+					# 			deletions.append(Deletion(family_key, chrom,
+					# 						int(start_pos), int(end_pos), length,
+					# 						int(opt_start_pos), int(opt_end_pos), (inds[child_index],), tuple([x for x in inds[2:] if x!=inds[child_index]]),
+					# 						len(inds), False, True,
+					# 						inds[0], inds[1], 
+					# 						True, False))
 
 					
 		except StopIteration:
@@ -218,67 +218,67 @@ for deletion in deletions:
 with open('%s/deletions.json' % phase_dir, 'w+') as f:
 	json.dump(json_deletions, f, indent=4)
 
-# # create collections
-# class DeletionCollection:
-# 	def __init__(self, deletion, matches):
-# 		self.deletion = deletion
-# 		self.matches = matches
+# create collections
+class DeletionCollection:
+	def __init__(self, deletion, matches):
+		self.deletion = deletion
+		self.matches = matches
 
-# collections = []
+collections = []
 	    
-# starts = np.array([d.opt_start_pos for d in deletions])
-# stops = np.array([d.opt_end_pos for d in deletions])
+starts = np.array([d.opt_start_pos for d in deletions])
+stops = np.array([d.opt_end_pos for d in deletions])
 
-# ordered_start_indices = np.argsort(starts)
-# ordered_starts = starts[ordered_start_indices]
-# ordered_stop_indices = np.argsort(stops)
-# ordered_stops = stops[ordered_stop_indices]
+ordered_start_indices = np.argsort(starts)
+ordered_starts = starts[ordered_start_indices]
+ordered_stop_indices = np.argsort(stops)
+ordered_stops = stops[ordered_stop_indices]
 	        
-# insert_starts_in_stops = np.searchsorted(ordered_stops, starts)
-# insert_stops_in_starts = np.searchsorted(ordered_starts, stops, side='right')
+insert_starts_in_stops = np.searchsorted(ordered_stops, starts)
+insert_stops_in_starts = np.searchsorted(ordered_starts, stops, side='right')
 	        
-# indices = np.ones((len(deletions),), dtype=bool)
+indices = np.ones((len(deletions),), dtype=bool)
 
-# for del_index, main_d in enumerate(deletions):
-# 	indices[:] = True
-# 	indices[ordered_stop_indices[:insert_starts_in_stops[del_index]]] = False
-# 	indices[ordered_start_indices[insert_stops_in_starts[del_index]:]] = False
+for del_index, main_d in enumerate(deletions):
+	indices[:] = True
+	indices[ordered_stop_indices[:insert_starts_in_stops[del_index]]] = False
+	indices[ordered_start_indices[insert_stops_in_starts[del_index]:]] = False
 
-# 	collections.append(DeletionCollection(main_d, [deletions[j] for j in np.where(indices)[0]]))
-# print('collections', len(collections))
+	collections.append(DeletionCollection(main_d, [deletions[j] for j in np.where(indices)[0]]))
+print('collections', len(collections))
 
-# ## prune deletions
-# for c in collections:
-# 	# we know all deletions within a collection overlap at least a little bit
+## prune deletions
+for c in collections:
+	# we know all deletions within a collection overlap at least a little bit
 
-# 	# this method focuses on finding deletions which overlap by 50%
-# 	lengths = np.array([d.length for d in c.matches])
-# 	overlaps = np.array([min(d.end_pos, c.deletion.end_pos)-max(d.start_pos, c.deletion.start_pos)+1 for d in c.matches])
-# 	c.matches = set([c.matches[j] for j in np.where((overlaps >= 0.5*lengths) & (overlaps >= 0.5*c.deletion.length))[0]])
+	# this method focuses on finding deletions which overlap by 50%
+	lengths = np.array([d.length for d in c.matches])
+	overlaps = np.array([min(d.end_pos, c.deletion.end_pos)-max(d.start_pos, c.deletion.start_pos)+1 for d in c.matches])
+	c.matches = set([c.matches[j] for j in np.where((overlaps >= 0.5*lengths) & (overlaps >= 0.5*c.deletion.length))[0]])
 
-# print('deletions pruned')
+print('deletions pruned')
 
-# # prune collections (get rid of collections that are identical to other collections)
-# deletion_to_index = dict([(x.deletion, i) for i, x in enumerate(collections)])
+# prune collections (get rid of collections that are identical to other collections)
+deletion_to_index = dict([(x.deletion, i) for i, x in enumerate(collections)])
 	    
-# for c in collections:
-# 	if c is not None:
-# 		for d in c.matches:
-# 			index = deletion_to_index[d]
-# 			if (c.deletion != d) and (collections[index] is not None) and (c.matches == collections[index].matches):
-# 				collections[index] = None
-# print('collections pruned, removed %d of %d' % (len([x for x in collections if x is None]), len(collections)))
-# collections = [x for x in collections if x is not None]
+for c in collections:
+	if c is not None:
+		for d in c.matches:
+			index = deletion_to_index[d]
+			if (c.deletion != d) and (collections[index] is not None) and (c.matches == collections[index].matches):
+				collections[index] = None
+print('collections pruned, removed %d of %d' % (len([x for x in collections if x is None]), len(collections)))
+collections = [x for x in collections if x is not None]
 
-# # write to json
-# json_collections = list()
-# for collection in collections:
-# 	json_collections.append({
-# 		'deletion': collection.deletion._asdict(),
-# 		'matches': [m._asdict() for m in collection.matches]
-# 	})
-# with open('%s/collections.json' % phase_dir, 'w+') as f:
-# 	json.dump(json_collections, f, indent=4)
+# write to json
+json_collections = list()
+for collection in collections:
+	json_collections.append({
+		'deletion': collection.deletion._asdict(),
+		'matches': [m._asdict() for m in collection.matches]
+	})
+with open('%s/collections.json' % phase_dir, 'w+') as f:
+	json.dump(json_collections, f, indent=4)
     
 
 

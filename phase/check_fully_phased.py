@@ -7,23 +7,32 @@ import input_output
 import os
 import traceback
 
-parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
+parser = argparse.ArgumentParser(description='Check that all families were phased.')
 parser.add_argument('phase_dir', type=str, help='Directory with phase data.')
-parser.add_argument('ped_file', type=str, help='Ped file for data.')
-parser.add_argument('data_dir', type=str, help='Directory with genotype data.')
-parser.add_argument('param_file', type=str, help='Parameter file.')
+parser.add_argument('data_dir', type=str, default=None, help='Directory gen data.')
+parser.add_argument('param_file', type=str, default=None, help='Param file.')
 
 args = parser.parse_args()
 
+with open('%s/info.json' % args.phase_dir, 'r') as f:
+	info = json.load(f)
+
+ped_file = info['ped_file']
+
+if args.data_dir is not None:
+	data_dir = info['data_dir']
+if args.param_file is not None:
+	param_file = info['param_file']
+
 # start by pulling families, only consider nuclear families
-families = input_output.pull_families(args.ped_file)
+families = input_output.pull_families(ped_file)
 families = [x for x in families if x.num_ancestors()==2 and len(x.ordered_couples)==1]
 
-sample_file = '%s/samples.json' % args.data_dir
+sample_file = '%s/samples.json' % data_dir
 with open(sample_file, 'r') as f:
     sample_ids = set(json.load(f))
 
-with open(args.param_file, 'r') as f:
+with open(param_file, 'r') as f:
     params = json.load(f)
 
 for family in families:
