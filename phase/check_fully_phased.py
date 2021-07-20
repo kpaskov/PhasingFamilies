@@ -20,9 +20,9 @@ with open('%s/info.json' % args.phase_dir, 'r') as f:
 
 ped_file = info['ped_file']
 
-if args.data_dir is not None:
+if args.data_dir is None:
 	data_dir = info['data_dir']
-if args.param_file is not None:
+if args.param_file is None:
 	param_file = info['param_file']
 
 # start by pulling families, only consider nuclear families
