@@ -29,11 +29,6 @@ if args.param_file is not None:
 families = input_output.pull_families(ped_file)
 families = [x for x in families if x.num_ancestors()==2 and len(x.ordered_couples)==1]
 
-# if we have a family size limit, then enforce
-if args.family_size is not None:
-	families = [x for x in families if len(x)==args.family_size]
-	print(len(families), 'of size', args.family_size)
-
 sample_file = '%s/samples.json' % data_dir
 with open(sample_file, 'r') as f:
     sample_ids = set(json.load(f))
@@ -47,6 +42,11 @@ for family in families:
 
 families = [x for x in families if x.num_descendents()>0]
 print(len(families), 'have genomic data')
+
+# if we have a family size limit, then enforce
+if args.family_size is not None:
+	families = [x for x in families if len(x)==args.family_size]
+	print(len(families), 'of size', args.family_size)
 
 for family in families:
     to_be_removed = [x for x in family.individuals if (x not in params and '%s.%s' % (family.id, x) not in params)]
