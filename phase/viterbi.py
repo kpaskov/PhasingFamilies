@@ -2,7 +2,7 @@ import numpy as np
 import time
 import random
 
-def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, loss, allow_del_start=False):
+def viterbi_forward_sweep(family_genotypes, mult_factor, states, transition_matrix, loss, allow_del_start=False):
 		
 	# forward sweep
 	prev_time = time.time()
@@ -31,7 +31,7 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 
 	return v_cost#, v_path
 
-def viterbi_forward_sweep_low_memory(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, loss, atol=0.1):
+def viterbi_forward_sweep_low_memory(family_genotypes, mult_factor, states, transition_matrix, loss, atol=0.1):
 	
 	# forward sweep
 	prev_time = time.time()
@@ -70,12 +70,13 @@ def merge_paths(paths, states):
 	path_states = states.get_full_states(paths)
 	return ((path_states[0, :]+1)*np.all(np.equal(path_states, path_states[0, :]), axis=0)) - 1
 
-def viterbi_backward_sweep(v_cost, states, transition_matrix, allow_del_end=False):
+def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transition_matrix, loss, allow_del_end=False):
 
 	# backward sweep
 	prev_time = time.time()
 	n = v_cost.shape[1]
 	final_states = -np.ones((states.full_state_length, n), dtype=np.int8)
+	cost = np.zeros((n,))
 	print('final_states', final_states.shape, final_states.nbytes/10**6, 'MB')
 
 	# choose best paths
@@ -86,9 +87,10 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix, allow_del_end=Fals
 		ok_end = np.array([states.is_ok_end(x) for x in states])
 	else:
 		ok_end = np.array([states.is_ok_end(x) for x in states])
-	
+
 	min_value = np.min(v_cost[ok_end, -1])
 	paths = np.where(np.isclose(v_cost[:, -1], min_value, rtol=0, atol=0.01) & ok_end)[0]
+	cost[-1] = np.average(loss(family_genotypes[:, -1])[paths])
 	print('Num solutions', paths.shape, min_value)
 
 	if paths.shape[0]>1:
@@ -109,12 +111,13 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix, allow_del_end=Fals
 			
 		paths = list(new_paths)
 		final_states[:, j] = merge_paths(paths, states)
+		cost[j] = np.average(loss(family_genotypes[:, j])[paths])
 		num_forks += (len(paths) > 1)
 
 	print('Num forks', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 
 	
-	return final_states
+	return final_states, cost
 
 def viterbi_backward_sweep_low_memory(v_path, v_cost, states, transition_matrix):
 	# backward sweep

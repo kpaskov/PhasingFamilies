@@ -23,7 +23,6 @@ parser.add_argument('param_file', type=str, help='Parameters for model.')
 parser.add_argument('num_loss_regions', type=int, help='Number of loss regions in model.')
 
 parser.add_argument('--detect_inherited_deletions', action='store_true', default=False, help='Detect inherited deletions while phasing.')
-parser.add_argument('--detect_denovo_deletions', action='store_true', default=False, help='Detect de novo deletions in the children.')
 parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
 parser.add_argument('--family_size', type=int, default=None, help='Size of family to phase.')
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
@@ -46,9 +45,6 @@ else:
 if args.detect_inherited_deletions:
 	print('Detecting inherited deletions while phasing ...')
 
-if args.detect_denovo_deletions:
-	print('Detecting de novo deletions while phasing ...')
-
 if args.detect_consanguinity:
 	print('Detecting parental consanguinity while phasing ...')
 
@@ -67,7 +63,7 @@ with open('%s/info.json' % args.out_dir, 'w+') as f:
 		'param_file': args.param_file,
 		'num_loss_regions': args.num_loss_regions,
 		'detect_inherited_deletions': args.detect_inherited_deletions,
-		'detect_denovo_deletions': args.detect_denovo_deletions,
+		'detect_denovo_deletions': False,
 		'chrom': args.chrom,
 		'detect_consanguinity': args.detect_consanguinity,
 		}, f)
@@ -136,7 +132,7 @@ for family in families:
 		print('family', family.id)
 
 		# create inheritance states
-		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_denovo_deletions, args.num_loss_regions)
+		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_inherited_deletions, args.num_loss_regions)
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, params)
@@ -144,6 +140,17 @@ for family in families:
 		# create loss function for this family
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions)
 		#print('loss created')
+
+		if args.detect_inherited_deletions:
+			# same setup, but no mat deletions
+			nomatdel_inheritance_states = InheritanceStates(family, False, True, args.num_loss_regions)
+			nomatdel_transition_matrix = TransitionMatrix(nomatdel_inheritance_states, params)
+			nomatdel_loss = LazyLoss(nomatdel_inheritance_states, family, params, args.num_loss_regions)
+
+			# same setup, but no pat deletions
+			nopatdel_inheritance_states = InheritanceStates(family, True, False, args.num_loss_regions)
+			nopatdel_transition_matrix = TransitionMatrix(nopatdel_inheritance_states, params)
+			nopatdel_loss = LazyLoss(nopatdel_inheritance_states, family, params, args.num_loss_regions)
 
 		# start by pulling header, or writing one if the file doesn't exist
 		existing_phase_data = []
@@ -190,22 +197,28 @@ for family in families:
 				# update loss cache
 				loss.set_cache(family_genotypes)
 
-				if args.low_memory:
-					# forward sweep
-					v_path, v_cost = viterbi_forward_sweep_low_memory(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
+				# forward sweep
+				v_cost = viterbi_forward_sweep(family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
 
-					# backward sweep
-					final_states = viterbi_backward_sweep_low_memory(v_path, v_cost, inheritance_states, transition_matrix)
+				# backward sweep
+				final_states, cost = viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
 
+				if args.detect_inherited_deletions:
+					nomatdel_loss.set_cache(family_genotypes)
+					nopatdel_loss.set_cache(family_genotypes)
+					
+					nomatdel_v_cost = viterbi_forward_sweep(family_genotypes, mult_factor, nomatdel_inheritance_states, nomatdel_transition_matrix, nomatdel_loss)
+					_, nomatdel_cost = viterbi_backward_sweep(nomatdel_v_cost, family_genotypes, mult_factor, nomatdel_inheritance_states, nomatdel_transition_matrix, nomatdel_loss)
+	
+					nopatdel_v_cost = viterbi_forward_sweep(family_genotypes, mult_factor, nopatdel_inheritance_states, nopatdel_transition_matrix, nopatdel_loss)
+					_, nopatdel_cost = viterbi_backward_sweep(nopatdel_v_cost, family_genotypes, mult_factor, nopatdel_inheritance_states, nopatdel_transition_matrix, nopatdel_loss)
+	
 				else:
-					# forward sweep
-					v_cost = viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, loss)
-
-					# backward sweep
-					final_states = viterbi_backward_sweep(v_cost, inheritance_states, transition_matrix)
+					nomatdel_cost = cost
+					nopatdel_cost = cost
 
 				# write to file
-				write_to_file(statef, chrom, family, final_states, family_snp_positions)
+				write_to_file(statef, chrom, family, final_states, family_snp_positions, cost, nomatdel_cost, nopatdel_cost)
 
 				statef.flush()
 	except Exception: 

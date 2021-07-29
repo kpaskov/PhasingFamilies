@@ -146,16 +146,13 @@ class State:
 
 class InheritanceStates:
 
-	def __init__(self, family, detect_inherited_deletions, detect_denovo_deletions, num_loss_states):
+	def __init__(self, family, detect_mat_inherited_deletions, detect_pat_inherited_deletions, num_loss_states):
 		self.family = family
 
 		# 0=deletion, 1=no deletion
 		del_options = []
-		if detect_inherited_deletions:
-			base_options = [0, 1]
-		else:
-			base_options = [1]
-		del_options.extend([base_options]*(2*family.num_ancestors()))
+		del_options.extend([[0, 1] if detect_mat_inherited_deletions else [1]]*(2*len(family.mat_ancestors)))
+		del_options.extend([[0, 1] if detect_pat_inherited_deletions else [1]]*(2*len(family.pat_ancestors)))
 		del_options = list(product(*del_options))
 		print('inherited del options', len(del_options))
 
@@ -189,12 +186,12 @@ class InheritanceStates:
 		print('mat phase options', len(mat_phase_options))
 		print('pat phase options', len(pat_phase_options))
 
-		if detect_denovo_deletions:
-			mat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[0, 1]]*self.family.num_descendents())))
-			pat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[0, 1]]*self.family.num_descendents())))
-		else:
-			mat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[1]]*self.family.num_descendents())))
-			pat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[1]]*self.family.num_descendents())))
+		#if detect_denovo_deletions:
+		#	mat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[0, 1]]*self.family.num_descendents())))
+		#	pat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[0, 1]]*self.family.num_descendents())))
+		#else:
+		mat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[1]]*self.family.num_descendents())))
+		pat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[1]]*self.family.num_descendents())))
 		print('mat denovo del options', len(mat_denovo_options))
 		print('pat denovo del options', len(pat_denovo_options))
 
