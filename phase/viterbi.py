@@ -2,7 +2,7 @@ import numpy as np
 import time
 import random
 
-def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, loss):
+def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, loss, allow_del_start=False):
 		
 	# forward sweep
 	prev_time = time.time()
@@ -16,7 +16,10 @@ def viterbi_forward_sweep(family_genotypes, family_snp_positions, mult_factor, s
 	v_cost[:, 0] = mult_factor[0]*loss(family_genotypes[:, 0])
 
 	# we enforce that the chromosome starts with no deletions
-	ok_start = np.array([states.is_ok_start(x) for x in states])
+	if allow_del_start:
+		ok_start = np.array([True for x in states])
+	else:
+		ok_start = np.array([states.is_ok_start(x) for x in states])
 	v_cost[~ok_start, 0] = np.inf
 
 	# next steps
@@ -67,7 +70,7 @@ def merge_paths(paths, states):
 	path_states = states.get_full_states(paths)
 	return ((path_states[0, :]+1)*np.all(np.equal(path_states, path_states[0, :]), axis=0)) - 1
 
-def viterbi_backward_sweep(v_cost, states, transition_matrix):
+def viterbi_backward_sweep(v_cost, states, transition_matrix, allow_del_end=False):
 
 	# backward sweep
 	prev_time = time.time()
@@ -78,7 +81,12 @@ def viterbi_backward_sweep(v_cost, states, transition_matrix):
 	# choose best paths
 	# we enforce that the chromosome ends with no deletions
 	num_forks = 0
-	ok_end = np.array([states.is_ok_end(x) for x in states])
+
+	if allow_del_end:
+		ok_end = np.array([states.is_ok_end(x) for x in states])
+	else:
+		ok_end = np.array([states.is_ok_end(x) for x in states])
+	
 	min_value = np.min(v_cost[ok_end, -1])
 	paths = np.where(np.isclose(v_cost[:, -1], min_value, rtol=0, atol=0.01) & ok_end)[0]
 	print('Num solutions', paths.shape, min_value)
