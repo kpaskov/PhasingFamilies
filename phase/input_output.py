@@ -442,10 +442,10 @@ def write_to_file(phasef, chrom, family, final_states, family_snp_positions, cos
 		phasef.write('%s\t%s\t%d\t%d\t%f\t%f\t%f\n' % (
 					'chr' + chrom, 
 					'\t'.join(map(str, final_states[:, s_start])), 
-					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1],
 					np.sum(cost[s_start:(s_end+1)]), 
 					np.sum(nomatdel_cost[s_start:(s_end+1)]),
-					np.sum(nopatdel_cost[s_start:(s_end+1)])))
+					np.sum(nopatdel_cost[s_start:(s_end+1)]),
+					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
 
 	print('Write to file complete')
 

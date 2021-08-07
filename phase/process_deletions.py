@@ -11,7 +11,8 @@ phase_dir = sys.argv[1] #'../phased_ihart'
 # read in deletions
 Deletion = namedtuple('Deletion', ['family', 'chrom', 'start_pos', 'end_pos', 'length',
 	'opt_start_pos', 'opt_end_pos', 
-	'trans', 'notrans', 'family_size', 'is_mat', 'is_pat', 'mother', 'father', 'is_denovo', 'is_inherited'])
+	'trans', 'notrans', 'family_size', 'is_mat', 'is_pat', 'mother', 'father', 'is_denovo', 'is_inherited',
+	'quality_score'])
 
 def pull_deletion_indices(data):
 	assert (data[0] == 1) and (data[-1] == 1)
@@ -50,7 +51,7 @@ for filename in listdir(phase_dir):
 			family_key = filename[:-11]
 			print(family_key)
 
-			chroms, positions, states = [], [], []
+			chroms, positions, states, costs = [], [], [], []
 			with open('%s/%s' % (phase_dir, filename), 'r')  as f:
 				header = next(f).strip().split('\t')
 				inds = [header[i][:-4] for i in range(5, len(header)-3, 2)]
@@ -59,8 +60,9 @@ for filename in listdir(phase_dir):
 				for line in f:
 					pieces = line.strip().split('\t')
 					chrom = pieces[0][3:]
-					start_pos, end_pos = [int(x) for x in pieces[-2:]]
-					state = np.array([int(x) for x in pieces[1:-2]])
+					start_pos, end_pos = [int(x) for x in pieces[-5:-3]]
+					state = np.array([int(x) for x in pieces[1:-5]])
+					cost = np.array([float(x) for x in pieces[-3:]])
 				
 					assert end_pos >= start_pos
 
@@ -68,6 +70,7 @@ for filename in listdir(phase_dir):
 						chroms.append(chrom)
 						positions.append(start_pos)
 						states.append(state)
+						costs.append(cost)
 
 			if np.all([x.endswith('_del') for x in header[1:5]]) and not header[5].endswith('_del') and len(set(chroms))>=22:
 				# pull only "simple" families with mom, dad, and children
@@ -75,6 +78,7 @@ for filename in listdir(phase_dir):
 				
 				positions = np.array(positions)
 				states = np.array(states)
+				costs = np.array(costs)
 				#states[states[:, -1]==1] = -1
 			
 				individuals.update(inds)
@@ -82,6 +86,7 @@ for filename in listdir(phase_dir):
 				for chrom in set(chroms):
 					chrom_states = states[[c==chrom for c in chroms], :].copy()
 					chrom_positions = positions[[c==chrom for c in chroms]].copy()
+					chrom_costs = costs[[c==chrom for c in chroms]].copy()
 					interval_lengths = chrom_positions[1:]-chrom_positions[:-1]
 
 					assert np.all((chrom_states[:, :4]>=-1) & (chrom_states[:, :4]<=1))
@@ -97,8 +102,10 @@ for filename in listdir(phase_dir):
 							
 							if is_mat:
 								parental_indices = np.arange(4, 4+(2*family_size), 2)
+								quality_score = np.sum(chrom_costs[start_index:end_index, 1]) - np.sum(chrom_costs[start_index:end_index, 0])
 							if is_pat:
 								parental_indices = np.arange(5, 4+(2*family_size), 2)
+								quality_score = np.sum(chrom_costs[start_index:end_index, 2]) - np.sum(chrom_costs[start_index:end_index, 0])
 
 							majority_parental_inheritance = None
 							for parental_inheritance_option in np.unique(chrom_states[start_index:end_index, :][:, parental_indices], axis=0):
@@ -132,7 +139,7 @@ for filename in listdir(phase_dir):
 										int(opt_start_pos), int(opt_end_pos), tuple(trans), tuple(notrans),
 										len(inds), is_mat, is_pat,
 										inds[0], inds[1], 
-										False, True))
+										False, True, quality_score))
 
 					# # pull de novo deletions
 					# for child_index in range(2, len(inds)):
