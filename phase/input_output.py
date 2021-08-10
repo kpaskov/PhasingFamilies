@@ -439,7 +439,7 @@ def write_to_file(phasef, chrom, family, final_states, family_snp_positions, cos
 	for j in range(1, len(change_indices)):
 		s_start, s_end = change_indices[j-1]+1, change_indices[j]
 		#assert np.all(final_states[:, s_start] == final_states[:, s_end])
-		phasef.write('%s\t%s\t%d\t%d\t%f\t%f\t%f\n' % (
+		phasef.write('%s\t%s\t%f\t%f\t%f\t%d\t%d\n' % (
 					'chr' + chrom, 
 					'\t'.join(map(str, final_states[:, s_start])), 
 					np.sum(cost[s_start:(s_end+1)]), 
