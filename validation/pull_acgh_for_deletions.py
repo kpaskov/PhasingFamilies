@@ -58,19 +58,29 @@ probe_to_index = dict([(x, i) for i, x in enumerate(probes)])
 print(probe_positions.shape)
 
 
-child_to_deletions = defaultdict(list)
+sample_to_deletions = defaultdict(list)
 for d in deletions:
     for child in [ssc_old_id_to_new_id.get(x, x) for x in d['trans']]:
         if child in sampleid_to_datafile:
-            child_to_deletions[child].append(d)
-print(len(child_to_deletions))
+            sample_to_deletions[child].append(d)
+    for child in [ssc_old_id_to_new_id.get(x, x) for x in d['notrans']]:
+        if child in sampleid_to_datafile:
+            sample_to_deletions[child].append(d)
+
+    mom = ssc_old_id_to_new_id.get(d['mom'], d['mom'])
+    if mom in sampleid_to_datafile:
+        sample_to_deletions[mom].append(d)
+    dad = ssc_old_id_to_new_id.get(d['dad'], d['dad'])
+    if dad in sampleid_to_datafile:
+        sample_to_deletions[dad].append(d)
+print(len(sample_to_deletions))
 
 
-for child, childdels in child_to_deletions.items():
+for sample, sampledels in sample_to_deletions.items():
 
     data = np.zeros((len(probes),))
     data.fill(np.nan)
-    with gzip.open('%s/%s' % (acgh_dir, sampleid_to_datafile[child]), 'rt') as f:
+    with gzip.open('%s/%s' % (acgh_dir, sampleid_to_datafile[sample]), 'rt') as f:
         # skip header
         line = next(f)
         while line.startswith('#'):
@@ -81,11 +91,11 @@ for child, childdels in child_to_deletions.items():
             if pieces[0] in probe_to_index:
                 data[probe_to_index[pieces[0]]] = float(pieces[1])
 
-    for d in childdels:
+    for d in sampledels:
         indices = (probe_positions[:, 0]==chrom_to_index[d['chrom']]) & (probe_positions[:, 1]>=d['start_pos']) & (probe_positions[:, 2]<=d['end_pos']) & (~np.isnan(data))
         #print(data[indices])
-        d['%s_num_markers_aCGH' % child] = int(np.sum(indices))
-        d['%s_med_aCGH' % child] = float(np.median(data[indices]))
+        d['%s_num_markers_aCGH' % sample] = int(np.sum(indices))
+        d['%s_med_aCGH' % sample] = float(np.median(data[indices]))
 
 with open(del_file, 'w+') as f:
     json.dump(deletions, f, indent=4)

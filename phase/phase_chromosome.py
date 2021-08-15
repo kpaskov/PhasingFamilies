@@ -34,6 +34,7 @@ parser.add_argument('--retain_order', action='store_true', default=False, help='
 parser.add_argument('--low_memory', action='store_true', default=False, help='Reduce memory consumption, but no uncertainty regions.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
 parser.add_argument('--no_pass', action='store_true', default=False, help='Use PASS to filter snps.')
+parser.add_argument('--qs', action='store_true', default=False, help='Calculate quality score metrics.')
 
 args = parser.parse_args()
 
@@ -203,7 +204,7 @@ for family in families:
 				# backward sweep
 				final_states, cost = viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
 
-				if args.detect_inherited_deletions:
+				if args.detect_inherited_deletions and args.qs:
 					nomatdel_loss.set_cache(family_genotypes)
 					nopatdel_loss.set_cache(family_genotypes)
 					
@@ -214,8 +215,8 @@ for family in families:
 					_, nopatdel_cost = viterbi_backward_sweep(nopatdel_v_cost, family_genotypes, mult_factor, nopatdel_inheritance_states, nopatdel_transition_matrix, nopatdel_loss)
 	
 				else:
-					nomatdel_cost = cost
-					nopatdel_cost = cost
+					nomatdel_cost = None
+					nopatdel_cost = None
 
 				# write to file
 				write_to_file(statef, chrom, family, final_states, family_snp_positions, cost, nomatdel_cost, nopatdel_cost)

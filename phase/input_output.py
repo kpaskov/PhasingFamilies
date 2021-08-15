@@ -443,8 +443,8 @@ def write_to_file(phasef, chrom, family, final_states, family_snp_positions, cos
 					'chr' + chrom, 
 					'\t'.join(map(str, final_states[:, s_start])), 
 					np.sum(cost[s_start:(s_end+1)]), 
-					np.sum(nomatdel_cost[s_start:(s_end+1)]),
-					np.sum(nopatdel_cost[s_start:(s_end+1)]),
+					'-' if nomatdel_cost is None else np.sum(nomatdel_cost[s_start:(s_end+1)]),
+					'-' if nopatdel_cost is None else np.sum(nopatdel_cost[s_start:(s_end+1)]),
 					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
 
 	print('Write to file complete')
