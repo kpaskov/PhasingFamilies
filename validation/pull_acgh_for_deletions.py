@@ -16,6 +16,9 @@ with open('data/ssc.id_map.from.repository', 'r') as f:
         ssc_old_id_to_new_id[pieces[1]] = pieces[0]
         ssc_old_id_to_new_id[pieces[1].replace('.', '_')] = pieces[0]
 
+ssc_new_id_to_old_id = dict([(new_id, old_id) for old_id, new_id in ssc_old_id_to_new_id.items()])
+
+
 # pull HybIDs
 sampleid_to_hybid = dict()
 with open('%s/GSE23682_family_table.txt' % acgh_dir, 'r') as f:
@@ -94,8 +97,8 @@ for sample, sampledels in sample_to_deletions.items():
     for d in sampledels:
         indices = (probe_positions[:, 0]==chrom_to_index[d['chrom']]) & (probe_positions[:, 1]>=d['start_pos']) & (probe_positions[:, 2]<=d['end_pos']) & (~np.isnan(data))
         #print(data[indices])
-        d['%s_num_markers_aCGH' % sample] = int(np.sum(indices))
-        d['%s_med_aCGH' % sample] = float(np.median(data[indices]))
+        d['%s_num_markers_aCGH' % ssc_new_id_to_old_id[sample]] = int(np.sum(indices))
+        d['%s_med_aCGH' % ssc_new_id_to_old_id[sample]] = float(np.median(data[indices]))
 
 with open(del_file, 'w+') as f:
     json.dump(deletions, f, indent=4)
