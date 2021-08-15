@@ -70,10 +70,10 @@ for d in deletions:
         if child in sampleid_to_datafile:
             sample_to_deletions[child].append(d)
 
-    mom = ssc_old_id_to_new_id.get(d['mom'], d['mom'])
+    mom = ssc_old_id_to_new_id.get(d['mother'], d['mother'])
     if mom in sampleid_to_datafile:
         sample_to_deletions[mom].append(d)
-    dad = ssc_old_id_to_new_id.get(d['dad'], d['dad'])
+    dad = ssc_old_id_to_new_id.get(d['father'], d['father'])
     if dad in sampleid_to_datafile:
         sample_to_deletions[dad].append(d)
 print(len(sample_to_deletions))
