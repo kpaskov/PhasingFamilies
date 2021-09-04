@@ -64,9 +64,13 @@ for filename in listdir(phase_dir):
 					#state = np.array([int(x) for x in pieces[1:-5]])
 					#cost = np.array([float(x) for x in pieces[-3:]])
 
+					#start_pos, end_pos = [int(x) for x in pieces[-2:]]
+					#state = np.array([int(x) for x in pieces[1:(6+2*family_size)]])
+					#cost = np.array([float(x) for x in pieces[(6+2*family_size):-2]])
+					
 					start_pos, end_pos = [int(x) for x in pieces[-2:]]
-					state = np.array([int(x) for x in pieces[1:(6+2*family_size)]])
-					cost = np.array([float(x) for x in pieces[(6+2*family_size):-2]])
+					state = np.array([int(x) for x in pieces[1:-2]])
+					cost = []
 
 					#start_pos, end_pos = [int(x) for x in pieces[-5:-3]]
 					#cost = np.array([float(x) for x in pieces[-3:]])
