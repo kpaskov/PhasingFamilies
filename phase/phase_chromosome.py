@@ -142,7 +142,7 @@ for family in families:
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions)
 		#print('loss created')
 
-		if args.detect_inherited_deletions:
+		if args.detect_inherited_deletions and args.qs:
 			# same setup, but no mat deletions
 			nomatdel_inheritance_states = InheritanceStates(family, False, True, args.num_loss_regions)
 			nomatdel_transition_matrix = TransitionMatrix(nomatdel_inheritance_states, params)
