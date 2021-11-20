@@ -306,14 +306,14 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 			poss = coords[:, 1]
 			is_snp = coords[:, 2]==1
 			is_pass = coords[:, 3]==1
-			#af = np.load('%s/%s' % (data_dir, af_file))
 
 			if not use_pass:
 				is_pass = np.ones(is_pass.shape, dtype=bool)
 
-			#if af_cutoff is not None:
-			#	is_pass = is_pass & (af>=af_cutoff)
-			
+			# remove multiallelic sites
+			multi_indices = np.where(coords[1:, 1]==coords[:-1, 1])[0]
+			is_pass[multi_indices] = False
+			is_pass[multi_indices+1] = False
 
 			if start_pos is not None and end_pos is not None:
 				in_interval = (coords[:, 1]>=start_pos) & (coords[:, 1]<=end_pos)
@@ -352,42 +352,27 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 
 	gens = np.hstack(gens)
 	snp_positions = np.hstack(snp_positions)
-	#afs = np.hstack(afs)
 	collapseds = np.hstack(collapseds)
-	#print(gens.shape, snp_positions.shape, collapseds.shape)
-	#print(total_pos, np.sum(collapseds)+gens.shape[1])
+	print(gens.shape, snp_positions.shape, collapseds.shape)
 
 	assert np.all(snp_positions <= chrom_length)
+	assert np.all(snp_positions[1:]>=snp_positions[:-1])
 	assert np.all(collapseds >= 0)
 
-	# append af to end of family genotypes to get our observed data
-	#print(gens.shape)
-
-	# remove multiallelic sites
-	is_multiallelic = np.zeros((snp_positions.shape[0],), dtype=bool)
-	indices = np.where(snp_positions[:-1] == snp_positions[1:])[0]
-	is_multiallelic[indices] = True
-	is_multiallelic[indices+1] = True
-	#print(np.sum(is_multiallelic))
-
-	collapseds_multiallelic = np.zeros((np.sum(~is_multiallelic)+1,), dtype=int)
-	collapseds_multiallelic[0] = collapseds[0]
-	collapseds_multiallelic[np.cumsum(~is_multiallelic)] += collapseds[1:]
-
-	n = 2*np.sum(~is_multiallelic)+1
+	n = 2*len(snp_positions)+1
 	family_genotypes = np.zeros((len(has_seq), n), dtype=np.int8)
-	family_genotypes[:, np.arange(1, n-1, 2)] = gens[:, ~is_multiallelic]
+	family_genotypes[:, np.arange(1, n-1, 2)] = gens
 		
 	observed = np.zeros((n,), dtype=int)
 	observed[np.arange(1, n-1, 2)] = 1
-	observed[np.arange(0, n, 2)] = collapseds_multiallelic
+	observed[np.arange(0, n, 2)] = collapseds
 		
 	family_snp_positions = np.zeros((n, 2), dtype=np.int)
-	family_snp_positions[np.arange(1, n-1, 2), 0] = snp_positions[~is_multiallelic]
-	family_snp_positions[np.arange(1, n-1, 2), 1] = snp_positions[~is_multiallelic]+1
+	family_snp_positions[np.arange(1, n-1, 2), 0] = snp_positions
+	family_snp_positions[np.arange(1, n-1, 2), 1] = snp_positions+1
 
-	family_snp_positions[np.arange(0, n-2, 2), 1] = snp_positions[~is_multiallelic]
-	family_snp_positions[np.arange(2, n, 2), 0] = snp_positions[~is_multiallelic]+1
+	family_snp_positions[np.arange(0, n-2, 2), 1] = snp_positions
+	family_snp_positions[np.arange(2, n, 2), 0] = snp_positions+1
 	family_snp_positions[0, 0] = 1
 	family_snp_positions[-1, 1] = chrom_length
 

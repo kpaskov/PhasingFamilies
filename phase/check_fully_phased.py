@@ -156,7 +156,7 @@ for family in families:
 				has_missing_individuals.append((family.id, set(family.individuals)-set(individuals)))
 			else:
 				all_good += 1
-				create_recomb_file(phase_filename)
+				#create_recomb_file(phase_filename)
 		except StopIteration:
 			has_no_data.append(family.id)
 	else:

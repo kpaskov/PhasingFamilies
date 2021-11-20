@@ -6,18 +6,14 @@ import argparse
 import input_output
 import os
 import traceback
+from numpyencoder import NumpyEncoder
 
 parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
-parser.add_argument('phase_dir', type=str, help='Directory with phase data.')
-parser.add_argument('ped_file', type=str, help='Ped file for data.')
-parser.add_argument('assembly', type=str, help='Reference genome assembly for data.')
+parser.add_argument('dataset_name', type=str, help='Name of dataset.')
 
 chroms_of_interest = [str(x) for x in range(1, 23)] #+ ['X']
 args = parser.parse_args()
 
-# start by pulling families, only consider nuclear families
-families = input_output.pull_families(args.ped_file)
-families = [x for x in families if x.num_ancestors()==2 and len(x.ordered_couples)==1]
 
 #pulls phase data from a file
 def pull_phase(filename):
@@ -57,16 +53,27 @@ def pull_phase(filename):
 			no_missing_mat = (states[mat_index1, :] != -1) & (states[mat_index2, :] != -1)
 			no_missing_pat = (states[pat_index1, :] != -1) & (states[pat_index2, :] != -1)
 
-			if np.sum(((states[mat_index1, :] == states[mat_index2, :])*(ends-starts))[no_missing_mat])/np.sum((ends-starts)[no_missing_mat]) > 0.9 and \
-			   np.sum(((states[pat_index1, :] == states[pat_index2, :])*(ends-starts))[no_missing_pat])/np.sum((ends-starts)[no_missing_pat]) > 0.9:
-			   raise Exception('This family contains identical twins.')
+			#if np.sum(((states[mat_index1, :] == states[mat_index2, :])*(ends-starts))[no_missing_mat])/np.sum((ends-starts)[no_missing_mat]) > 0.9 and \
+			#   np.sum(((states[pat_index1, :] == states[pat_index2, :])*(ends-starts))[no_missing_pat])/np.sum((ends-starts)[no_missing_pat]) > 0.9:
+			#   raise Exception('This family contains identical twins.')
 
 
 	return states, chrs, starts, ends, individuals, mat_indices, pat_indices
 		
 
+# extracts deletions from within recombination interval
+def extract_deletions(states, starts, ends, is_mat):
+	#print(states)
+	if is_mat:
+		del_indices = [0, 1]
+	else:
+		del_indices = [2, 3]
+
+	return np.any(states[del_indices, :-1]==0)
+
+
 # extracts all recombination points from phase
-Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size', 'mom', 'dad'])
+Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size', 'mom', 'dad', 'deletions'])
 def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  indices, is_mat):
     recombinations = []
     for chrom in chroms_of_interest:
@@ -74,7 +81,7 @@ def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  i
         is_chrom = np.array([x==chrom for x in chroms])
         for individual, index in zip(individuals, indices):
             change_indices = np.where(is_chrom[:-1] & is_chrom[1:] & (states[index, :-1] != states[index, 1:]))[0]+1
-                        
+
             if change_indices.shape[0]>0:
                 current_index = change_indices[0]
                 for next_index in change_indices[1:]:
@@ -84,30 +91,32 @@ def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  i
                     if states[index, current_index-1] != -1 and states[index, current_index] != -1:
                         # we know exactly where the recombination happened
                         recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1]))
-                    elif states[index, current_index-1] != -1 and states[index, current_index] == -1 and states[index, next_index] != -1 and states[index, current_index-1] != states[index, next_index]:
+                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1], False))
+                    elif states[index, current_index-1] != -1 and states[index, current_index] == -1 and states[index, current_index-1] != states[index, next_index]:
+                        deletions = extract_deletions(states[:, current_index:next_index], starts[current_index:next_index], ends[current_index:next_index], is_mat)
                         # there's a region where the recombination must have occured
                         recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[next_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1]))
+                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1], deletions))
                     
                     current_index = next_index
+                
                 if states[index, current_index-1] != -1 and states[index, current_index] != -1:
                     # we know exactly where the recombination happened
                     recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1]))
-
+                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1], False))
+                   
     return recombinations
 
-Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad'])
-GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad'])
+Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad', 'deletions'])
+GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad', 'deletions'])
 
-def match_recombinations(recombinations, chrom, child, is_mat):
+def match_recombinations(recombinations, chrom, family_id, child, is_mat):
     gene_conversions = []
     crossovers = []
     
     rs = [r for r in recombinations if r.chrom==chrom and r.child==child and r.is_mat==is_mat]
     dists = np.array([r2.start_pos-r1.end_pos for r1, r2 in zip(rs[:-1], rs[1:])])
-    breaks = [0] + (np.where(dists>100000)[0]+1).tolist() + [len(rs)]
+    breaks = [0] + (np.where(dists>150000)[0]+1).tolist() + [len(rs)]
     for break_start, break_end in zip(breaks[:-1], breaks[1:]):
         r_group = rs[break_start:break_end]
         if len(r_group)>0:
@@ -115,66 +124,63 @@ def match_recombinations(recombinations, chrom, child, is_mat):
                 gene_conversions.append(GeneConversion(family_id, chrom, 
                                                        r_group[0].start_pos, r_group[-1].end_pos, child,
                                                        is_mat, not is_mat, len(r_group)>2, tuple(r_group), r_group[0].family_size,
-                                                       r_group[0].mom, r_group[0].dad))
+                                                       r_group[0].mom, r_group[0].dad, np.any([x.deletions for x in r_group])))
             else:
                 crossovers.append(Crossover(family_id, chrom,
                                            r_group[0].start_pos, r_group[-1].end_pos, child,
                                            is_mat, not is_mat, len(r_group)>1, tuple(r_group), r_group[0].family_size,
-                                           r_group[0].mom, r_group[0].dad))
+                                           r_group[0].mom, r_group[0].dad, np.any([x.deletions for x in r_group])))
                     
     return gene_conversions, crossovers
+
+with open('%s/sibpairs.json' % args.dataset_name, 'r') as f:
+	sibpairs = json.load(f)
+
+all_crossovers = []
+all_gene_conversions = []
+for sibpair in sibpairs:
+	family_key = sibpair['family']
+	print(family_key)
+	states, chroms, starts, ends, individuals, mat_indices, pat_indices = pull_phase('%s/%s.phased.txt' % (sibpair['phase_dir'], family_key))
 	
-for file in sorted(os.listdir(args.phase_dir)):
-	if file.endswith('.phased.txt'):
-		try:
-			family_id = file[:-11]
-			print(family_id)
-			states, chroms, starts, ends, individuals, mat_indices, pat_indices = pull_phase('%s/%s.phased.txt' % (args.phase_dir, family_id))
-			
-			missing_chroms = set(chroms_of_interest) - set(np.unique(chroms))
-			if len(missing_chroms)>0:
-				raise Exception('missing %s' % str(missing_chroms))
+	missing_chroms = set(chroms_of_interest) - set(np.unique(chroms))
+	if len(missing_chroms)>0:
+		raise Exception('missing %s' % str(missing_chroms))
 
-			mult = ends-starts
-			num_children = len(individuals)-2
+	mult = ends-starts
+	num_children = len(individuals)-2
 
-			# start by pulling all recombinations
-			mat_recombinations = pull_recombinations(family_id, states, chroms, starts, ends, individuals, mat_indices, True)
-			pat_recombinations = pull_recombinations(family_id, states, chroms, starts, ends, individuals, pat_indices, False)
-			recombinations = mat_recombinations + pat_recombinations
+	# start by pulling all recombinations
+	mat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, mat_indices, True)
+	pat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, pat_indices, False)
+	recombinations = mat_recombinations + pat_recombinations
 
-			# now identify crossovers and gene conversions
-			gene_conversions, crossovers = [], []
-			children = set([x.child for x in recombinations])
-			for chrom in chroms_of_interest:
-				for child in children:
-					gc, co = match_recombinations(recombinations, chrom, child, True)
-					gene_conversions.extend(gc)
-					crossovers.extend(co)
+	# now identify crossovers and gene conversions
+	gene_conversions, crossovers = [], []
+	children = set([x.child for x in recombinations])
+	for chrom in chroms_of_interest:
+		for child in children:
+			gc, co = match_recombinations(recombinations, chrom, family_key, child, True)
+			gene_conversions.extend(gc)
+			crossovers.extend(co)
 
-					gc, co = match_recombinations(recombinations, chrom, child, False)
-					gene_conversions.extend(gc)
-					crossovers.extend(co)
+			gc, co = match_recombinations(recombinations, chrom, family_key, child, False)
+			gene_conversions.extend(gc)
+			crossovers.extend(co)
 
-			print('gc', len(gene_conversions), 'co', len(crossovers))
+	print('gc', len(gene_conversions), 'co', len(crossovers))
 
-			gc = len(gene_conversions)/num_children
-			cr = len(crossovers)/num_children
-			print('avg gene conversion', gc, 'avg crossover', cr)
+	gc = len(gene_conversions)/num_children
+	cr = len(crossovers)/num_children
+	print('avg gene conversion', gc, 'avg crossover', cr)
 
-			with open('%s/%s.crossovers.json' % (args.phase_dir, family_id), 'w+') as f:
-				json.dump([c._asdict() for c in crossovers], f, indent=4)
+	all_crossovers.extend(crossovers)
+	all_gene_conversions.extend(gene_conversions)
 
-			with open('%s/%s.gene_conversions.json' % (args.phase_dir, family_id), 'w+') as f:
-				json.dump([gc._asdict() for gc in gene_conversions], f, indent=4)
-		except Exception:
-			traceback.print_exc()
+with open('%s/crossovers.json' % args.dataset_name, 'w+') as f:
+	json.dump([c._asdict() for c in all_crossovers], f, indent=4, cls=NumpyEncoder)
 
-			crossover_file = '%s/%s.crossovers.json' % (args.phase_dir, family_id)
-			if os.path.isfile(crossover_file):
-				os.remove(crossover_file)
-			gene_conversion_file = '%s/%s.gene_conversions.json' % (args.phase_dir, family_id)
-			if os.path.isfile(gene_conversion_file):
-				os.remove(gene_conversion_file)
+with open('%s/gene_conversions.json' % args.dataset_name, 'w+') as f:
+	json.dump([gc._asdict() for gc in all_gene_conversions], f, indent=4, cls=NumpyEncoder)
 
 
