@@ -23,6 +23,7 @@ parser.add_argument('param_file', type=str, help='Parameters for model.')
 parser.add_argument('num_loss_regions', type=int, help='Number of loss regions in model.')
 
 parser.add_argument('--detect_inherited_deletions', action='store_true', default=False, help='Detect inherited deletions while phasing.')
+parser.add_argument('--detect_upd', action='store_true', default=False, help='Detect uniparental disomy while phasing. We detect only heterodisomy because isodisomy is essentially indistinguishable from a denovo deletion.')
 parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
 parser.add_argument('--family_size', type=int, default=None, help='Size of family to phase.')
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
@@ -46,6 +47,9 @@ else:
 if args.detect_inherited_deletions:
 	print('Detecting inherited deletions while phasing ...')
 
+if args.detect_upd:
+	print('Detecting UPD while phasing...')
+
 if args.detect_consanguinity:
 	print('Detecting parental consanguinity while phasing ...')
 
@@ -64,6 +68,7 @@ with open('%s/info.json' % args.out_dir, 'w+') as f:
 		'param_file': args.param_file,
 		'num_loss_regions': args.num_loss_regions,
 		'detect_inherited_deletions': args.detect_inherited_deletions,
+		'detect_upd': args.detect_upd,
 		'detect_denovo_deletions': False,
 		'chrom': args.chrom,
 		'detect_consanguinity': args.detect_consanguinity,
@@ -133,7 +138,7 @@ for family in families:
 		print('family', family.id)
 
 		# create inheritance states
-		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_inherited_deletions, args.num_loss_regions)
+		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_inherited_deletions, args.detect_upd, args.num_loss_regions)
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, params)

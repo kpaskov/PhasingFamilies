@@ -88,6 +88,13 @@ class LazyLoss:
 		gen_index = self.gen_to_index.get(tuple(gen), None)
 		if gen_index is not None and self.already_calculated[gen_index]:
 			return self.losses[:, gen_index]
+		elif np.any([x==-1 for x in gen]):
+			# ignore positions where one or more family members has missing data
+			loss = np.zeros((self.states.num_states,), dtype=float)
+			if gen_index is not None:
+				self.losses[:, gen_index] = loss
+				self.already_calculated[gen_index] = True
+			return loss
 		else:
 			loss = np.zeros((self.states.num_states,), dtype=float)
 
@@ -118,7 +125,6 @@ class LazyLoss:
 			if gen_index is not None:
 				self.losses[:, gen_index] = loss
 				self.already_calculated[gen_index] = True
-			
 			return loss
 
 	# def ancestral_variant_probabilities(self, gen, state_index):

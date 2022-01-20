@@ -73,13 +73,26 @@ def extract_deletions(states, starts, ends, is_mat):
 
 
 # extracts all recombination points from phase
-Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size', 'mom', 'dad', 'deletions'])
-def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  indices, is_mat):
+Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size', 'mom', 'dad', 
+	'is_left_match', 'is_right_match', 'is_other_parent_match', 'is_other_parent_mismatch'])
+def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  indices, other_indices, is_mat):
+    match_state = 0 if is_mat else 2
+    other_match_state = 2 if is_mat else 0
+
+    def make_recombination(chrom, start_index, end_index, individual, index, other_index):
+    	return Recombination(family_id, chrom, int(ends[start_index])-1, int(starts[end_index]),
+                                    (individual, individuals[2]), is_mat, not is_mat, 
+                                    len(individuals), individuals[0], individuals[1],
+                                    states[index, start_index]==match_state, 
+                                    states[index, end_index]==match_state,
+                                    np.all(states[other_index, start_index:end_index+1]==other_match_state),
+                                    np.all(states[other_index, start_index:end_index+1]!=-1) and np.all(states[other_index, start_index:end_index+1]!=other_match_state))
+
     recombinations = []
     for chrom in chroms_of_interest:
         # block out 
         is_chrom = np.array([x==chrom for x in chroms])
-        for individual, index in zip(individuals, indices):
+        for individual, index, other_index in zip(individuals, indices, other_indices):
             change_indices = np.where(is_chrom[:-1] & is_chrom[1:] & (states[index, :-1] != states[index, 1:]))[0]+1
 
             if change_indices.shape[0]>0:
@@ -90,25 +103,20 @@ def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  i
 
                     if states[index, current_index-1] != -1 and states[index, current_index] != -1:
                         # we know exactly where the recombination happened
-                        recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1], False))
+                        recombinations.append(make_recombination(chrom, current_index-1, current_index, individual, index, other_index))
+
                     elif states[index, current_index-1] != -1 and states[index, current_index] == -1 and states[index, current_index-1] != states[index, next_index]:
-                        deletions = extract_deletions(states[:, current_index:next_index], starts[current_index:next_index], ends[current_index:next_index], is_mat)
                         # there's a region where the recombination must have occured
-                        recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[next_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1], deletions))
-                    
+                        recombinations.append(make_recombination(chrom, current_index-1, next_index, individual, index, other_index))
                     current_index = next_index
                 
                 if states[index, current_index-1] != -1 and states[index, current_index] != -1:
                     # we know exactly where the recombination happened
-                    recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, len(individuals), individuals[0], individuals[1], False))
-                   
+                    recombinations.append(make_recombination(chrom, current_index-1, current_index, individual, index, other_index))
     return recombinations
 
-Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad', 'deletions'])
-GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad', 'deletions'])
+Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad'])
+GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'recombinations', 'family_size', 'mom', 'dad'])
 
 def match_recombinations(recombinations, chrom, family_id, child, is_mat):
     gene_conversions = []
@@ -123,13 +131,13 @@ def match_recombinations(recombinations, chrom, family_id, child, is_mat):
             if len(r_group)%2 == 0:
                 gene_conversions.append(GeneConversion(family_id, chrom, 
                                                        r_group[0].start_pos, r_group[-1].end_pos, child,
-                                                       is_mat, not is_mat, len(r_group)>2, tuple(r_group), r_group[0].family_size,
-                                                       r_group[0].mom, r_group[0].dad, np.any([x.deletions for x in r_group])))
+                                                       is_mat, not is_mat, len(r_group)>2, [r._asdict() for r in r_group], r_group[0].family_size,
+                                                       r_group[0].mom, r_group[0].dad))
             else:
                 crossovers.append(Crossover(family_id, chrom,
                                            r_group[0].start_pos, r_group[-1].end_pos, child,
-                                           is_mat, not is_mat, len(r_group)>1, tuple(r_group), r_group[0].family_size,
-                                           r_group[0].mom, r_group[0].dad, np.any([x.deletions for x in r_group])))
+                                           is_mat, not is_mat, len(r_group)>1, [r._asdict() for r in r_group], r_group[0].family_size,
+                                           r_group[0].mom, r_group[0].dad))
                     
     return gene_conversions, crossovers
 
@@ -151,8 +159,8 @@ for sibpair in sibpairs:
 	num_children = len(individuals)-2
 
 	# start by pulling all recombinations
-	mat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, mat_indices, True)
-	pat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, pat_indices, False)
+	mat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, mat_indices, pat_indices, True)
+	pat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, pat_indices, mat_indices, False)
 	recombinations = mat_recombinations + pat_recombinations
 
 	# now identify crossovers and gene conversions

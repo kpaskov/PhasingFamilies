@@ -21,14 +21,14 @@ def viterbi_forward_sweep(family_genotypes, mult_factor, states, transition_matr
 	else:
 		ok_start = np.array([states.is_ok_start(x) for x in states])
 	v_cost[~ok_start, 0] = np.inf
+	print('ok starts', np.sum(ok_start))
 
 	# next steps
 	for j in range(1, n): 
 		#v_path[:, j] = np.argmin(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1)
 		v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])
-	
-	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 
+	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 	return v_cost#, v_path
 
 def viterbi_forward_sweep_low_memory(family_genotypes, mult_factor, states, transition_matrix, loss, atol=0.1):

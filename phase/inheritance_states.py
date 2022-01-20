@@ -109,6 +109,12 @@ class State:
 		else:
 			return self._paternal_denovo_deletions[index]==0
 
+	def has_upd(self, index=None):
+		if index is None:
+			return np.any([x is not None and x>1 for x in self._maternal_phase + self._paternal_phase])
+		else:
+			return (self._maternal_phase[index] is not None and self._maternal_phase[index]>1) or (self._paternal_phase[index] is not None and self._paternal_phase[index]>1)
+
 	def has_denovo_deletion(self):
 		return self.has_maternal_denovo_deletion() or self.has_paternal_denovo_deletion()
 
@@ -130,9 +136,19 @@ class State:
 			for child in self._family.parents_to_children[(mom, dad)]:
 				child_index = self._family.individual_to_index[child]
 				# add mat phase
-				phase.append(phase[2*mom_index + self._maternal_phase[child_index]])
+				mat = self._maternal_phase[child_index]
+				if mat > 1:
+					# UPD
+					phase.append(phase[2*dad_index + (mat-2)])
+				else:
+					phase.append(phase[2*mom_index + mat])
 				# add pat phase
-				phase.append(phase[2*dad_index + self._paternal_phase[child_index]])
+				pat = self._paternal_phase[child_index]
+				if pat > 1:
+					# UPD
+					phase.append(phase[2*mom_index + (pat-2)])
+				else:
+					phase.append(phase[2*dad_index + pat])
 		return phase
 
 	def full_state(self):
@@ -143,10 +159,13 @@ class State:
 		full_state.append(self._loss_region)
 		return full_state
 
+	def __repr__(self):
+		return 'State(' +  (' '.join([str(x) for x in self.full_state()])) + ')'
+
 
 class InheritanceStates:
 
-	def __init__(self, family, detect_mat_inherited_deletions, detect_pat_inherited_deletions, num_loss_states):
+	def __init__(self, family, detect_mat_inherited_deletions, detect_pat_inherited_deletions, detect_upd, num_loss_states):
 		self.family = family
 
 		# 0=deletion, 1=no deletion
@@ -163,28 +182,55 @@ class InheritanceStates:
 		
 		# always fix first child of the parent
 		parents_with_fixed_child = set()
-		mat_phase_options, pat_phase_options = [[None]]*self.family.num_ancestors(), [[None]]*self.family.num_ancestors()
+		#mat_phase_options, pat_phase_options = [[None]]*self.family.num_ancestors(), [[None]]*self.family.num_ancestors()
+		phase_options = [[(None, None)]]*self.family.num_ancestors()
 		self.fixed_children = []
 		for mom, dad in family.ordered_couples:
 			for child in family.parents_to_children[(mom, dad)]:
-				if mom in parents_with_fixed_child:
-					mat_phase_options.append([0, 1])
-				else:
-					mat_phase_options.append([0])
-					parents_with_fixed_child.add(mom)
-					self.fixed_children.append((child, 'mat'))
-
-				if dad in parents_with_fixed_child:
-					pat_phase_options.append([0, 1])
-				else:
-					pat_phase_options.append([0])
+				if mom in parents_with_fixed_child and dad in parents_with_fixed_child:
+					if detect_upd:
+						phase_options.append([(0, 0), (0, 1), (1, 0), (1, 1),
+											  (0, 3), (1, 2),
+											  (3, 0), (2, 1)
+											  ])
+					else:
+						phase_options.append([(0, 0), (0, 1), (1, 0), (1, 1)])
+				elif mom in parents_with_fixed_child:
+					if detect_upd:
+						phase_options.append([(0, 0), (1, 0),
+											  (0, 3), (1, 2),
+											  (3, 0)
+											  ])
+					else:
+						phase_options.append([(0, 0), (1, 0)])
 					parents_with_fixed_child.add(dad)
 					self.fixed_children.append((child, 'pat'))
-		mat_phase_options = list(product(*mat_phase_options))
-		pat_phase_options = list(product(*pat_phase_options))
+				elif dad in parents_with_fixed_child:
+					if detect_upd:
+						phase_options.append([(0, 0), (0, 1),
+											  (0, 3),
+											  (3, 0), (2, 1)
+											  ])
+					else:
+						phase_options.append([(0, 0), (0, 1)])
+					parents_with_fixed_child.add(mom)
+					self.fixed_children.append((child, 'mat'))
+				else:
+					if detect_upd:
+						phase_options.append([(0, 0),
+											  (0, 3),
+											  (3, 0)
+											  ])
+					else:
+						phase_options.append([(0, 0)])
+					parents_with_fixed_child.add(dad)
+					self.fixed_children.append((child, 'pat'))
+					parents_with_fixed_child.add(mom)
+					self.fixed_children.append((child, 'mat'))
+					
+		phase_options = list(product(*phase_options))
 		print('fixed', self.fixed_children)
-		print('mat phase options', len(mat_phase_options))
-		print('pat phase options', len(pat_phase_options))
+		print('phase options', len(phase_options))
 
 		#if detect_denovo_deletions:
 		#	mat_denovo_options = list(product(*([[1]]*self.family.num_ancestors() + [[0, 1]]*self.family.num_descendents())))
@@ -200,7 +246,7 @@ class InheritanceStates:
 		print('loss options', len(loss_options))
 
 		self._states = [State(family, inh_deletions, maternal_denovo_deletions, paternal_denovo_deletions, 
-			maternal_phase, paternal_phase, loss_region) for inh_deletions, maternal_denovo_deletions, paternal_denovo_deletions, maternal_phase, paternal_phase, loss_region in product(del_options, mat_denovo_options, pat_denovo_options, mat_phase_options, pat_phase_options, loss_options)]
+			[x[0] for x in phase], [x[1] for x in phase], loss_region) for inh_deletions, maternal_denovo_deletions, paternal_denovo_deletions, phase, loss_region in product(del_options, mat_denovo_options, pat_denovo_options, phase_options, loss_options)]
 
 		# can only have one deletion or duplication in the family at any position
 		# self._states = self._states[np.sum(np.isin(self._states[:, self.deletion_indices], [0, 2]), axis=1) <= 1, :]
@@ -220,6 +266,11 @@ class InheritanceStates:
 		# allow only a single de novo deletion
 		self._states = [x for x in self._states if len([y for y in x._maternal_denovo_deletions+x._paternal_denovo_deletions if y==0])<=1]
 
+		# allow only a single UPD
+		self._states = [x for x in self._states if len([y for y in x._maternal_phase+x._paternal_phase if y is not None and y>1])<=1]
+
+		#print(self._states)
+
 		# deletion/duplication must be inherited
 		#self.num_states = self._states.shape[0]
 		#phase = self.get_phase()
@@ -230,10 +281,11 @@ class InheritanceStates:
 		#self._states = self._states[is_inherited, :]
 
 		self.num_states = len(self._states)
+		print('inheritance states', self.num_states)
+
 		self._phase = np.array([x.phase() for x in self._states])
 		self._full_states = np.array([x.full_state() for x in self._states])
 
-		print('inheritance states', len(self._states))
 
 		self.full_state_length = self._full_states.shape[1]
 		self._state_to_index = dict([(x, i) for i, x in enumerate(self._states)])
@@ -268,7 +320,7 @@ class InheritanceStates:
 			# first sibling is fixed, so recombination in first sibling results in joint recombination in all other siblings
 			maternal_phase = np.array(state._maternal_phase)
 			ind_indices = self.family.ind_filter(siblings[1:])
-			maternal_phase[ind_indices] = 1-maternal_phase[ind_indices]
+			maternal_phase[ind_indices] = [x if x>1 else 1-x for x in maternal_phase[ind_indices]]
 			new_state = State.fromMaternalPhase(state, maternal_phase)
 			if new_state in self:
 				neighbor_indices.add(self.index(new_state))
@@ -277,7 +329,7 @@ class InheritanceStates:
 			for sibling in siblings[1:]:
 				maternal_phase = np.array(state._maternal_phase)
 				ind_indices = self.family.ind_filter([sibling])
-				maternal_phase[ind_indices] = 1-maternal_phase[ind_indices]
+				maternal_phase[ind_indices] = [x if x>1 else 1-x for x in maternal_phase[ind_indices]]
 				new_state = State.fromMaternalPhase(state, maternal_phase)
 				if new_state in self:
 					neighbor_indices.add(self.index(new_state))
@@ -289,19 +341,72 @@ class InheritanceStates:
 			# first sibling is fixed, so recombination in first sibling results in joint recombination in all other siblings
 			paternal_phase = np.array(state._paternal_phase)
 			ind_indices = self.family.ind_filter(siblings[1:])
-			paternal_phase[ind_indices] = 1-paternal_phase[ind_indices]
+			paternal_phase[ind_indices] = [x if x>1 else 1-x for x in paternal_phase[ind_indices]]
 			new_state = State.fromPaternalPhase(state, paternal_phase)
-			if new_state in self:
+			if new_state != state and new_state in self:
 				neighbor_indices.add(self.index(new_state))
 
 			# typical maternal recombination in other siblings
 			for sibling in siblings[1:]:
 				paternal_phase = np.array(state._paternal_phase)
 				ind_indices = self.family.ind_filter([sibling])
-				paternal_phase[ind_indices] = 1-paternal_phase[ind_indices]
+				paternal_phase[ind_indices] = [x if x>1 else 1-x for x in paternal_phase[ind_indices]]
 				new_state = State.fromPaternalPhase(state, paternal_phase)
-				if new_state in self:
+				if new_state != state and new_state in self:
 					neighbor_indices.add(self.index(new_state))
+		return neighbor_indices
+
+	def get_upd_neighbors(self, state):
+		neighbor_indices = set()
+
+		if state.has_upd():
+			# if we're already in a UPD state, we can get out
+			for index in range(len(state._family)):
+				if state._maternal_phase[index] is not None and state._maternal_phase[index]>1:
+					maternal_phase = np.array(state._maternal_phase)
+					maternal_phase[index] = 0
+					new_state = State.fromMaternalPhase(state, maternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+					maternal_phase[index] = 1
+					new_state = State.fromMaternalPhase(state, maternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+				if state._paternal_phase[index] is not None and state._paternal_phase[index]>1:
+					paternal_phase = np.array(state._paternal_phase)
+					paternal_phase[index] = 0
+					new_state = State.fromPaternalPhase(state, paternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+					paternal_phase[index] = 1
+					new_state = State.fromPaternalPhase(state, paternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+		else:
+			# if we're not in a UPD state, we can get into one
+			for index in range(len(state._family)):
+				if state._maternal_phase[index] is not None:
+					maternal_phase = np.array(state._maternal_phase)
+					maternal_phase[index] = 2
+					new_state = State.fromMaternalPhase(state, maternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+					maternal_phase[index] = 3
+					new_state = State.fromMaternalPhase(state, maternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+				if state._paternal_phase[index] is not None:
+					paternal_phase = np.array(state._paternal_phase)
+					paternal_phase[index] = 2
+					new_state = State.fromPaternalPhase(state, paternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+					paternal_phase[index] = 3
+					new_state = State.fromPaternalPhase(state, paternal_phase)
+					if new_state in self:
+						neighbor_indices.add(self.index(new_state))
+		
+
 		return neighbor_indices
 
 	def get_inh_deletion_neighbors(self, state):
@@ -345,10 +450,10 @@ class InheritanceStates:
 		return neighbor_indices
 
 	def is_ok_start(self, state):
-		return not state.has_deletion()
+		return not state.has_deletion() and not state.has_upd()
 
 	def is_ok_end(self, state):
-		return not state.has_deletion()
+		return not state.has_deletion() and not state.has_upd()
 
 	def get_full_states(self, state_indices):
 		return self._full_states[state_indices, :]

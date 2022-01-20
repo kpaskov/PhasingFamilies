@@ -52,6 +52,11 @@ class TransitionMatrix:
 			transition_costs[state_index].extend([params['-log10(P[paternal_crossover])']]*len(neighbors))
 			num_recomb_neighbors += len(neighbors)
 
+			# allow a single UPD transition
+			neighbors = states.get_upd_neighbors(state)
+			transitions[state_index].extend(neighbors)
+			transition_costs[state_index].extend([20]*len(neighbors))
+
 			# allow a transition into or out of a new loss region
 			neighbors = states.get_loss_neighbors(state)
 			transitions[state_index].extend(neighbors)
