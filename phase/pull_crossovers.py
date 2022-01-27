@@ -49,14 +49,12 @@ def pull_phase(filename):
 		# if this is a hard to sequences region, we don't know the exact location of crossovers
 		states[:, states[-1, :]==1] = -1
 
-		for (mat_index1, pat_index1), (mat_index2, pat_index2) in combinations(zip(mat_indices[2:], pat_indices[2:]), 2):
-			no_missing_mat = (states[mat_index1, :] != -1) & (states[mat_index2, :] != -1)
-			no_missing_pat = (states[pat_index1, :] != -1) & (states[pat_index2, :] != -1)
-
-			#if np.sum(((states[mat_index1, :] == states[mat_index2, :])*(ends-starts))[no_missing_mat])/np.sum((ends-starts)[no_missing_mat]) > 0.9 and \
-			#   np.sum(((states[pat_index1, :] == states[pat_index2, :])*(ends-starts))[no_missing_pat])/np.sum((ends-starts)[no_missing_pat]) > 0.9:
-			#   raise Exception('This family contains identical twins.')
-
+		# if there's UPD, it's not a crossover
+		for mat_index, pat_index in zip(mat_indices[2:], pat_indices[2:]):
+			states[:, states[mat_index, :]==2] = -1
+			states[:, states[mat_index, :]==3] = -1
+			states[:, states[pat_index, :]==0] = -1
+			states[:, states[pat_index, :]==1] = -1
 
 	return states, chrs, starts, ends, individuals, mat_indices, pat_indices
 		
@@ -141,8 +139,15 @@ def match_recombinations(recombinations, chrom, family_id, child, is_mat):
                     
     return gene_conversions, crossovers
 
-with open('%s/sibpairs.json' % args.dataset_name, 'r') as f:
-	sibpairs = json.load(f)
+try:
+	with open('%s/sibpairs.json' % args.dataset_name, 'r') as f:
+		sibpairs = json.load(f)
+except:
+	with open('%s/similarity.txt' % args.dataset_name, 'r') as f:
+		sibpairs = []
+		next(f) # skip header
+		for line in f:
+			sibpairs.append({'phase_dir': args.dataset_name, 'family': line.split('\t', maxsplit=1)[0]})
 
 all_crossovers = []
 all_gene_conversions = []

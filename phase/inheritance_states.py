@@ -190,16 +190,16 @@ class InheritanceStates:
 				if mom in parents_with_fixed_child and dad in parents_with_fixed_child:
 					if detect_upd:
 						phase_options.append([(0, 0), (0, 1), (1, 0), (1, 1),
-											  (0, 3), (1, 2),
-											  (3, 0), (2, 1)
+											  (0, 2), (0, 3), (1, 2), (1, 3),
+											  (2, 0), (3, 0), (2, 1), (3, 1),
 											  ])
 					else:
 						phase_options.append([(0, 0), (0, 1), (1, 0), (1, 1)])
 				elif mom in parents_with_fixed_child:
 					if detect_upd:
 						phase_options.append([(0, 0), (1, 0),
-											  (0, 3), (1, 2),
-											  (3, 0)
+											  (0, 2), (0, 3), (1, 2), (1, 3),
+											  (2, 0), (3, 0)
 											  ])
 					else:
 						phase_options.append([(0, 0), (1, 0)])
@@ -208,8 +208,8 @@ class InheritanceStates:
 				elif dad in parents_with_fixed_child:
 					if detect_upd:
 						phase_options.append([(0, 0), (0, 1),
-											  (0, 3),
-											  (3, 0), (2, 1)
+											  (0, 2), (0, 3),
+											  (2, 0), (3, 0), (2, 1), (3, 1),
 											  ])
 					else:
 						phase_options.append([(0, 0), (0, 1)])
@@ -218,8 +218,8 @@ class InheritanceStates:
 				else:
 					if detect_upd:
 						phase_options.append([(0, 0),
-											  (0, 3),
-											  (3, 0)
+											  (0, 2), (0, 3),
+											  (2, 0), (3, 0)
 											  ])
 					else:
 						phase_options.append([(0, 0)])
