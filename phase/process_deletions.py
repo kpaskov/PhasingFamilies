@@ -80,11 +80,11 @@ for sibpair in sibpairs:
 
 			assert end_pos >= start_pos
 
-			if chrom != 'X':
-				chroms.append(chrom)
-				positions.append(start_pos)
-				states.append(state)
-				costs.append(cost)
+			#if chrom != 'X':
+			chroms.append(chrom)
+			positions.append(start_pos)
+			states.append(state)
+			costs.append(cost)
 
 	if np.all([x.endswith('_del') for x in header[1:5]]) and not header[5].endswith('_del') and len(set(chroms))>=22:
 		# pull only "simple" families with mom, dad, and children

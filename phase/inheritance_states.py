@@ -248,6 +248,28 @@ class InheritanceStates:
 		self._states = [State(family, inh_deletions, maternal_denovo_deletions, paternal_denovo_deletions, 
 			[x[0] for x in phase], [x[1] for x in phase], loss_region) for inh_deletions, maternal_denovo_deletions, paternal_denovo_deletions, phase, loss_region in product(del_options, mat_denovo_options, pat_denovo_options, phase_options, loss_options)]
 
+		# you can't have isodisomy if the other parental chromosome has a deletion
+		states_to_remove = set()
+		for i, state in enumerate(self._states):
+			if state.has_inh_deletion() and state.has_upd():
+				p = np.array(state.phase())
+				for mom, dad in family.ordered_couples:
+					mom_index, dad_index = family.individual_to_index[mom], family.individual_to_index[dad]
+					#print(state.has_inh_deletion(2*mom_index) or state.has_inh_deletion(2*mom_index+1),
+				#		state.has_inh_deletion(2*dad_index) or state.has_inh_deletion(2*dad_index+1),
+				#		p[::2], p[1::2])
+					if (state.has_inh_deletion(2*mom_index) or state.has_inh_deletion(2*mom_index+1)) and \
+						(np.any((p[::2]==2*dad_index) & (p[1::2]==2*dad_index)) or np.any((p[::2]==2*dad_index+1) & (p[1::2]==2*dad_index+1))):
+						states_to_remove.add(i)
+					if (state.has_inh_deletion(2*dad_index) or state.has_inh_deletion(2*dad_index+1)) and \
+						(np.any((p[::2]==2*mom_index) & (p[1::2]==2*mom_index)) or np.any((p[::2]==2*mom_index+1) & (p[1::2]==2*mom_index+1))):
+						states_to_remove.add(i)
+						
+		print('removing isodisomy if other parental chrom has deletion', len(states_to_remove))
+		self._states = [x for i, x in enumerate(self._states) if i not in states_to_remove]
+
+
+
 		# can only have one deletion or duplication in the family at any position
 		# self._states = self._states[np.sum(np.isin(self._states[:, self.deletion_indices], [0, 2]), axis=1) <= 1, :]
 
