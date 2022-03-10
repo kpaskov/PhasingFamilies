@@ -120,11 +120,8 @@ for chrom in [str(x) for x in range(1, 23)] + ['X']:
 X = np.hstack(X)
 print(X.shape)
     
-
-is_mm = np.array([(child_id_to_sex[sib1]=='1') and (child_id_to_sex[sib2]=='1') for (fam, sib1, sib2) in sibpairs])
-is_mf = np.array([(child_id_to_sex[sib1]=='1') and (child_id_to_sex[sib2]=='2') for (fam, sib1, sib2) in sibpairs])
-is_fm = np.array([(child_id_to_sex[sib1]=='2') and (child_id_to_sex[sib2]=='1') for (fam, sib1, sib2) in sibpairs])
-is_ff = np.array([(child_id_to_sex[sib1]=='2') and (child_id_to_sex[sib2]=='2') for (fam, sib1, sib2) in sibpairs])
+is_m_sib1 = np.array([child_id_to_sex[sib1]=='1' for (fam, sib1, sib2) in sibpairs])
+is_m_sib2 = np.array([child_id_to_sex[sib2]=='1' for (fam, sib1, sib2) in sibpairs])
 
 #is_ntaff = np.array([(child_id_to_affected[sib1]=='1') and (child_id_to_affected[sib2]=='2') for (fam, sib1, sib2) in sibpairs])
 #is_affnt = np.array([(child_id_to_affected[sib1]=='2') and (child_id_to_affected[sib2]=='1') for (fam, sib1, sib2) in sibpairs])
@@ -133,22 +130,21 @@ is_ntaff = phen[:, scq_index]==-1
 is_affnt = phen[:, scq_index]==1
 
 
-X = np.hstack((is_mm[:, np.newaxis], is_mf[:, np.newaxis], is_fm[:, np.newaxis], is_ff[:, np.newaxis], X))
+X = np.hstack((np.ones((len(sibpairs), 1)), is_m_sib1[:, np.newaxis], is_m_sib2[:, np.newaxis], X))
 
 
-print(np.sum(X[:, 4:])/(X.shape[0]*(X.shape[1]-4)))
+print(np.sum(X[:, 3:])/(X.shape[0]*(X.shape[1]-3)))
 print(np.sum(X[:, 0])/X.shape[0])
 print(np.sum(X[:, 1])/X.shape[0])
 print(np.sum(X[:, 2])/X.shape[0])
-print(np.sum(X[:, 3])/X.shape[0])
 print(np.sum(is_affnt)/len(sibpairs), np.sum(is_ntaff)/len(sibpairs))
 
 beta = cp.Variable(X.shape[1])
 log_likelihood = cp.sum(
     cp.multiply(is_affnt[is_affnt | is_ntaff], X[is_affnt | is_ntaff, :] @ beta) - cp.logistic(X[is_affnt | is_ntaff, :] @ beta)
 )
-problem = cp.Problem(cp.Maximize(log_likelihood/np.sum(is_affnt | is_ntaff) - lamb*cp.tv(beta[4:])),
-                    [beta[4:]>=0])
+problem = cp.Problem(cp.Maximize(log_likelihood/np.sum(is_affnt | is_ntaff) - lamb*cp.tv(beta[3:])),
+                    [beta[3:]>=0])
 #- 0.001*cp.norm(beta[2:], 1) 
 problem.solve(solver='MOSEK', verbose=True)
 
