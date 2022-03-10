@@ -9,7 +9,7 @@ phase_dir = 'recomb_ssc.hg38'
 lamb = float(sys.argv[1])
 scq_index = int(sys.argv[2])
 
-colors=['#ef6c00', '#4db6ac', '#ce93d8ff']
+chroms = [str(x) for x in range(1, 23)] + ['X']
 
 # pull affected status
 # (0=unknown; 1=unaffected; 2=affected)
@@ -89,7 +89,7 @@ print('remaining deletions', len(deletions))
 
 X = []
 positions = []
-for chrom in [str(x) for x in range(1, 23)] + ['X']:
+for chrom in chroms:
     chrom_ds = [d for d in deletions if d['chrom'] == chrom]
     poss = sorted(set([d['start_pos']-1 for d in chrom_ds if len(d['trans'])==1 and len(d['notrans'])==1]) | \
                   set([d['start_pos'] for d in chrom_ds if len(d['trans'])==1 and len(d['notrans'])==1]) | \
@@ -141,8 +141,13 @@ beta = cp.Variable(X.shape[1])
 log_likelihood = cp.sum(
     cp.multiply(is_affnt[is_affnt | is_ntaff], X[is_affnt | is_ntaff, :] @ beta) - cp.logistic(X[is_affnt | is_ntaff, :] @ beta)
 )
-problem = cp.Problem(cp.Maximize(log_likelihood/np.sum(is_affnt | is_ntaff) - lamb*cp.tv(beta[2:])),
-                    [beta[2:]>=0])
+
+ll = log_likelihood/np.sum(is_affnt | is_ntaff)
+for chrom in chroms:
+	indices = np.array([p[0]==chrom for p in positions])
+	ll -= lamb*cp.tv(beta[2:][indices])
+
+problem = cp.Problem(cp.Maximize(ll), [beta[2:]>=0])
 #- 0.001*cp.norm(beta[2:], 1) 
 problem.solve(solver='MOSEK', verbose=True)
 
