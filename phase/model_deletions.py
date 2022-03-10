@@ -147,8 +147,8 @@ beta = cp.Variable(X.shape[1])
 log_likelihood = cp.sum(
     cp.multiply(is_affnt[is_affnt | is_ntaff], X[is_affnt | is_ntaff, :] @ beta) - cp.logistic(X[is_affnt | is_ntaff, :] @ beta)
 )
-problem = cp.Problem(cp.Maximize(log_likelihood/np.sum(is_affnt | is_ntaff) - lamb*cp.tv(beta[2:])),
-                    [beta[2:]>=0])
+problem = cp.Problem(cp.Maximize(log_likelihood/np.sum(is_affnt | is_ntaff) - lamb*cp.tv(beta[4:])),
+                    [beta[4:]>=0])
 #- 0.001*cp.norm(beta[2:], 1) 
 problem.solve(solver='MOSEK', verbose=True)
 
