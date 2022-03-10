@@ -56,7 +56,7 @@ class LazyLoss:
 		self.family_size = len(family)
 		self.states = states
 
-		self.__build_perfect_matches__(states)
+		self.__build_perfect_matches__(states, family)
 		
 		self.loss_region = np.asarray([x.loss_region() for x in states], dtype=int)
 		
@@ -106,8 +106,8 @@ class LazyLoss:
 
 			for gen in gen_options:
 				non_missing_indices = np.where([x!=-1 for x in gen])[0]
-				for i, pm in enumerate(self.perfect_matches):
-					self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size)[non_missing_indices], [pm[i] for i in non_missing_indices], [gen[i] for i in non_missing_indices]], axis=1)
+				for j, pm in enumerate(self.perfect_matches):
+					self.s[:, j] = np.sum(self.emission_params[:, list(np.arange(self.family_size)[non_missing_indices]), [pm[i] for i in non_missing_indices], [gen[i] for i in non_missing_indices]], axis=1)
 
 				for k in range(self.num_loss_regions):
 					#loss[self.loss_region==k] += np.sum(np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
@@ -127,35 +127,16 @@ class LazyLoss:
 				self.already_calculated[gen_index] = True
 			return loss
 
-	# def ancestral_variant_probabilities(self, gen, state_index):
-	# 	# -------------- any changes must also be made in __call__() ----------------------
-	# 	if np.all(gen[:-1] <= 0) & ~np.all(gen[:-1] == 0):
-	# 		raise Exception('Genotypes without variants must be (0,)')
+	def get_ancestral_variants(self, state_index, gen):
+		state = self.states[state_index]
 
-	# 	gen_index = self.gen_to_index.get(tuple(gen), None)
-		
-	# 	if np.all(gen==0):
-	# 		gen_options = list(product(*([[0] if x else [0, -1] for x in self.no_data])))
-	# 	else:
-	# 		gen_options = [gen]
+		non_missing_indices = np.where([x!=-1 for x in gen])[0]
 
-	# 	loss_region_index = self.states[state_index].loss_region()
+		anc_variants = np.zeros((self.num_acs,))
+		anc_variants[self.ac_indices[state_index, self.not_filler[state_index, :]]] = [10**-np.sum(self.emission_params[state._loss_region, list(np.arange(self.family_size)[non_missing_indices]), [self.perfect_matches[pm_index][i] for i in non_missing_indices], [gen[i] for i in non_missing_indices]]) for pm_index in self.perfect_match_indices[state_index, self.not_filler[state_index, :]]]
+		return anc_variants
 
-	# 	ancvar_probs = np.zeros((self.perfect_match_indices.shape[1],), dtype=float)
-	# 	for gen in gen_options:
-	# 		non_missing_indices = np.where([x!=-1 for x in gen])[0]
-	# 		for i, pm in enumerate(self.perfect_matches):
-	# 			self.s[:, i] = np.sum(self.emission_params[:, np.arange(self.family_size)[non_missing_indices], [pm[i] for i in non_missing_indices], [gen[i] for i in non_missing_indices]], axis=1)
-
-	# 		ancvar_probs += np.power(10, -self.s[k, self.perfect_match_indices[self.loss_region==k, :]] - \
-	# 													(self.perfect_match_allele_counts[:, self.loss_region==k, :].T @ np.array([rc, ac, -np.log10(1), rc+rc, -np.log10(2)+rc+ac, ac+ac])).T) * \
-	# 													self.not_filler[self.loss_region==k, :]
-
-	# 	return np.clip(ancvar_probs, 0, 1) # handles numerical instability
-
-
-
-	def __build_perfect_matches__(self, states):
+	def __build_perfect_matches__(self, states, family):
 		# every state has 2^(2*num_ancestors) perfect match family genotypes
 		# futhermore, many of these perfect match family genotypes overlap
 		# we generate a list of all perfect matches (self.perfect_matches)
@@ -179,8 +160,13 @@ class LazyLoss:
 		self.not_filler = np.zeros((states.num_states, max_perfect_matches), dtype=bool)
 		print('not_filler', self.not_filler.shape, self.not_filler.nbytes/10**6, 'MB')
 
+		ac_to_index = dict([(tuple(x), i) for i, x in enumerate(product(*[[0, 1, 2]]*(2*family.num_ancestors())))])
+		self.ac_indices = np.zeros((states.num_states, max_perfect_matches), dtype=int)
+		self.num_acs = len(ac_to_index)
+
 		for i, s in enumerate(states):
 			pms, allele_combinations = state_to_perfect_matches[s]
 			self.perfect_match_indices[i, :len(pms)] = [perfect_match_to_index[pm] for pm in pms]
+			self.ac_indices[i, :len(pms)] = [ac_to_index[tuple(x)] for x in allele_combinations]
 			self.not_filler[i, :len(pms)] = True
 

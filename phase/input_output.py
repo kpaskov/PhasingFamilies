@@ -418,24 +418,15 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 
 	return new_family_genotypes, new_family_snp_positions, mult_factor
 
-def write_to_file(phasef, chrom, family, final_states, family_snp_positions, cost, nomatdel_cost, nopatdel_cost):
+def write_to_file(phasef, chrom, family, final_states, family_snp_positions, cost):
 	# write final states to file
 	change_indices = [-1] + np.where(np.any(final_states[:, 1:]!=final_states[:, :-1], axis=0))[0].tolist() + [family_snp_positions.shape[0]-1]
 	for j in range(1, len(change_indices)):
 		s_start, s_end = change_indices[j-1]+1, change_indices[j]
 		#assert np.all(final_states[:, s_start] == final_states[:, s_end])
-		if nomatdel_cost is None and nopatdel_cost is None:
-			phasef.write('%s\t%s\t%d\t%d\n' % (
+		phasef.write('%s\t%s\t%d\t%d\n' % (
 					'chr' + chrom, 
 					'\t'.join(map(str, final_states[:, s_start])), 
-					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
-		else:
-			phasef.write('%s\t%s\t%f\t%f\t%f\t%d\t%d\n' % (
-					'chr' + chrom, 
-					'\t'.join(map(str, final_states[:, s_start])), 
-					np.sum(cost[s_start:(s_end+1)]), 
-					np.sum(nomatdel_cost[s_start:(s_end+1)]),
-					np.sum(nopatdel_cost[s_start:(s_end+1)]),
 					family_snp_positions[s_start, 0], family_snp_positions[s_end, 1]))
 
 	print('Write to file complete')

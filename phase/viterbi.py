@@ -70,12 +70,17 @@ def merge_paths(paths, states):
 	path_states = states.get_full_states(paths)
 	return ((path_states[0, :]+1)*np.all(np.equal(path_states, path_states[0, :]), axis=0)) - 1
 
+def merge_ancestral_variants(paths, gen, loss):
+	return np.average([loss.get_ancestral_variants(state_index, gen) for state_index in paths], axis=0)
+
+
 def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transition_matrix, loss, allow_del_end=False):
 
 	# backward sweep
 	prev_time = time.time()
 	n = v_cost.shape[1]
 	final_states = -np.ones((states.full_state_length, n), dtype=np.int8)
+	ancestral_variants = np.zeros((loss.num_acs, n))
 	cost = np.zeros((n,))
 	print('final_states', final_states.shape, final_states.nbytes/10**6, 'MB')
 
@@ -97,6 +102,7 @@ def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transi
 		paths = [random.choice(paths)]
 
 	final_states[:, -1] = merge_paths(paths, states)
+	ancestral_variants[:, -1] = merge_ancestral_variants(paths, family_genotypes[:, -1], loss)
 	num_forks += (len(paths) > 1)
 
 	# now work backwards
@@ -111,13 +117,14 @@ def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transi
 			
 		paths = list(new_paths)
 		final_states[:, j] = merge_paths(paths, states)
+		ancestral_variants[:, j] = merge_ancestral_variants(paths, family_genotypes[:, j], loss)
 		cost[j] = np.average(loss(family_genotypes[:, j])[paths])
 		num_forks += (len(paths) > 1)
 
 	print('Num forks', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 
 	
-	return final_states, cost
+	return final_states, cost, ancestral_variants
 
 def viterbi_backward_sweep_low_memory(v_path, v_cost, states, transition_matrix):
 	# backward sweep

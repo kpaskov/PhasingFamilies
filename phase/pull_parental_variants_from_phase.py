@@ -4,36 +4,31 @@ import numpy as np
 import scipy.sparse as sparse
 import json
 
-from inheritance_states import AutosomalInheritanceStates
-from input_output import WGSData, pull_families_from_file, pull_phase, chrom_lengths, convert_to_csr
-from genotypes import Genotypes
+from inheritance_states import InheritanceStates
+from input_output import write_to_file, pull_families, pull_families_missing_parent, pull_gen_data_for_individuals
+from transition_matrices import TransitionMatrix
 from losses import LazyLoss
-from parental_variants import estimate_parental_variants
+from viterbi import viterbi_forward_sweep, viterbi_backward_sweep, viterbi_forward_sweep_low_memory, viterbi_backward_sweep_low_memory
 
-# Run locally with python3 phase/pull_parental_variants_from_phase.py 22 3 data/v34.vcf.ped split_gen_ihart phased_ihart parameter_estimation/ihart_params.json
+import argparse
+
+parser = argparse.ArgumentParser(description='Pull parental variants.')
+parser.add_argument('phase_dir', type=str, help='Directory with phase data.')
+
+args = parser.parse_args()
 
 if __name__ == "__main__":
 
-	# Read in command line arguments
-	chrom = sys.argv[1]
-	m = int(sys.argv[2])
-	ped_file = sys.argv[3]
-	data_dir = sys.argv[4]
-	phase_dir = sys.argv[5]
-	param_file = sys.argv[6]
+	with open('%s/info.json' % args.phase_dir, 'r') as f:
+		info = json.load(f)
 
 	with open(param_file, 'r') as f:
 		params = json.load(f)
 
-	print('Chromosome', chrom)
-	chrom_length = chrom_lengths[chrom]
+	with open('%s/info.json' % info['data_dir'], 'r') as f:
+		assembly = json.load(f)['assembly']
 
-	# set up filenames
-	sample_file = '%s/chr.%s.gen.samples.txt' % (data_dir, chrom)
-	coord_file = '%s/chr.%s.gen.coordinates.npy' % (data_dir,  chrom)
-	gen_files = sorted([f for f in listdir(data_dir) if ('chr.%s' % chrom) in f and 'gen.npz' in f])
-	fam_file = '%s/chr.%s.familysize.%s.families.txt' % (phase_dir, chrom, m)
-	phase_file = '%s/chr.%s.familysize.%s.phased.txt' % (phase_dir, chrom, m)
+	families = pull_families(args.ped_file, retain_order=info['retain_order'])
 
 	# pull families
 	families = pull_families_from_file(fam_file)

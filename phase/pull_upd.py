@@ -55,13 +55,15 @@ def pull_phase(filename):
 
 
 # extracts all UPD intervals from phase
-UPD = namedtuple('UPD', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_heterodisomy', 'is_isodisomy', 'family_size', 'mom', 'dad'])
+UPD = namedtuple('UPD', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_isodisomy', 'is_heterodisomy', 
+						 'is_hts', 'family_size', 'mom', 'dad'])
 def pull_upd(family_id, states, chroms, starts, ends, individuals,  indices, other_indices, is_mat):
 
-    def make_upd(chrom, start_index, end_index, individual, is_iso):
+    def make_upd(chrom, start_index, end_index, individual, is_iso, is_hts):
     	return UPD(family_id, chrom, int(starts[start_index]), int(starts[end_index]),
                                     individual, not is_mat, is_mat, 
                                     is_iso, not is_iso,
+                                    is_hts,
                                     len(individuals), individuals[0], individuals[1])
 
     upds = []
@@ -77,9 +79,11 @@ def pull_upd(family_id, states, chroms, starts, ends, individuals,  indices, oth
                     assert states[index, current_index] != states[index, next_index]
 
                     if is_mat and (states[index, current_index] == 2 or states[index, current_index]==3):
-                        upds.append(make_upd(chrom, current_index, next_index, individual, states[index, current_index]==states[other_index, current_index]))
+                        is_hts = bool(np.sum((states[-1, current_index:next_index]>0) * (ends-starts)[current_index:next_index])/np.sum((ends-starts)[current_index:next_index]) > 0.9)
+                        upds.append(make_upd(chrom, current_index, next_index, individual, states[index, current_index]==states[other_index, current_index], is_hts))
                     elif (not is_mat) and (states[index, current_index] == 0 or states[index, current_index]==1):
-                        upds.append(make_upd(chrom, current_index, next_index, individual, states[index, current_index]==states[other_index, current_index]))
+                        is_hts = bool(np.sum((states[-1, current_index:next_index]>0) * (ends-starts)[current_index:next_index])/np.sum((ends-starts)[current_index:next_index]) > 0.9)
+                        upds.append(make_upd(chrom, current_index, next_index, individual, states[index, current_index]==states[other_index, current_index], is_hts))
 
     return upds
 
