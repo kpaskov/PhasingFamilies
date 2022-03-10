@@ -1,14 +1,5 @@
 import json
-from collections import defaultdict, Counter
 import numpy as np
-from os import listdir
-import scipy.stats as stats
-import gzip
-import scipy.sparse as sparse
-import statsmodels.api as sm
-import random
-from sklearn.metrics import precision_recall_curve, roc_curve
-from itertools import combinations, product
 import csv
 import cvxpy as cp
 import sys
