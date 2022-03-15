@@ -3,12 +3,14 @@ import numpy as np
 import csv
 import cvxpy as cp
 import sys
+import scipy.sparse as sparse
 
 ped_file = '../DATA/ssc.hg38/ssc.ped'
 phase_dir = 'recomb_ssc.hg38'
 lamb = float(sys.argv[1])
+k = int(sys.argv[2])
 
-chroms = [str(x) for x in range(22, 23)] #+ ['X']
+chroms = [str(x) for x in range(20, 21)] #+ ['X']
 
 # pull affected status
 # (0=unknown; 1=unaffected; 2=affected)
@@ -124,35 +126,69 @@ sibpair_sex = np.array([int(child_id_to_sex[sib1]=='1')-int(child_id_to_sex[sib2
 #is_ntaff = np.array([(child_id_to_affected[sib1]=='1') and (child_id_to_affected[sib2]=='2') for (fam, sib1, sib2) in sibpairs])
 #is_affnt = np.array([(child_id_to_affected[sib1]=='2') and (child_id_to_affected[sib2]=='1') for (fam, sib1, sib2) in sibpairs])
 
-X = np.hstack((np.ones((len(sibpairs), 1)), sibpair_sex[:, np.newaxis], X))
+X = sparse.csc_matrix(np.hstack((np.ones((len(sibpairs), 1)), sibpair_sex[:, np.newaxis], X)))
 
 
 print(np.sum(X[:, 2:])/(X.shape[0]*(X.shape[1]-2)))
 print(np.sum(X[:, 0])/X.shape[0])
 print(np.sum(X[:, 1])/X.shape[0])
 
+def fit_A(B, lamb):
+    
+    k = B.shape[0]
+    A = cp.Variable((X.shape[1], k))
 
-beta = cp.Variable((X.shape[1], 40))
+    ll = 0
+    
+    for scq_index in range(40):
+        is_ntaff = phen[:, scq_index]==-1
+        is_affnt = phen[:, scq_index]==1
 
-ll = 0
-for scq_index in range(40):
-	is_ntaff = phen[:, scq_index]==-1
-	is_affnt = phen[:, scq_index]==1
+        log_likelihood = cp.sum(
+            cp.multiply(is_affnt[is_affnt | is_ntaff], X[is_affnt | is_ntaff, :]@A@B[:, scq_index]) - cp.logistic(X[is_affnt | is_ntaff, :]@A@B[:, scq_index])
+        )
 
-	log_likelihood = cp.sum(
-	    cp.multiply(is_affnt[is_affnt | is_ntaff], X[is_affnt | is_ntaff, :] @ beta[:, scq_index]) - cp.logistic(X[is_affnt | is_ntaff, :] @ beta[:, scq_index])
-	)
+        ll += log_likelihood/np.sum(is_affnt | is_ntaff)
+    
+    for chrom in chroms:
+        indices = np.array([p[0]==chrom for p in positions])
+        for i in range(k):
+            ll -= lamb*cp.tv(A[2:, i][indices])
 
-	ll += log_likelihood/np.sum(is_affnt | is_ntaff)
-	for chrom in chroms:
-		indices = np.array([p[0]==chrom for p in positions])
-		ll -= lamb*cp.tv(beta[2:, scq_index][indices])
+    problem = cp.Problem(cp.Maximize(ll), [A[2:, :]>=0])
+    problem.solve(solver='MOSEK', verbose=True)
+    return A.value
 
-ll -= lamb*cp.norm(beta, 'nuc')
 
-problem = cp.Problem(cp.Maximize(ll), [beta[2:, :]>=0])
-#- 0.001*cp.norm(beta[2:], 1) 
-problem.solve(solver='MOSEK', verbose=True)
+def fit_B(A, lamb):
+    k = A.shape[1]
+    B = cp.Variable((k, 40))
 
-np.save('%s/delmodel.%0.2f.nuc' % (phase_dir, lamb), beta.value)
+    ll = 0
+    
+    for scq_index in range(40):
+        is_ntaff = phen[:, scq_index]==-1
+        is_affnt = phen[:, scq_index]==1
+
+        log_likelihood = cp.sum(
+            cp.multiply(is_affnt[is_affnt | is_ntaff], X[is_affnt | is_ntaff, :] @A@B[:, scq_index]) - cp.logistic(X[is_affnt | is_ntaff, :]@A@B[:, scq_index])
+        )
+
+        ll += log_likelihood/np.sum(is_affnt | is_ntaff)
+
+    problem = cp.Problem(cp.Maximize(ll), [B>=0])
+    problem.solve(solver='MOSEK', verbose=True)
+    return B.value
+           
+
+
+A = np.random.randn(X.shape[1], k)
+B = np.random.randn(k, 40)
+
+for _ in range(10):
+    A = fit_A(B, 0.1)
+    B = fit_B(A, 0.1)
+
+    np.save('%s/delmodel.%0.2f.A' % (phase_dir, lamb), A)
+    np.save('%s/delmodel.%0.2f.B' % (phase_dir, lamb), B)
 
