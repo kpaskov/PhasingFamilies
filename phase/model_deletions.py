@@ -10,7 +10,7 @@ phase_dir = 'recomb_ssc.hg38'
 lamb = float(sys.argv[1])
 k = int(sys.argv[2])
 
-chroms = [str(x) for x in range(20, 21)] #+ ['X']
+chroms = [str(x) for x in range(1, 23)] + ['X']
 
 # pull affected status
 # (0=unknown; 1=unaffected; 2=affected)
