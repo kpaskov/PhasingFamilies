@@ -288,11 +288,11 @@ for batch_num in range(args.kfold_crossvalidation):
 	crossover_ps_pat = X_pat.dot(ps_pat)
 	crossover_lengths_pat = X_pat.dot(length_pat)
 	
-	np.save('recomb_%s/recombination_rates/ps_pat.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), ps_pat/length_pat)	
-	np.save('recomb_%s/recombination_rates/crossover_ps_pat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_ps_pat[is_pat_train])
-	np.save('recomb_%s/recombination_rates/crossover_ps_pat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_ps_pat[is_pat_test])
-	np.save('recomb_%s/recombination_rates/crossover_lengths_pat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_lengths_pat[is_pat_train])
-	np.save('recomb_%s/recombination_rates/crossover_lengths_pat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_lengths_pat[is_pat_test])
+	np.save('recomb_%s/recombination_rates/ps_pat.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), ps_pat/length_pat)	
+	np.save('recomb_%s/recombination_rates/crossover_ps_pat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_ps_pat[is_pat_train])
+	np.save('recomb_%s/recombination_rates/crossover_ps_pat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_ps_pat[is_pat_test])
+	np.save('recomb_%s/recombination_rates/crossover_lengths_pat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_lengths_pat[is_pat_train])
+	np.save('recomb_%s/recombination_rates/crossover_lengths_pat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_lengths_pat[is_pat_test])
 
 # MAT
 ps_mat, ps_pat = estimate_recombination_rates(X_mat, X_pat, chroms_mat, length_mat)
