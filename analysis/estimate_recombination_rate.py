@@ -10,10 +10,10 @@ import random
 parser = argparse.ArgumentParser(description='Estimate recombination rate.')
 parser.add_argument('assembly', type=str, help='Reference genome assembly for data.')
 parser.add_argument('kfold_crossvalidation', type=int, help='Number of fold to be used for cross validation. 1 means no cross validation')
-parser.add_argument('lamb', type=float, help='Regularization weight.')
-parser.add_argument('lamb_cross', type=float, help='Regularization weight for cross entropy.')
+parser.add_argument('lamb', type=float, help='Regularization weight for entropy of combined recombination map.')
+parser.add_argument('mat_lamb', type=float, help='Regularization weight for cross entropy between maternal recombination map and combined recombination map.')
+parser.add_argument('pat_lamb', type=float, help='Regularization weight for cross entropy between paternal recombination map and combined recombination map.')
 parser.add_argument('dataset', type=str, help='Name of dataset.')
-parser.add_argument('regularization', type=str, help='Type of regularization. Options are L1 or entropy.')
 
 args = parser.parse_args()
 
@@ -80,19 +80,29 @@ if args.assembly == '38':
 else:
     chrom_lengths = chrom_lengths37
 
-# pull crossover information
-with open('recomb_%s/crossovers.json' % args.dataset, 'r') as f:
-    crossovers = json.load(f)
 
-for co in crossovers:
-	if co['start_pos'] == co['end_pos']:
-		print(co)
-	assert co['start_pos'] != co['end_pos']
+with open('recomb_%s/sibpairs.json' % args.dataset, 'r') as f:
+	sibpairs = json.load(f)
 
-quads = sorted(set([tuple(co['child']) for co in crossovers]))
+# prune sibpairs so that each child appears in the dataset only once (this is relevant for families with more than 2 children)
+random.shuffle(sibpairs)
+
+quads = set()
+child_included = set()
+for sibpair in sibpairs:
+	if sibpair['sibling1'] not in child_included and sibpair['sibling2'] not in child_included:
+		quads.add((sibpair['sibling2'], sibpair['sibling1']))
+		child_included.add(sibpair['sibling1'])
+		child_included.add(sibpair['sibling2'])
+
 print('children with phase information', 2*len(quads))
 
+# pull crossover information
+with open('recomb_%s/crossovers.json' % args.dataset, 'r') as f:
+	crossovers = [x for x in json.load(f)  if tuple(x['child']) in quads]
+
 # split quads into train/test
+quads = list(quads)
 random.shuffle(quads)
 if args.kfold_crossvalidation == 1:
 	batch_size = None
@@ -181,11 +191,11 @@ for i, chrom in enumerate(chroms):
 	chroms_pat.append(i*np.ones((len(pos_to_index)-1,), dtype=int))
 	chrom_index_offset_pat += len(pos_to_index)-1
 
-with open('recomb_%s/recombination_rates/intervals_mat.txt' % args.dataset, 'w+') as f:
+with open('recomb_%s/recombination_rates/intervals_mat.%g.%g.%g.txt' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), 'w+') as f:
 	for chrom, start_pos, end_pos in intervals_mat:
 		f.write('%s\t%d\t%d\n' % (chrom, start_pos, end_pos))
 
-with open('recomb_%s/recombination_rates/intervals_pat.txt' % args.dataset, 'w+') as f:
+with open('recomb_%s/recombination_rates/intervals_pat.%g.%g.%g.txt' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), 'w+') as f:
 	for chrom, start_pos, end_pos in intervals_pat:
 		f.write('%s\t%d\t%d\n' % (chrom, start_pos, end_pos))
 
@@ -203,62 +213,8 @@ length_pat = np.hstack(lengths_pat)
 chroms_mat = np.hstack(chroms_mat)
 chroms_pat = np.hstack(chroms_pat)
 
-np.save('recomb_%s/recombination_rates/lengths_mat' % args.dataset, length_mat)
-np.save('recomb_%s/recombination_rates/lengths_pat' % args.dataset, length_pat)
-
-# estimate recombination rates
-def estimate_recombination_rates(X, chrs, length):
-	print('Estimating...', X.shape, len(chrs), len(length))
-
-	p = cp.Variable(X.shape[1])
-
-	# maximize likelihood of multinomial loss...
-	expr = cp.sum(cp.log(X@p))/X.shape[0] 
-	
-	# encourage probabilities to be the same between neighboring intervals (piecewise linear)
-	if args.regularization=='L1':
-		for i, chrom in enumerate(chroms):
-			expr -= args.lamb * cp.tv(cp.multiply(p[chrs==i], (10**6/length[chrs==i])))
-	
-	# regularize with maximum entropy
-	# -xlog(x)
-	# since p is on the scale of Mbp
-	# let l be length
-	# entropy for each interval is 
-	#   -(p/10**6)log(p/10**6)*l
-	# = -(lp/10**6)[log(p)-log(10**6)]
-	# = -(l/10**6)plogp + (lp/10**6)log(10**6)
-	# = entr(p)(l/10**6) + p(l/10**6)log(10**6)
-	#expr += args.lamb * cp.entr(p)@(length/10**6)
-	#expr += args.lamb * p@length * np.log(10**6)
-
-	# regularize with maximum entropy
-	# -xlog(x)
-	# let l be length
-	# entropy for each interval is 
-	#   -plog(p)*l
-	# = -lplog(p) - lplog(l) + lplog(l)
-	# = -lplog(lp) + lplog(l)
-
-	if args.regularization=='spiky':
-		expr += args.lamb * cp.sum(cp.entr(p))
-		expr += args.lamb * p@cp.log(length)
-	
-	
-	# constrain probabilities to be between 0 and 1
-	constraints = [p>=0, cp.sum(p)==1]
-
-
-	# now solve
-	prob = cp.Problem(cp.Maximize(expr), constraints)
-	result = prob.solve(solver='MOSEK', mosek_params={'MSK_IPAR_INTPNT_MAX_ITERATIONS': 500}, verbose=True)
-	#result = prob.solve(solver='ECOS', max_iters=200, verbose=True)
-	print(prob.status)
-
-	if prob.status != 'optimal' and prob.status != 'optimal_inaccurate':
-		raise Error('Parameters not fully estimated.')
-
-	return np.clip(p.value, 0, 1) # clip just in case we have some numerical problems
+np.save('recomb_%s/recombination_rates/lengths_mat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), length_mat)
+np.save('recomb_%s/recombination_rates/lengths_pat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), length_pat)
 
 # estimate recombination rates
 def estimate_recombination_rates(X_mat, X_pat, chrs, length):
@@ -266,29 +222,13 @@ def estimate_recombination_rates(X_mat, X_pat, chrs, length):
 
 	assert X_mat.shape[1] == X_pat.shape[1]
 
+	p = cp.Variable(X_mat.shape[1])
 	p_mat = cp.Variable(X_mat.shape[1])
 	p_pat = cp.Variable(X_pat.shape[1])
 
 	# maximize likelihood of multinomial loss...
 	expr = cp.sum(cp.log(X_mat@p_mat))/X_mat.shape[0] 
 	expr += cp.sum(cp.log(X_pat@p_pat))/X_pat.shape[0] 
-	
-	# encourage probabilities to be the same between neighboring intervals (piecewise linear)
-	if args.regularization=='L1':
-		for i, chrom in enumerate(chroms):
-			expr -= args.lamb * cp.tv(cp.multiply(p[chrs==i], (10**6/length[chrs==i])))
-	
-	# regularize with maximum entropy
-	# -xlog(x)
-	# since p is on the scale of Mbp
-	# let l be length
-	# entropy for each interval is 
-	#   -(p/10**6)log(p/10**6)*l
-	# = -(lp/10**6)[log(p)-log(10**6)]
-	# = -(l/10**6)plogp + (lp/10**6)log(10**6)
-	# = entr(p)(l/10**6) + p(l/10**6)log(10**6)
-	#expr += args.lamb * cp.entr(p)@(length/10**6)
-	#expr += args.lamb * p@length * np.log(10**6)
 
 	# regularize with maximum entropy
 	# -xlog(x)
@@ -298,20 +238,15 @@ def estimate_recombination_rates(X_mat, X_pat, chrs, length):
 	# = -lplog(p) - lplog(l) + lplog(l)
 	# = -lplog(lp) + lplog(l)
 
-	if args.regularization=='spiky':
-		expr += args.lamb * cp.sum(cp.entr(p_mat))
-		expr += args.lamb * p_mat@cp.log(length)
-		expr += args.lamb * cp.sum(cp.entr(p_pat))
-		expr += args.lamb * p_pat@cp.log(length)
+	expr += args.lamb * cp.sum(cp.entr(p))
+	expr += args.lamb * p@cp.log(length)
 
-
-		# regularize with relative entropy
-		expr -= args.lamb_cross * cp.sum(cp.kl_div(p_mat, p_pat)) 
-		expr -= args.lamb_cross * cp.sum(cp.kl_div(p_pat, p_mat))
+	expr -= args.mat_lamb * cp.sum(cp.rel_entr(p_mat, p)) 
+	expr -= args.pat_lamb * cp.sum(cp.rel_entr(p_pat, p))
 	
 	
 	# constrain probabilities to be between 0 and 1
-	constraints = [p_mat>=0, p_pat>=0, cp.sum(p_mat)==1, cp.sum(p_pat)==1]
+	constraints = [p>=0, p_mat>=0, p_pat>=0, cp.sum(p)==1, cp.sum(p_mat)==1, cp.sum(p_pat)==1]
 
 
 	# now solve
@@ -339,27 +274,42 @@ for batch_num in range(args.kfold_crossvalidation):
 	assert np.all(~(is_pat_train & is_pat_test))
 
 	# MAT
-	#ps_mat = estimate_recombination_rates(X_mat[is_mat_train, :], chroms_mat, length_mat)
 	ps_mat, ps_pat = estimate_recombination_rates(X_mat[is_mat_train, :], X_pat[is_pat_train, :], chroms_mat, length_mat)
 	crossover_ps_mat = X_mat.dot(ps_mat)
 	crossover_lengths_mat = X_mat.dot(length_mat)
 	
-	np.save('recomb_%s/recombination_rates/%s.ps_mat.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), ps_mat/length_mat)
-	np.save('recomb_%s/recombination_rates/%s.crossover_ps_mat_train.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_ps_mat[is_mat_train])
-	np.save('recomb_%s/recombination_rates/%s.crossover_ps_mat_test.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_ps_mat[is_mat_test])
-	np.save('recomb_%s/recombination_rates/%s.crossover_lengths_mat_train.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_lengths_mat[is_mat_train])
-	np.save('recomb_%s/recombination_rates/%s.crossover_lengths_mat_test.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_lengths_mat[is_mat_test])
+	np.save('recomb_%s/recombination_rates/ps_mat.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), ps_mat/length_mat)
+	np.save('recomb_%s/recombination_rates/crossover_ps_mat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_ps_mat[is_mat_train])
+	np.save('recomb_%s/recombination_rates/crossover_ps_mat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_ps_mat[is_mat_test])
+	np.save('recomb_%s/recombination_rates/crossover_lengths_mat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_lengths_mat[is_mat_train])
+	np.save('recomb_%s/recombination_rates/crossover_lengths_mat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb, batch_num), crossover_lengths_mat[is_mat_test])
 
 	# PAT
-	#ps_pat = estimate_recombination_rates(X_pat[is_pat_train, :], chroms_pat, length_pat)
 	crossover_ps_pat = X_pat.dot(ps_pat)
 	crossover_lengths_pat = X_pat.dot(length_pat)
 	
-	np.save('recomb_%s/recombination_rates/%s.ps_pat.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), ps_pat/length_pat)	
-	np.save('recomb_%s/recombination_rates/%s.crossover_ps_pat_train.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_ps_pat[is_pat_train])
-	np.save('recomb_%s/recombination_rates/%s.crossover_ps_pat_test.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_ps_pat[is_pat_test])
-	np.save('recomb_%s/recombination_rates/%s.crossover_lengths_pat_train.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_lengths_pat[is_pat_train])
-	np.save('recomb_%s/recombination_rates/%s.crossover_lengths_pat_test.%g.%g.%d' % (args.dataset, args.regularization, args.lamb, args.lamb_cross, batch_num), crossover_lengths_pat[is_pat_test])
+	np.save('recomb_%s/recombination_rates/ps_pat.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), ps_pat/length_pat)	
+	np.save('recomb_%s/recombination_rates/crossover_ps_pat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_ps_pat[is_pat_train])
+	np.save('recomb_%s/recombination_rates/crossover_ps_pat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_ps_pat[is_pat_test])
+	np.save('recomb_%s/recombination_rates/crossover_lengths_pat_train.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_lengths_pat[is_pat_train])
+	np.save('recomb_%s/recombination_rates/crossover_lengths_pat_test.%g.%g.%g.%d' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lambbatch_num), crossover_lengths_pat[is_pat_test])
+
+# MAT
+ps_mat, ps_pat = estimate_recombination_rates(X_mat, X_pat, chroms_mat, length_mat)
+crossover_ps_mat = X_mat.dot(ps_mat)
+crossover_lengths_mat = X_mat.dot(length_mat)
+
+np.save('recomb_%s/recombination_rates/ps_mat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), ps_mat/length_mat)
+np.save('recomb_%s/recombination_rates/crossover_ps_mat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), crossover_ps_mat)
+np.save('recomb_%s/recombination_rates/crossover_lengths_mat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), crossover_lengths_mat)
+
+# PAT
+crossover_ps_pat = X_pat.dot(ps_pat)
+crossover_lengths_pat = X_pat.dot(length_pat)
+
+np.save('recomb_%s/recombination_rates/ps_pat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), ps_pat/length_pat)	
+np.save('recomb_%s/recombination_rates/crossover_ps_pat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), crossover_ps_pat)
+np.save('recomb_%s/recombination_rates/crossover_lengths_pat.%g.%g.%g' % (args.dataset, args.lamb, args.mat_lamb, args.pat_lamb), crossover_lengths_pat)
 
 
    
