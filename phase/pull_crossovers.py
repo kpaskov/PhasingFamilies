@@ -11,7 +11,7 @@ from numpyencoder import NumpyEncoder
 parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
 parser.add_argument('dataset_name', type=str, help='Name of dataset.')
 
-chroms_of_interest = [str(x) for x in range(1, 23)] #+ ['X']
+chroms_of_interest = [str(x) for x in range(1, 23)] + ['X']
 args = parser.parse_args()
 
 
@@ -158,7 +158,7 @@ for sibpair in sibpairs:
 	
 	missing_chroms = set(chroms_of_interest) - set(np.unique(chroms))
 	if len(missing_chroms)>0:
-		raise Exception('missing %s' % str(missing_chroms))
+		raise Exception('missing %s' % str(missing_chroms), family_key)
 
 	mult = ends-starts
 	num_children = len(individuals)-2

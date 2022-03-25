@@ -31,6 +31,42 @@ def viterbi_forward_sweep(family_genotypes, mult_factor, states, transition_matr
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 	return v_cost#, v_path
 
+def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, transition_matrixX, loss, assembly, allow_del_start=False):
+
+	if assembly=='37':
+		par_end, par_start = 2699520, 154931044
+	elif assembly=='38':
+		par_end, par_start = 2781479, 155701383
+		
+	# forward sweep
+	prev_time = time.time()
+
+	m, n = family_genotypes.shape
+	v_cost = np.zeros((states.num_states, n), dtype=float)
+	print('v_cost', v_cost.shape, v_cost.nbytes/10**6, 'MB')
+	print('transition_matrix', transition_matrix.transitions.shape)
+
+	v_cost[:, 0] = mult_factor[0]*loss(family_genotypes[:, 0])
+
+	# we enforce that the chromosome starts with no deletions
+	if allow_del_start:
+		ok_start = np.array([True for x in states])
+	else:
+		ok_start = np.array([states.is_ok_start(x) for x in states])
+	v_cost[~ok_start, 0] = np.inf
+	print('ok starts', np.sum(ok_start))
+
+	# next steps
+	for j in range(1, n): 
+		if (family_snp_positions[j, 0]>= par_end) and (family_snp_positions[j, 1]<=par_start):
+			# we're in the X chromosome, but not the PAR
+			v_cost[:, j] = np.min(v_cost[transition_matrixX.transitions, j-1] + transition_matrixX.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])			
+		else:
+			v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])
+
+	print('Forward sweep complete', time.time()-prev_time, 'sec') 
+	return v_cost
+
 def viterbi_forward_sweep_low_memory(family_genotypes, mult_factor, states, transition_matrix, loss, atol=0.1):
 	
 	# forward sweep
@@ -76,6 +112,11 @@ def merge_ancestral_variants(paths, gen, loss):
 
 def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transition_matrix, loss, allow_del_end=False):
 
+	if assembly=='37':
+		par_end, par_start = 2699520, 154931044
+	elif assembly=='38':
+		par_end, par_start = 2781479, 155701383
+
 	# backward sweep
 	prev_time = time.time()
 	n = v_cost.shape[1]
@@ -120,6 +161,79 @@ def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transi
 		ancestral_variants[:, j] = merge_ancestral_variants(paths, family_genotypes[:, j], loss)
 		cost[j] = np.average(loss(family_genotypes[:, j])[paths])
 		num_forks += (len(paths) > 1)
+
+	print('Num forks', num_forks)
+	print('Backward sweep complete', time.time()-prev_time, 'sec') 
+	
+	return final_states, cost, ancestral_variants
+
+def viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, transition_matrixX, loss, assembly, allow_del_end=False):
+
+	if assembly=='37':
+		par_end, par_start = 2699520, 154931044
+	elif assembly=='38':
+		par_end, par_start = 2781479, 155701383
+
+		
+	# backward sweep
+	prev_time = time.time()
+	n = v_cost.shape[1]
+	final_states = -np.ones((states.full_state_length, n), dtype=np.int8)
+	ancestral_variants = np.zeros((loss.num_acs, n))
+	cost = np.zeros((n,))
+	print('final_states', final_states.shape, final_states.nbytes/10**6, 'MB')
+
+	# choose best paths
+	# we enforce that the chromosome ends with no deletions
+	num_forks = 0
+
+	if allow_del_end:
+		ok_end = np.array([states.is_ok_end(x) for x in states])
+	else:
+		ok_end = np.array([states.is_ok_end(x) for x in states])
+
+	min_value = np.min(v_cost[ok_end, -1])
+	paths = np.where(np.isclose(v_cost[:, -1], min_value, rtol=0, atol=0.01) & ok_end)[0]
+	cost[-1] = np.average(loss(family_genotypes[:, -1])[paths])
+	print('Num solutions', paths.shape, min_value)
+
+	if paths.shape[0]>1:
+		paths = [random.choice(paths)]
+
+	final_states[:, -1] = merge_paths(paths, states)
+	ancestral_variants[:, -1] = merge_ancestral_variants(paths, family_genotypes[:, -1], loss)
+	num_forks += (len(paths) > 1)
+
+	# now work backwards
+	for j in reversed(range(n-1)):
+		if (family_snp_positions[j, 0]>= par_end) and (family_snp_positions[j, 1]<=par_start):
+			# traceback
+			total_cost = v_cost[transition_matrixX.transitions[paths, :], j] + transition_matrixX.costs[paths, :]
+			min_value = np.min(total_cost, axis=1)
+			new_paths = set()
+			for i, k in enumerate(paths):
+				min_indices = transition_matrixX.transitions[k, np.isclose(total_cost[i, :], min_value[i], rtol=0, atol=0.01)]	
+				new_paths.update(min_indices.tolist())
+				
+			paths = list(new_paths)
+			final_states[:, j] = merge_paths(paths, states)
+			ancestral_variants[:, j] = merge_ancestral_variants(paths, family_genotypes[:, j], loss)
+			cost[j] = np.average(loss(family_genotypes[:, j])[paths])
+			num_forks += (len(paths) > 1)
+		else:
+			# traceback
+			total_cost = v_cost[transition_matrix.transitions[paths, :], j] + transition_matrix.costs[paths, :]
+			min_value = np.min(total_cost, axis=1)
+			new_paths = set()
+			for i, k in enumerate(paths):
+				min_indices = transition_matrix.transitions[k, np.isclose(total_cost[i, :], min_value[i], rtol=0, atol=0.01)]	
+				new_paths.update(min_indices.tolist())
+				
+			paths = list(new_paths)
+			final_states[:, j] = merge_paths(paths, states)
+			ancestral_variants[:, j] = merge_ancestral_variants(paths, family_genotypes[:, j], loss)
+			cost[j] = np.average(loss(family_genotypes[:, j])[paths])
+			num_forks += (len(paths) > 1)
 
 	print('Num forks', num_forks)
 	print('Backward sweep complete', time.time()-prev_time, 'sec') 

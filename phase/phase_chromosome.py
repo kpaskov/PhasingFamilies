@@ -118,6 +118,7 @@ for family in families:
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, params)
+		transition_matrixX = TransitionMatrixX(inheritance_states, params)
 
 		# create loss function for this family
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions)
@@ -179,11 +180,18 @@ for family in families:
 				# update loss cache
 				loss.set_cache(family_genotypes)
 
-				# forward sweep
-				v_cost = viterbi_forward_sweep(family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
+				if chrom == 'X':
+					# forward sweep
+					v_cost = viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, inheritance_statesX, transition_matrix, loss, assembly)
+					# backward sweep
+					final_states, cost, ancestral_variants = viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, inheritance_states, inheritance_statesX, transition_matrix, loss, assembly)
 
-				# backward sweep
-				final_states, cost, ancestral_variants = viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
+				else:
+					# forward sweep
+					v_cost = viterbi_forward_sweep(family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
+					# backward sweep
+					final_states, cost, ancestral_variants = viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
+
 
 				np.save('%s/%s.chr.%s.final_states' % (args.out_dir, family, chrom), final_states)
 				np.save('%s/%s.chr.%s.genomic_intervals' % (args.out_dir, family, chrom), family_snp_positions)
