@@ -2,9 +2,9 @@
 #
 #
 #SBATCH --job-name=af
-#SBATCH --output=logs/af_%a.out
-#SBATCH --error=logs/af_%a.err
-#SBATCH --array=1-20
+#SBATCH --output=logs/af.out
+#SBATCH --error=logs/af.err
+#SBATCH --array=1-22
 #SBATCH -p dpwall
 #SBATCH -D /oak/stanford/groups/dpwall/users/kpaskov/PhasingFamilies
 #SBATCH -t 3:00:00
@@ -22,6 +22,8 @@ module load py-pysam/0.15.3_py36
 #srun python3 preprocessing/pull_af_gnomad.py ../DATA/platinum/genotypes /scratch/PI/dpwall/DATA/gnomAD/r2.1.1/gnomad.genomes.r2.1.1.sites.vcf.bgz 15708 $SLURM_ARRAY_TASK_ID 0
 
 #srun python3 preprocessing/pull_af_gnomad.py ../DATA/ihart.ms2/genotypes /scratch/PI/dpwall/DATA/gnomAD/3.1/gnomad.site.all.gz 71702 $1 $SLURM_ARRAY_TASK_ID
+
+srun python3 preprocessing/pull_af_gnomad.py ../DATA/spark20190423/genotypes /scratch/PI/dpwall/DATA/gnomAD/3.1/gnomad.genomes.v3.1.1.sites.chr$SLURM_ARRAY_TASK_ID.vcf.bgz 71702 $SLURM_ARRAY_TASK_ID 0
 
 #srun python3 preprocessing/pull_af_gnomad.py ../DATA/spark/genotypes /scratch/PI/dpwall/DATA/gnomAD/r3.hg38/gnomad.genomes.r3.0.sites.chr$SLURM_ARRAY_TASK_ID.vcf.bgz 71702 $SLURM_ARRAY_TASK_ID $1 
 
