@@ -31,7 +31,6 @@ parser.add_argument('--batch_size', type=int, default=None, help='Restrict numbe
 parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of families. Will use families[(batch_num*batch_size):((batch_num+1)*batch_size)]')
 parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
-parser.add_argument('--low_memory', action='store_true', default=False, help='Reduce memory consumption, but no uncertainty regions.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
 parser.add_argument('--use_pass', action='store_true', default=False, help='If True, Use PASS filter to filter snps. If False, ignore PASS filter.')
 parser.add_argument('--qs', action='store_true', default=False, help='Calculate quality score metrics.')
@@ -182,9 +181,9 @@ for family in families:
 
 				if chrom == 'X':
 					# forward sweep
-					v_cost = viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, inheritance_statesX, transition_matrix, loss, assembly)
+					v_cost = viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, transition_matrixX, loss, assembly)
 					# backward sweep
-					final_states, cost, ancestral_variants = viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, inheritance_states, inheritance_statesX, transition_matrix, loss, assembly)
+					final_states, cost, ancestral_variants = viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, transition_matrixX, loss, assembly)
 
 				else:
 					# forward sweep
