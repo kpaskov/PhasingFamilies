@@ -7,6 +7,7 @@ import input_output
 import os
 import traceback
 from numpyencoder import NumpyEncoder
+import traceback
 
 parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
 parser.add_argument('dataset_name', type=str, help='Name of dataset.')
@@ -45,6 +46,9 @@ def pull_phase(filename):
 		states = np.array(states).T
 		starts = np.array(starts)
 		ends = np.array(ends)
+
+		if states.shape == (0,):
+			raise Exception('No data')
 
 		# if this is a hard to sequences region, we don't know the exact location of crossovers
 		states[:, states[-1, :]==1] = -1
@@ -154,42 +158,45 @@ all_gene_conversions = []
 for sibpair in sibpairs:
 	family_key = sibpair['family']
 	print(family_key)
-	states, chroms, starts, ends, individuals, mat_indices, pat_indices = pull_phase('%s/%s.phased.txt' % (sibpair['phase_dir'], family_key))
-	
-	missing_chroms = set(chroms_of_interest) - set(np.unique(chroms))
-	if len(missing_chroms)>0:
-		raise Exception('missing %s' % str(missing_chroms), family_key)
+	try:
+		states, chroms, starts, ends, individuals, mat_indices, pat_indices = pull_phase('%s/%s.phased.txt' % (sibpair['phase_dir'], family_key))
+		
+		missing_chroms = set(chroms_of_interest) - set(np.unique(chroms))
+		if len(missing_chroms)>0:
+			#raise Exception('missing %s' % str(missing_chroms), family_key)
+			print('missing %s' % str(missing_chroms), family_key)
 
-	mult = ends-starts
-	num_children = len(individuals)-2
+		mult = ends-starts
+		num_children = len(individuals)-2
 
-	# start by pulling all recombinations
-	mat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, mat_indices, pat_indices, True)
-	pat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, pat_indices, mat_indices, False)
-	recombinations = mat_recombinations + pat_recombinations
+		# start by pulling all recombinations
+		mat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, mat_indices, pat_indices, True)
+		pat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, pat_indices, mat_indices, False)
+		recombinations = mat_recombinations + pat_recombinations
 
-	# now identify crossovers and gene conversions
-	gene_conversions, crossovers = [], []
-	children = set([x.child for x in recombinations])
-	for chrom in chroms_of_interest:
-		for child in children:
-			gc, co = match_recombinations(recombinations, chrom, family_key, child, True)
-			gene_conversions.extend(gc)
-			crossovers.extend(co)
+		# now identify crossovers and gene conversions
+		gene_conversions, crossovers = [], []
+		children = set([x.child for x in recombinations])
+		for chrom in chroms_of_interest:
+			for child in children:
+				gc, co = match_recombinations(recombinations, chrom, family_key, child, True)
+				gene_conversions.extend(gc)
+				crossovers.extend(co)
 
-			gc, co = match_recombinations(recombinations, chrom, family_key, child, False)
-			gene_conversions.extend(gc)
-			crossovers.extend(co)
+				gc, co = match_recombinations(recombinations, chrom, family_key, child, False)
+				gene_conversions.extend(gc)
+				crossovers.extend(co)
 
-	print('gc', len(gene_conversions), 'co', len(crossovers))
+		print('gc', len(gene_conversions), 'co', len(crossovers))
 
-	gc = len(gene_conversions)/num_children
-	cr = len(crossovers)/num_children
-	print('avg gene conversion', gc, 'avg crossover', cr)
+		gc = len(gene_conversions)/num_children
+		cr = len(crossovers)/num_children
+		print('avg gene conversion', gc, 'avg crossover', cr)
 
-	all_crossovers.extend(crossovers)
-	all_gene_conversions.extend(gene_conversions)
-
+		all_crossovers.extend(crossovers)
+		all_gene_conversions.extend(gene_conversions)
+	except Exception:
+		print(traceback.format_exc())
 with open('%s/crossovers.json' % args.dataset_name, 'w+') as f:
 	json.dump([c._asdict() for c in all_crossovers], f, indent=4, cls=NumpyEncoder)
 

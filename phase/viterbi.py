@@ -112,11 +112,6 @@ def merge_ancestral_variants(paths, gen, loss):
 
 def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transition_matrix, loss, allow_del_end=False):
 
-	if assembly=='37':
-		par_end, par_start = 2699520, 154931044
-	elif assembly=='38':
-		par_end, par_start = 2781479, 155701383
-
 	# backward sweep
 	prev_time = time.time()
 	n = v_cost.shape[1]
@@ -174,7 +169,7 @@ def viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mul
 	elif assembly=='38':
 		par_end, par_start = 2781479, 155701383
 
-		
+
 	# backward sweep
 	prev_time = time.time()
 	n = v_cost.shape[1]
