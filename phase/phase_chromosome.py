@@ -192,10 +192,10 @@ for family in families:
 					final_states, cost, ancestral_variants = viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
 
 
-				np.save('%s/%s.chr.%s.final_states' % (args.out_dir, family, chrom), final_states)
-				np.save('%s/%s.chr.%s.genomic_intervals' % (args.out_dir, family, chrom), family_snp_positions)
-				np.save('%s/%s.chr.%s.ancestral_variants' % (args.out_dir, family, chrom), ancestral_variants)
-				np.save('%s/%s.chr.%s.family_genotypes' % (args.out_dir, family, chrom), family_genotypes)
+				#np.save('%s/%s.chr.%s.final_states' % (args.out_dir, family, chrom), final_states)
+				#np.save('%s/%s.chr.%s.genomic_intervals' % (args.out_dir, family, chrom), family_snp_positions)
+				#np.save('%s/%s.chr.%s.ancestral_variants' % (args.out_dir, family, chrom), ancestral_variants)
+				#np.save('%s/%s.chr.%s.family_genotypes' % (args.out_dir, family, chrom), family_genotypes)
 				
 
 				# write to file
