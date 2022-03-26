@@ -21,7 +21,7 @@ module load py-scipy/1.1.0_py36
 
 #srun python3 phase/phase_chromosome.py ../DATA/ancestry/ancestry.ped.quads.ped ../DATA/ancestry/genotypes 37 phased_ancestry_quads params/ancestry_quads_multiloss_params.json 1 --family $1 --batch_size 1 --batch_num $SLURM_ARRAY_TASK_ID --max_af_cost 4.679
 
-srun python3 phase/phase_chromosome.py ../DATA/ihart.ms2/ihart.ped.quads.ped ../DATA/ihart.ms2/genotypes phased_ihart.ms2_quads_del params/ihart.ms2_quads_params.json 2 --batch_size 3 --batch_num $SLURM_ARRAY_TASK_ID --detect_inherited_deletions --chrom X
+srun python3 phase/phase_chromosome.py ../DATA/ihart.ms2/ihart.ped.quads.ped ../DATA/ihart.ms2/genotypes phased_ihart.ms2_quads_del params/ihart.ms2_quads_params.json 2 --batch_size 3 --batch_num $SLURM_ARRAY_TASK_ID --max_af_cost 4.679 --detect_deletions --chrom X
 
 #srun python3 phase/phase_chromosome.py ../DATA/ihart/ihart.ped ../DATA/ihart/genotypes 37 phased_ihart_complex_families params/ihart_multiloss_params.json 2 --family $1
 

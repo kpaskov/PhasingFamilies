@@ -7,7 +7,7 @@ import numpy as np
 
 from inheritance_states import InheritanceStates
 from input_output import write_to_file, pull_families, pull_families_missing_parent, pull_gen_data_for_individuals
-from transition_matrices import TransitionMatrix
+from transition_matrices import TransitionMatrix, TransitionMatrixX
 from losses import LazyLoss
 from viterbi import viterbi_forward_sweep, viterbi_backward_sweep, viterbi_forward_sweep_low_memory, viterbi_backward_sweep_low_memory
 
