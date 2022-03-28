@@ -47,7 +47,7 @@ def calculate_af_and_percent_miss(chrom, indices=None):
 
 
 for chrom in chroms:
-    print(chrom, end=' ')
+    print(chrom)
 
     # pull snp positions
     pos_data = np.load('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom))  
