@@ -32,7 +32,6 @@ parser.add_argument('--batch_num', type=int, default=0, help='To be used along w
 parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
-parser.add_argument('--use_pass', action='store_true', default=False, help='If True, Use PASS filter to filter snps. If False, ignore PASS filter.')
 parser.add_argument('--qs', action='store_true', default=False, help='Calculate quality score metrics.')
 parser.add_argument('--no_restrictions_X', action='store_true', default=False, help='Remove restriction on paternal recombination in the non-PAR X.')
 
@@ -175,7 +174,7 @@ for family in families:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
-				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, assembly, chrom, family.individuals, use_pass=args.use_pass)
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, assembly, chrom, family.individuals)
 
 				# update loss cache
 				loss.set_cache(family_genotypes)
