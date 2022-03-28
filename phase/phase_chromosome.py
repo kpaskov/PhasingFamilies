@@ -34,6 +34,7 @@ parser.add_argument('--retain_order', action='store_true', default=False, help='
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
 parser.add_argument('--use_pass', action='store_true', default=False, help='If True, Use PASS filter to filter snps. If False, ignore PASS filter.')
 parser.add_argument('--qs', action='store_true', default=False, help='Calculate quality score metrics.')
+parser.add_argument('--no_restrictions_X', action='store_true', default=False, help='Remove restriction on paternal recombination in the non-PAR X.')
 
 args = parser.parse_args()
 
@@ -179,7 +180,7 @@ for family in families:
 				# update loss cache
 				loss.set_cache(family_genotypes)
 
-				if chrom == 'X':
+				if chrom == 'X' and (not args.no_restrictions_X):
 					# forward sweep
 					v_cost = viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, transition_matrixX, loss, assembly)
 					# backward sweep
