@@ -21,7 +21,8 @@ elif len(sys.argv)>2 and sys.argv[2] == '--pass_from_qual':
     cutoff = int(sys.argv[3])
     print('Generate PASS from QUAL with cutoff %d' % cutoff)
 
-chroms = [str(x) for x in range(1, 23)] + ['X', 'Y']
+#chroms = [str(x) for x in range(1, 23)] + ['X', 'Y']
+chroms = ['X.0', 'Y.0']
 
 def calculate_af_and_percent_miss(chrom, indices=None):
     # load genotypes
