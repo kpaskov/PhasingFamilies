@@ -35,6 +35,8 @@ def pull_phase(filename):
 		ends = []
 		for line in f:
 			pieces = line.strip().split('\t')
+			if len(pieces) != len(header)+3:
+				print('ERROR', pieces)
 			chrs.append(pieces[0][3:])
 			states.append(list(map(int, pieces[1:-2])))
 			starts.append(int(pieces[-2]))

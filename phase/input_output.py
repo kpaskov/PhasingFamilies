@@ -123,6 +123,7 @@ class Family():
 					already_added.add((mom, dad))
 			parents = parents - already_added
 			if len(already_added) == 0:
+				print(self.id)
 				raise Exception('Circular pedigree.')
 		self.individuals = self.mat_ancestors + self.pat_ancestors + self.descendents
 		self.individual_to_index = dict([(x, i) for i, x in enumerate(self.individuals)])

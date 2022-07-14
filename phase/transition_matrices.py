@@ -30,11 +30,7 @@ class TransitionMatrix:
 			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']]*len(neighbors))
 			num_del_neighbors = len(neighbors)
 
-			# allow a transition into or out of one or more denovo deletions
-			neighbors = states.get_denovo_deletion_neighbors(state)
-			transitions[state_index].extend(neighbors)
-			transition_costs[state_index].extend([params['-log10(P[denovo_deletion_entry_exit])']]*len(neighbors))
-			
+
 			# allow a transition into or out of one or more inherited duplications
 			#neighbors, num_changed = states.get_duplication_neighbors(state)
 			#transitions[state_index].extend(neighbors)
@@ -112,11 +108,6 @@ class TransitionMatrixX:
 			transition_costs[state_index].extend([params['-log10(P[inherited_deletion_entry_exit])']]*len(neighbors))
 			num_del_neighbors = len(neighbors)
 
-			# allow a transition into or out of one or more denovo deletions
-			neighbors = states.get_denovo_deletion_neighbors(state)
-			transitions[state_index].extend(neighbors)
-			transition_costs[state_index].extend([params['-log10(P[denovo_deletion_entry_exit])']]*len(neighbors))
-			
 			# allow a single recombination event
 			neighbors = states.get_maternal_recombination_neighbors(state)
 			transitions[state_index].extend(neighbors)
