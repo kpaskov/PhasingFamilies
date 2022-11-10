@@ -99,6 +99,6 @@ for chrom in chroms:
             
     print(np.sum(is_pass), np.sum(is_pass)/is_pass.shape[0])
 
-    chrom_int = 23 if chrom == 'X' else 24 if chrom == 'Y' else int(chrom)
+    chrom_int = 23 if chrom == 'X.0' else 24 if chrom == 'Y.0' else int(chrom)
     np.save('%s/chr.%s.gen.coordinates.npy' % (data_dir, chrom), np.hstack((chrom_int*np.ones((pos_data.shape[0], 1), dtype=int), pos_data[:, 1:3], is_pass[:, np.newaxis])))
 

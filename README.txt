@@ -14,7 +14,7 @@ python parameter_estimation/pull_famgen_counts.py [data_dir] [ped_file] [chrom] 
 
 Then we estimate parameters using
 
-python parameter_estimation/estimate_parameters_per_individual.py [data_dir] [param_file]
+python parameter_estimation/estimate_parameters.py [data_dir] [param_file]
 
 python parameter_estimation/extend_params.py [param_file]
 
