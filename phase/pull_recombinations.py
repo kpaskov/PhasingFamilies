@@ -124,15 +124,12 @@ Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 
 GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'is_hts', 'recombinations', 'family_size', 'mom', 'dad'])
 
 def match_recombinations(recombinations, chrom, family_id, child, is_mat):
-    cutoff = 161332 if is_mat else 154265 # pulled from spark 0.01 quantile
-
     gene_conversions = []
     crossovers = []
     
     rs = [r for r in recombinations if r.chrom==chrom and r.child==child and r.is_mat==is_mat]
     dists = np.array([r2.start_pos-r1.end_pos for r1, r2 in zip(rs[:-1], rs[1:])])
-   
-    breaks = [0] + (np.where(dists>cutoff)[0]+1).tolist() + [len(rs)]
+    breaks = [0] + (np.where(dists>100000)[0]+1).tolist() + [len(rs)]
     for break_start, break_end in zip(breaks[:-1], breaks[1:]):
         r_group = rs[break_start:break_end]
         if len(r_group)>0:
@@ -186,36 +183,9 @@ for sibpair in sibpairs:
 	pat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, pat_indices, mat_indices, False)
 	recombinations = mat_recombinations + pat_recombinations
 
-	# now identify crossovers and gene conversions
-	gene_conversions, crossovers = [], []
-	children = set([x.child for x in recombinations])
-	for chrom in chroms_of_interest:
-		for child in children:
-			gc, co = match_recombinations(recombinations, chrom, family_key, child, True)
-			gene_conversions.extend(gc)
-			crossovers.extend(co)
-
-			gc, co = match_recombinations(recombinations, chrom, family_key, child, False)
-			gene_conversions.extend(gc)
-			crossovers.extend(co)
-
-	print('gc', len(gene_conversions), 'co', len(crossovers))
-
-	gc = len(gene_conversions)/num_children
-	cr = len(crossovers)/num_children
-	print('avg gene conversion', gc, 'avg crossover', cr)
-
 	all_recombinations.extend(recombinations)
-	all_crossovers.extend(crossovers)
-	all_gene_conversions.extend(gene_conversions)
 
 with open('%s/recombinations.json' % args.dataset_name, 'w+') as f:
 	json.dump([c._asdict() for c in all_recombinations], f, indent=4, cls=NumpyEncoder)	
-
-with open('%s/crossovers.json' % args.dataset_name, 'w+') as f:
-	json.dump([c._asdict() for c in all_crossovers], f, indent=4, cls=NumpyEncoder)
-
-with open('%s/gene_conversions.json' % args.dataset_name, 'w+') as f:
-	json.dump([gc._asdict() for gc in all_gene_conversions], f, indent=4, cls=NumpyEncoder)
 
 

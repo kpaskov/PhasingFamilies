@@ -234,6 +234,12 @@ class InheritanceStates:
 		self._phase = np.array([x.phase() for x in self._states])
 		self._full_states = np.array([x.full_state() for x in self._states])
 
+		# In most of the X chromosome, we require that dads have at least one deletion
+		self._dads_have_deletions = np.zeros((self.num_states,), dtype=bool)
+		for mom, dad in family.ordered_couples:
+			dad_index = family.individual_to_index[dad]
+			self._dads_have_deletions[[x.has_inh_deletion(2*dad_index) or x.has_inh_deletion(2*dad_index+1) for x in self._states]] = True
+
 
 		self.full_state_length = self._full_states.shape[1]
 		self._state_to_index = dict([(x, i) for i, x in enumerate(self._states)])

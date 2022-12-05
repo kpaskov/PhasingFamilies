@@ -117,7 +117,7 @@ for family in families:
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, params)
-		transition_matrixX = TransitionMatrixX(inheritance_states, params)
+		transitionsX = TransitionMatrixX(inheritance_states, params)
 
 		# create loss function for this family
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions)
@@ -181,9 +181,9 @@ for family in families:
 
 				if chrom == 'X' and (not args.no_restrictions_X):
 					# forward sweep
-					v_cost = viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, transition_matrixX, loss, assembly)
+					v_cost = viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, transitionsX, loss, assembly)
 					# backward sweep
-					final_states, cost, ancestral_variants = viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, transition_matrixX, loss, assembly)
+					final_states, cost, ancestral_variants = viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, inheritance_states, transition_matrix, transitionsX, loss, assembly)
 
 				else:
 					# forward sweep

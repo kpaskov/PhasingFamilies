@@ -37,6 +37,8 @@ def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor,
 		par_end, par_start = 2699520, 154931044
 	elif assembly=='38':
 		par_end, par_start = 2781479, 155701383
+
+	is_par_loss_region = np.array([x._loss_region==0 or x._loss_region==2 for x in states])
 		
 	# forward sweep
 	prev_time = time.time()
@@ -60,9 +62,13 @@ def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor,
 	for j in range(1, n): 
 		if (family_snp_positions[j, 0]>= par_end) and (family_snp_positions[j, 1]<=par_start):
 			# we're in the X chromosome, but not the PAR
+			# so no paternal recombination is allowed, and dad has to have a deletion
 			v_cost[:, j] = np.min(v_cost[transition_matrixX.transitions, j-1] + transition_matrixX.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])			
+			v_cost[~states._dads_have_deletions, j] = np.inf
+			v_cost[is_par_loss_region, j] = np.inf
 		else:
 			v_cost[:, j] = np.min(v_cost[transition_matrix.transitions, j-1] + transition_matrix.costs, axis=1) + mult_factor[j]*loss(family_genotypes[:, j])
+			v_cost[~is_par_loss_region, j] = np.inf
 
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 	return v_cost
