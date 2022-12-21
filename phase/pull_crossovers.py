@@ -11,9 +11,15 @@ import traceback
 
 parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
 parser.add_argument('dataset_name', type=str, help='Name of dataset.')
+parser.add_argument('--hard_to_sequence', nargs='*', default=[1], type=int, help='Mark hard to sequence loss regions.')
+parser.add_argument('--chrom', help='Chrom to use.')
 
-chroms_of_interest = [str(x) for x in range(1, 23)] + ['X']
 args = parser.parse_args()
+
+if args.chrom is None:
+	chroms_of_interest = [str(x) for x in range(1, 23)] + ['X']
+else:
+	chroms_of_interest = ['X']
 
 
 #pulls phase data from a file
@@ -53,7 +59,8 @@ def pull_phase(filename):
 			raise Exception('No data')
 
 		# if this is a hard to sequences region, we don't know the exact location of crossovers
-		states[:-1, (states[-1, :]==1)] = -1
+		for x in args.hard_to_sequence:
+			states[:-1, (states[-1, :]==x)] = -1
 
 		# if there's UPD, it's not a crossover
 		for mat_index, pat_index in zip(mat_indices[2:], pat_indices[2:]):
@@ -159,11 +166,17 @@ try:
 	with open('%s/sibpairs.json' % args.dataset_name, 'r') as f:
 		sibpairs = json.load(f)
 except:
-	with open('%s/similarity.txt' % args.dataset_name, 'r') as f:
+	try:
+		with open('%s/similarity.txt' % args.dataset_name, 'r') as f:
+			sibpairs = []
+			next(f) # skip header
+			for line in f:
+				sibpairs.append({'phase_dir': args.dataset_name, 'family': line.split('\t', maxsplit=1)[0]})
+	except:
 		sibpairs = []
-		next(f) # skip header
-		for line in f:
-			sibpairs.append({'phase_dir': args.dataset_name, 'family': line.split('\t', maxsplit=1)[0]})
+		for file in os.listdir(args.dataset_name):
+			if file.endswith('.phased.txt'):
+				sibpairs.append({'phase_dir': args.dataset_name, 'family': file.split('.')[0]})
 
 all_recombinations = []
 all_crossovers = []

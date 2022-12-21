@@ -15,13 +15,13 @@ from viterbi import viterbi_forward_sweep, viterbi_backward_sweep, viterbi_forwa
 
 import argparse
 
+genome_size = 3000000000
+
 parser = argparse.ArgumentParser(description='Phase chromosome.')
 parser.add_argument('ped_file', type=str, help='Ped file of family structure.')
 parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
 parser.add_argument('out_dir', type=str, help='Output directory.')
-parser.add_argument('param_file', type=str, help='Parameters for model.')
-parser.add_argument('num_loss_regions', type=int, help='Number of loss regions in model.')
-
+parser.add_argument('sequencing_error_rates', type=str, nargs='+', help='Sequencing error rates for model.')
 parser.add_argument('--detect_inherited_deletions', action='store_true', default=False, help='Detect inherited deletions while phasing.')
 parser.add_argument('--detect_upd', action='store_true', default=False, help='Detect uniparental disomy while phasing. We detect only heterodisomy because isodisomy is essentially indistinguishable from a denovo deletion.')
 parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
@@ -32,8 +32,12 @@ parser.add_argument('--batch_num', type=int, default=0, help='To be used along w
 parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
-parser.add_argument('--qs', action='store_true', default=False, help='Calculate quality score metrics.')
 parser.add_argument('--no_restrictions_X', action='store_true', default=False, help='Remove restriction on paternal recombination in the non-PAR X.')
+parser.add_argument('--inherited_deletion_entry_exit_cost', type=float, default=-np.log10(2*100)+np.log10(genome_size), help='-log10(P[inherited_deletion_entry_exit])')
+parser.add_argument('--maternal_crossover_cost', type=float, default=-np.log10(42)+np.log10(genome_size), help='-log10(P[maternal_crossover])')
+parser.add_argument('--paternal_crossover_cost', type=float, default=-np.log10(28)+np.log10(genome_size), help='-log10(P[paternal_crossover])')
+parser.add_argument('--loss_transition_cost', type=float, default=-np.log10(2*1000)+np.log10(genome_size), help='-log10(P[loss_transition])')
+
 
 args = parser.parse_args()
 
@@ -48,9 +52,6 @@ if args.detect_inherited_deletions:
 if args.detect_upd:
 	print('Detecting UPD while phasing...')
 
-with open(args.param_file, 'r') as f:
-	params = json.load(f)
-
 with open('%s/info.json' % args.data_dir, 'r') as f:
 	assembly = json.load(f)['assembly']
 
@@ -58,6 +59,39 @@ print('assembly', assembly)
 
 with open('%s/info.json' % args.out_dir, 'w+') as f:
 	json.dump(vars(args), f)
+
+# ---------------- set up sequencing error parameters ---------------------
+
+params = dict()
+
+all_params = []
+for i, param_file in enumerate(args.sequencing_error_rates):
+	with open(param_file, 'r') as f:
+		all_params.append(json.load(f))
+		params['loss_%d' % i] = param_file
+
+# first pull individuals that exist in all params
+individuals = set([k for k, v in all_params[0].items() if isinstance(v, dict)])
+for p in all_params[1:]:
+	individuals = individuals & set([k for k, v in p.items() if isinstance(v, dict)])
+
+# for each individual, extrapolate deletion costs
+gens = ['0/0', '0/1', '1/1']
+obss = ['0/0', '0/1', '1/1', './.']
+
+for ind in individuals:
+	params[ind] = dict()
+	for i, p in enumerate(all_params):
+		for obs in obss:
+			for gen in gens:
+				params[ind]['-log10(P[obs=%s|true_gen=%s,loss=%d])' % (obs, gen, i)] = min(p[ind]['-log10(P[obs=%s|true_gen=%s])' % (obs, gen)], p[ind]['lower_bound[-log10(P[obs=%s|true_gen=%s])]' % (obs, gen)])
+			params[ind]['-log10(P[obs=%s|true_gen=-/0,loss=%d])' % (obs, i)] = min(p[ind]['-log10(P[obs=%s|true_gen=0/0])' % obs], p[ind]['lower_bound[-log10(P[obs=%s|true_gen=0/0])]' % obs])
+			params[ind]['-log10(P[obs=%s|true_gen=-/1,loss=%d])' % (obs, i)] = min(p[ind]['-log10(P[obs=%s|true_gen=1/1])' % obs], p[ind]['lower_bound[-log10(P[obs=%s|true_gen=1/1])]' % obs])
+		
+		params[ind]['-log10(P[obs=0/0|true_gen=-/-,loss=%d])' % i] = min(p[ind]['-log10(P[obs=0/1|true_gen=1/1])'], p[ind]['lower_bound[-log10(P[obs=0/1|true_gen=1/1])]'])
+		params[ind]['-log10(P[obs=0/1|true_gen=-/-,loss=%d])' % i] = min((p[ind]['-log10(P[obs=0/0|true_gen=1/1])'] + p[ind]['-log10(P[obs=1/1|true_gen=0/0])'])/2, (p[ind]['lower_bound[-log10(P[obs=0/0|true_gen=1/1])]'] + p[ind]['lower_bound[-log10(P[obs=1/1|true_gen=0/0])]'])/2)
+		params[ind]['-log10(P[obs=1/1|true_gen=-/-,loss=%d])' % i] = min(p[ind]['-log10(P[obs=0/1|true_gen=0/0])'], p[ind]['lower_bound[-log10(P[obs=0/1|true_gen=0/0])]'])
+		params[ind]['-log10(P[obs=./.|true_gen=-/-,loss=%d])' % i] = -np.log10(1 - sum([10.0**-params[ind]['-log10(P[obs=%s|true_gen=-/-,loss=%d])' % (obs, i)]  for obs in ['0/0', '0/1', '1/1']]))
 
 
 # --------------- pull families of interest ---------------
@@ -116,48 +150,49 @@ for family in families:
 		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_inherited_deletions, args.detect_upd, args.num_loss_regions)
 					
 		# create transition matrix
-		transition_matrix = TransitionMatrix(inheritance_states, params)
-		transitionsX = TransitionMatrixX(inheritance_states, params)
+		transition_matrix = TransitionMatrix(inheritance_states, 
+			{
+			'-log10(P[inherited_deletion_entry_exit])': args.inherited_deletion_entry_exit_cost,
+			'-log10(P[maternal_crossover])': args.maternal_crossover_cost,
+			'-log10(P[paternal_crossover])': args.paternal_crossover_cost,
+			'-log10(P[loss_transition])': args.loss_transition_cost,
+			})
+		transitionsX = TransitionMatrixX(inheritance_states, 
+			{
+			'-log10(P[inherited_deletion_entry_exit])': args.inherited_deletion_entry_exit_cost,
+			'-log10(P[maternal_crossover])': args.maternal_crossover_cost,
+			'-log10(P[paternal_crossover])': args.paternal_crossover_cost,
+			'-log10(P[loss_transition])': args.loss_transition_cost,
+			})
 
 		# create loss function for this family
 		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions)
-		#print('loss created')
-
-		if args.detect_inherited_deletions and args.qs:
-			# same setup, but no mat deletions
-			nomatdel_inheritance_states = InheritanceStates(family, False, True, args.num_loss_regions)
-			nomatdel_transition_matrix = TransitionMatrix(nomatdel_inheritance_states, params)
-			nomatdel_loss = LazyLoss(nomatdel_inheritance_states, family, params, args.num_loss_regions)
-
-			# same setup, but no pat deletions
-			nopatdel_inheritance_states = InheritanceStates(family, True, False, args.num_loss_regions)
-			nopatdel_transition_matrix = TransitionMatrix(nopatdel_inheritance_states, params)
-			nopatdel_loss = LazyLoss(nopatdel_inheritance_states, family, params, args.num_loss_regions)
 
 		# start by pulling header, or writing one if the file doesn't exist
 		existing_phase_data = []
 		needs_header = False
 		try:
-			with open('%s/%s.phased.txt' % (args.out_dir, family), 'r') as f:
-				header = next(f)
-				header_pieces = header.strip().split('\t')[1:-2]
-				individuals = [x[:-4] for x in header_pieces if x.endswith('_mat')]
+			with open('%s/%s.phased.bed' % (args.out_dir, family), 'r') as f:
+				next(f) # skip description (mom, dad, children)
+				individuals = next(f).strip()[1:].split(',')
 				family.set_individual_order(individuals)
 				existing_phase_data = [x for x in f] 
 
 		except (FileNotFoundError, StopIteration):
-			header = '\t'.join(['chrom'] + \
+			header = '#mom, dad, children\n' + \
+				'#' + (','.join(family.individuals)) + '\n' + \
+				'#' + ('\t'.join(['chrom', 'chrom_start', 'chrom_end'] + \
 				['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
 				['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
 				sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
-				['loss_region', 'start_pos', 'end_pos']) + '\n'
+				['loss_region'])) + '\n'
 			needs_header = True
 
 		# to avoid overwriting previous data, check which chromosomes have already been phased
 		already_phased_chroms = set([line.split('\t', maxsplit=1)[0][3:] for line in existing_phase_data])
 		print('already phased', sorted(already_phased_chroms))
 
-		with open('%s/%s.phased.txt' % (args.out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
+		with open('%s/%s.phased.bed' % (args.out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
 			if args.no_overwrite:
 				print('no overwrite')
 				if needs_header:

@@ -240,7 +240,6 @@ class InheritanceStates:
 			dad_index = family.individual_to_index[dad]
 			self._dads_have_deletions[[x.has_inh_deletion(2*dad_index) or x.has_inh_deletion(2*dad_index+1) for x in self._states]] = True
 
-
 		self.full_state_length = self._full_states.shape[1]
 		self._state_to_index = dict([(x, i) for i, x in enumerate(self._states)])
 		self._full_state_to_index = dict([(tuple(x), i) for i, x in enumerate(self._full_states)])
