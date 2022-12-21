@@ -38,36 +38,35 @@ The `inheritance_patterns/info.json` file contains metadata including the refere
 
 The `[family].bed` files contain inheritance patterns for each family, across all chromosomes in .bed format.
 
-The `crossovers.json` file contains all called crossovers in the cohort in .json format.
+The `crossovers.json` and `crossovers.bed` files contains all called crossovers in the cohort in .json and .bed format respectively.
 
-The `crossovers.bed` file contains all called crossovers in the cohort in .bed format.
+The `gene_conversions.json` and `gene_conversions.bed` files contains possible gene-conversion events in the cohort in .json and .bed format respectively. Gene conversions are more difficult to detect than crossovers due to their small size. We have not validated the gene conversions called by our algorithm, so they should be examined carefully before use.
+
+`IBD.json`
+
+`deletions/info.json`
+
+The `inherited_deletions.json` and `inherited_deletions.bed` files contains all called inherited deletions in the cohort in .json and .bed format respectively.
 
 ## Instructions for running code
 
+### 1. Start by getting your genomic data into numpy format.
+using https://github.com/kpaskov/VCFtoNPZ. 
 
-1. Preprocessing
-You need to get your genomic data into numpy format. If your data is currently in VCF format, split by chromosome, this can be done by running
+### 2. Estimate sequencing error rates.
+using https://github.com/kpaskov/FamilySeqError.
 
-python preprocessing/pull_gen_data.py [vcf_file] [data_dir] [chrom]
+If using whole-genome sequencing data, follow the instructions for estimating sequencing error rates in both low-complexity and high-complexity regions. A good source of low-complexity regions is the supplementary materials file from https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4271055/.
 
-If your vcf files don't have filters applied (for example no variant is PASS) or you'd like to apply a different type of filter, use preprocessing/pull_pass.py
+### 3. Run our hidden Markov model family phasing algorithm which detects crossovers and inherited deletions.
 
-2. Tune parameters
-The phasing/deletion detection code needs estimates of different types of sequencing error rates. These parameters can be estimated automatically from the data. First, we pull out counts for joint family genotypes.
+```
+python phase/phase_chromosome.py [chrom] [ped_file] [data_dir] [phase_dir] [high_complexity_param_file] [low_complexity_param_file] --detect_deletions
+```
 
-python parameter_estimation/pull_famgen_counts.py [data_dir] [ped_file] [chrom] [out_dir]
+The `--batch_size` and `--batch_num` options can be used to parallelize when running on a large cohort.
 
-Then we estimate parameters using
-
-python parameter_estimation/estimate_parameters.py [data_dir] [param_file]
-
-python parameter_estimation/extend_params.py [param_file]
-
-3. Run Phasing/Deletion Detection
-Now we're ready to run using
-
-python phase/phase_chromosome.py [chrom] [ped_file] [data_dir] [assembly version] [phase_dir] [param_file] [num_loss_regions] --detect_deletions --family AU0197
-
+---------------------------------------------------------------------------------------------------------
 
 Memory
 WGS: families of size 3/4 need 8GB, families of size 5 need 16GB, families of size 6 need 64GB
