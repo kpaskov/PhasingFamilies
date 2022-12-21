@@ -16,27 +16,23 @@ The code adds to a directory structure created by the https://github.com/kpaskov
 - genotypes
 - family_genotype_counts
 - sequencing_error_rates
-- inheritance_patterns
-- - info.json
-- - [family_1].bed
-- - [family_2].bed
-...
-- crossovers
+- phase
 - - info.json
 - - crossovers.json
 - - crossovers.bed
 - - gene_conversions.json
 - - gene_conversions.bed
-- - IBD.json
-- deletions
-- - info.json
 - - inherited_deletions.json
 - - inherited_deletions.bed
+- - IBD.json
+- - inheritance_patterns
+- - - [family_1].bed
+- - - [family_2].bed
+...
+
 ```
 
-The `inheritance_patterns/info.json` file contains metadata including the reference assembly (GRch37 or GRch38), vcf directory, ped file, sequencing error parameter files, and any flags provided to the phasing algorithm.
-
-The `[family].bed` files contain inheritance patterns for each family, across all chromosomes in .bed format.
+The `info.json` file contains metadata including the reference assembly (GRch37 or GRch38), vcf directory, ped file, sequencing error parameter files, and any flags provided to the phasing algorithm.
 
 The `crossovers.json` and `crossovers.bed` files contains all called crossovers in the cohort in .json and .bed format respectively.
 
@@ -44,9 +40,9 @@ The `gene_conversions.json` and `gene_conversions.bed` files contains possible g
 
 `IBD.json`
 
-`deletions/info.json`
-
 The `inherited_deletions.json` and `inherited_deletions.bed` files contains all called inherited deletions in the cohort in .json and .bed format respectively.
+
+The `[family].bed` files contain inheritance patterns for each family, across all chromosomes in .bed format.
 
 ## Instructions for running code
 
