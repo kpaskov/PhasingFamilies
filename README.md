@@ -58,7 +58,7 @@ If using whole-genome sequencing data, follow the instructions for estimating se
 The algorithm detects crossovers and inherited deletions. Run using
 
 ```
-python phase/phase_chromosome.py [chrom] [ped_file] [data_dir] [phase_dir] [high_complexity_param_file] [low_complexity_param_file] --detect_deletions
+python phase/phase_chromosome.py [ped_file] [data_dir] [high_complexity_param_file] [low_complexity_param_file] --detect_inherited_deletions
 ```
 
 The `--batch_size` and `--batch_num` options can be used to parallelize when running on a large cohort.
