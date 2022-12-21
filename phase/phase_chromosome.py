@@ -67,7 +67,7 @@ if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
 if not os.path.exists('%s/inheritance_patterns' % out_dir):
-    os.makedirs(out_dir)
+    os.makedirs('%s/inheritance_patterns' % out_dir)
 
 with open('%s/info.json' % out_dir, 'w+') as f:
 	json.dump(vars(args), f)
