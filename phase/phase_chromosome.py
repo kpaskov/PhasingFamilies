@@ -4,6 +4,7 @@ from itertools import product, combinations
 import traceback
 import os
 import numpy as np
+import time
 
 from inheritance_states import InheritanceStates
 from input_output import write_to_file, pull_families, pull_families_missing_parent, pull_gen_data_for_individuals
@@ -155,6 +156,8 @@ print('Families of interest, limited to batch', len(families))
 
 # phase each family
 for family in families:
+	t0 = time.time()
+
 	try:
 		print('family', family.id)
 
@@ -249,9 +252,8 @@ for family in families:
 				write_to_file(statef, chrom, family, final_states, family_snp_positions, cost)
 
 				statef.flush()
+		statef.write('# Completed in ', time.time()-t0, 'sec')
 	except Exception: 
 		traceback.print_exc()
 
-
-	print('Done!')
 	
