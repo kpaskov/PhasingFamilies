@@ -2,7 +2,7 @@ import sys
 import json
 from itertools import product, combinations
 import traceback
-from os import listdir
+import os
 import numpy as np
 
 from inheritance_states import InheritanceStates
@@ -20,7 +20,6 @@ genome_size = 3000000000
 parser = argparse.ArgumentParser(description='Phase chromosome.')
 parser.add_argument('ped_file', type=str, help='Ped file of family structure.')
 parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
-parser.add_argument('out_dir', type=str, help='Output directory.')
 parser.add_argument('sequencing_error_rates', type=str, nargs='+', help='Sequencing error rates for model.')
 parser.add_argument('--detect_inherited_deletions', action='store_true', default=False, help='Detect inherited deletions while phasing.')
 parser.add_argument('--detect_upd', action='store_true', default=False, help='Detect uniparental disomy while phasing. We detect only heterodisomy because isodisomy is essentially indistinguishable from a denovo deletion.')
@@ -37,6 +36,7 @@ parser.add_argument('--inherited_deletion_entry_exit_cost', type=float, default=
 parser.add_argument('--maternal_crossover_cost', type=float, default=-np.log10(42)+np.log10(genome_size), help='-log10(P[maternal_crossover])')
 parser.add_argument('--paternal_crossover_cost', type=float, default=-np.log10(28)+np.log10(genome_size), help='-log10(P[paternal_crossover])')
 parser.add_argument('--loss_transition_cost', type=float, default=-np.log10(2*1000)+np.log10(genome_size), help='-log10(P[loss_transition])')
+parser.add_argument('--phase_name', type=str, default=None, help='Name for this phase attempt.')
 
 
 args = parser.parse_args()
@@ -52,12 +52,21 @@ if args.detect_inherited_deletions:
 if args.detect_upd:
 	print('Detecting UPD while phasing...')
 
-with open('%s/info.json' % args.data_dir, 'r') as f:
+with open('%s/genotypes/info.json' % args.data_dir, 'r') as f:
 	assembly = json.load(f)['assembly']
 
 print('assembly', assembly)
 
-with open('%s/info.json' % args.out_dir, 'w+') as f:
+# create output directory if it doesn't exist
+if args.phase_name is None:
+	out_dir = '%s/phase' % args.data_dir
+else:
+	out_dir = '%s/%s_phase' % (args.data_dir, args.phase_name)
+
+if not os.path.exists(out_dir):
+    os.makedirs(out_dir)
+
+with open('%s/info.json' % out_dir, 'w+') as f:
 	json.dump(vars(args), f)
 
 # ---------------- set up sequencing error parameters ---------------------
@@ -103,7 +112,7 @@ else:
 print(families[0], families[0].individuals)
 
 # make sure at least one individual has genetic data
-sample_file = '%s/samples.json' % args.data_dir
+sample_file = '%s/genotypes/samples.json' % args.data_dir
 with open(sample_file, 'r') as f:
 	sample_ids = set(json.load(f))
 
@@ -147,7 +156,7 @@ for family in families:
 		print('family', family.id)
 
 		# create inheritance states
-		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_inherited_deletions, args.detect_upd, args.num_loss_regions)
+		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_inherited_deletions, args.detect_upd, len(args.sequencing_error_rates))
 					
 		# create transition matrix
 		transition_matrix = TransitionMatrix(inheritance_states, 
@@ -166,13 +175,13 @@ for family in families:
 			})
 
 		# create loss function for this family
-		loss = LazyLoss(inheritance_states, family, params, args.num_loss_regions)
+		loss = LazyLoss(inheritance_states, family, params, len(args.sequencing_error_rates))
 
 		# start by pulling header, or writing one if the file doesn't exist
 		existing_phase_data = []
 		needs_header = False
 		try:
-			with open('%s/%s.phased.bed' % (args.out_dir, family), 'r') as f:
+			with open('%s/inheritance_patterns/%s.phased.bed' % (out_dir, family), 'r') as f:
 				next(f) # skip description (mom, dad, children)
 				individuals = next(f).strip()[1:].split(',')
 				family.set_individual_order(individuals)
@@ -192,7 +201,7 @@ for family in families:
 		already_phased_chroms = set([line.split('\t', maxsplit=1)[0][3:] for line in existing_phase_data])
 		print('already phased', sorted(already_phased_chroms))
 
-		with open('%s/%s.phased.bed' % (args.out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
+		with open('%s/inheritance_patterns/%s.phased.bed' % (out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
 			if args.no_overwrite:
 				print('no overwrite')
 				if needs_header:
@@ -227,10 +236,10 @@ for family in families:
 					final_states, cost, ancestral_variants = viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, inheritance_states, transition_matrix, loss)
 
 
-				#np.save('%s/%s.chr.%s.final_states' % (args.out_dir, family, chrom), final_states)
-				#np.save('%s/%s.chr.%s.genomic_intervals' % (args.out_dir, family, chrom), family_snp_positions)
-				#np.save('%s/%s.chr.%s.ancestral_variants' % (args.out_dir, family, chrom), ancestral_variants)
-				#np.save('%s/%s.chr.%s.family_genotypes' % (args.out_dir, family, chrom), family_genotypes)
+				#np.save('%s/%s.chr.%s.final_states' % (out_dir, family, chrom), final_states)
+				#np.save('%s/%s.chr.%s.genomic_intervals' % (out_dir, family, chrom), family_snp_positions)
+				#np.save('%s/%s.chr.%s.ancestral_variants' % (out_dir, family, chrom), ancestral_variants)
+				#np.save('%s/%s.chr.%s.family_genotypes' % (out_dir, family, chrom), family_genotypes)
 				
 
 				# write to file
