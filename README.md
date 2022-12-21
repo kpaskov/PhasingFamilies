@@ -58,7 +58,8 @@ using https://github.com/kpaskov/FamilySeqError.
 
 If using whole-genome sequencing data, follow the instructions for estimating sequencing error rates in both low-complexity and high-complexity regions. A good source of low-complexity regions is the supplementary materials file from https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4271055/.
 
-### 3. Run our hidden Markov model family phasing algorithm which detects crossovers and inherited deletions.
+### 3. Run our hidden Markov model family phasing algorithm.
+The algorithm detects crossovers and inherited deletions. Run using
 
 ```
 python phase/phase_chromosome.py [chrom] [ped_file] [data_dir] [phase_dir] [high_complexity_param_file] [low_complexity_param_file] --detect_deletions
