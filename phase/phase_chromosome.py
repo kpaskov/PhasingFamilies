@@ -188,8 +188,11 @@ for family in families:
 		needs_header = False
 		try:
 			with open('%s/inheritance_patterns/%s.phased.bed' % (out_dir, family), 'r') as f:
-				next(f) # skip description (mom, dad, children)
-				individuals = next(f).strip()[1:].split(',')
+				header = next(f) # skip description (mom, dad, children)
+				inds = next(f)
+				header += inds
+				individuals = inds.strip()[1:].split(',')
+				header += next(f)
 				family.set_individual_order(individuals)
 				existing_phase_data = [x for x in f] 
 
