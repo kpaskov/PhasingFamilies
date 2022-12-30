@@ -255,7 +255,7 @@ for family in families:
 				write_to_file(statef, chrom, family, final_states, family_snp_positions, cost)
 
 				statef.flush()
-		statef.write('# Completed in ', time.time()-t0, 'sec')
+		statef.write('# Completed in %0.2f sec' % (time.time()-t0))
 	except Exception: 
 		traceback.print_exc()
 
