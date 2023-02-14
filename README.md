@@ -24,7 +24,7 @@ The code adds to a directory structure created by the https://github.com/kpaskov
 - - gene_conversions.bed
 - - inherited_deletions.json
 - - inherited_deletions.bed
-- - IBD.json
+- - sibpairs.json
 - - inheritance_patterns
 - - - [family_1].bed
 - - - [family_2].bed
@@ -38,7 +38,7 @@ The `crossovers.json` and `crossovers.bed` files contains all called crossovers 
 
 The `gene_conversions.json` and `gene_conversions.bed` files contains possible gene-conversion events in the cohort in .json and .bed format respectively. Gene conversions are more difficult to detect than crossovers due to their small size. We have not validated the gene conversions called by our algorithm, so they should be examined carefully before use.
 
-`IBD.json`
+`sibpairs.json` contains all sibling-pairs in the dataset as well as genome-wide autosomal IBD values and chromosome-level IBD values.
 
 The `inherited_deletions.json` and `inherited_deletions.bed` files contains all called inherited deletions in the cohort in .json and .bed format respectively.
 
@@ -58,10 +58,64 @@ If using whole-genome sequencing data, follow the instructions for estimating se
 The algorithm detects crossovers and inherited deletions. Run using
 
 ```
-python phase/phase_chromosome.py [ped_file] [data_dir] [high_complexity_param_file] [low_complexity_param_file] --detect_inherited_deletions
+python phase/phase_chromosome.py [ped_file] [data_dir] [high_complexity_sequencing_error_profile] [low_complexity_sequencing_error_profile]
 ```
 
-The `--batch_size` and `--batch_num` options can be used to parallelize when running on a large cohort.
+The script has options
+
+- `--detect_inherited_deletions` models inherited deletions while phasing.
+- `--detect_upd` models uniparental disomy while phasing. We detect only heterodisomy because isodisomy is essentially indistinguishable from a denovo deletion. (This option is still under development.)
+- `--chrom [chrom]` phases a single chromosome. If this option is not used, all autosomal chromosomes are phased.
+- `--family_size [family_size]` only families of size [family_size] are phased.
+- `--family [family]` only [family] is phased.
+- `--batch_size` and `--batch_num` options can be used to parallelize when running on a large cohort.
+- `--phase_name [name]` phase data will be written to directory `[data_dir]/[name]_phase/inheritance_patterns`. If this option is not used, phase data will be written to directory `[data_dir]/phase/inheritance_patterns`.
+
+Phase data will be written to `[data_dir]/phase/inheritance_patterns` in .bed format.
+
+The example below phases all autosomal chromosomes for all families of size 4 in the ssc.hg38 dataset.
+
+```
+python phase/phase_chromosome.py ../DATA/ssc.hg38/ssc.ped ../DATA/ssc.hg38 ../DATA/ssc.hg38/sequencing_error_rates/HCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/LCR_errors.json --detect_inherited_deletions --family_size 4 
+ ```
+ 
+ You can use as many sequencing error profiles as you'd like. This comes in handy when phasing the X chromosome, since the PAR and non-PAR regions have different error profiles. This is an example of phasing the X chromosome using four different error profiles.
+ 
+ ```
+ python phase/phase_chromosome.py ../DATA/ssc.hg38/ssc.ped ../DATA/ssc.hg38 ../DATA/ssc.hg38/sequencing_error_rates/X_PAR_HCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/X_PAR_LCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/X_nonPAR_HCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/X_nonPAR_LCR_errors.json --chrom X --batch_size 3 --batch_num $SLURM_ARRAY_TASK_ID --detect_inherited_deletions --family_size 4
+ ```
+
+If no `--chrom` option is given, `phase_chromosome.py` will phase all autosomal chromosomes. The X chromosome must be phased explicitly using the `--chrom` option.
+
+### 4. Pull sibling-pair IBD and run quality control metrics.
+This script pulls genome-wide autosomal IBD for sibling pairs as well as chromosome-level IBD. It marks siblings who appear to be identical twins or full siblings based on their IBD sharing.
+
+```
+python phase/pull_sibpair_ibd.py [data_dir]
+```
+
+The `--include_X` flag includes chrX when calculating chromosome-level IBD. However, the X chromosome is not used in the calculation of genome-wide IBD.
+
+This script produces `[data_dir]/phase/sibpairs.json` which contains an entry for every sibling pair in the dataset with the following fields:
+- `family` the family ID for the sibling pair
+- `sibling1` the ID for the first sibling in the pair (the first sibling's ID is alphabetically first)
+- `sibling2` the ID for the second sibling in the pair (the second sibling's ID is alphabetically last)
+- `maternal_ibd` the genome-wide autosomal maternal IBD between the siblings
+- `maternal_unknown_fraction` the fraction of the autosomal genome where maternal IBD could not be determined
+- `maternal_ibd_chroms` a list of chromosome-level maternal IBD between the siblings in order from chr1-chr22, ending with chrX
+- `maternal_unknown_fraction_chroms` a list of the fraction of each chromosome where maternal IBD could not be determined in order from chr1-chr22, ending with chrX
+- `paternal_ibd` the genome-wide autosomal paternal IBD between the siblings
+- `paternal_unknown_fraction` the fraction of the autosomal genome where paternal IBD could not be determined
+- `paternal_ibd_chroms` a list of chromosome-level paternal IBD between the siblings in order from chr1-chr22, ending with chrX
+- `paternal_unknown_fraction_chroms` a list of the fraction of each chromosome where paternal IBD could not be determined in order from chr1-chr22, ending with chrX
+- `matxpat_ibd` the genome-wide autosomal IBD2 (simultaneous maternal and paternal IBD) between the siblings
+- `matxpat_unknown_fraction` the fraction of the autosomal genome where IBD2 could not be determined
+- `matxpat_ibd_chroms` a list of chromosome-level IBD2 between the siblings in order from chr1-chr22, ending with chrX
+- `matxpat_unknown_fraction_chroms` a list of the fraction of each chromosome where IBD2 could not be determined in order from chr1-chr22, ending with chrX  
+- `is_identical` siblings are marked as identical if both maternal and paternal genome-wide autosomal IBD is greater than 0.8.
+- `is_full_sibling` siblings are marked as full siblings if both maternal and paternal genome-wide autosomal IBD is greater than 0.2; if this flag is false there is likely an error in the .ped file
+```
+
 
 ---------------------------------------------------------------------------------------------------------
 
