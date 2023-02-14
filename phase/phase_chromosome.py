@@ -20,7 +20,7 @@ genome_size = 3000000000
 
 parser = argparse.ArgumentParser(description='Phase chromosome.')
 parser.add_argument('ped_file', type=str, help='Ped file of family structure.')
-parser.add_argument('data_dir', type=str, help='Directory of genotype data in .npy format.')
+parser.add_argument('data_dir', type=str, help='Directory of genotype data for the cohort in .npy format.')
 parser.add_argument('sequencing_error_rates', type=str, nargs='+', help='Sequencing error rates for model.')
 parser.add_argument('--detect_inherited_deletions', action='store_true', default=False, help='Detect inherited deletions while phasing.')
 parser.add_argument('--detect_upd', action='store_true', default=False, help='Detect uniparental disomy while phasing. We detect only heterodisomy because isodisomy is essentially indistinguishable from a denovo deletion.')
@@ -29,7 +29,6 @@ parser.add_argument('--family_size', type=int, default=None, help='Size of famil
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
 parser.add_argument('--batch_size', type=int, default=None, help='Restrict number of families to batch_size.')
 parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of families. Will use families[(batch_num*batch_size):((batch_num+1)*batch_size)]')
-parser.add_argument('--no_overwrite', action='store_true', default=False, help='No overwriting files if they already exist.')
 parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
 parser.add_argument('--no_restrictions_X', action='store_true', default=False, help='Remove restriction on paternal recombination in the non-PAR X.')
@@ -45,7 +44,7 @@ args = parser.parse_args()
 if args.chrom is not None:
 	chroms = [args.chrom]
 else:
-	chroms = [str(x) for x in range(1, 23)] + ['X']
+	chroms = [str(x) for x in range(1, 23)]
 
 if args.detect_inherited_deletions:
 	print('Detecting inherited deletions while phasing ...')
@@ -156,8 +155,6 @@ print('Families of interest, limited to batch', len(families))
 
 # phase each family
 for family in families:
-	t0 = time.time()
-
 	try:
 		print('family', family.id)
 
@@ -210,20 +207,20 @@ for family in families:
 		already_phased_chroms = set([line.split('\t', maxsplit=1)[0][3:] for line in existing_phase_data])
 		print('already phased', sorted(already_phased_chroms))
 
-		with open('%s/inheritance_patterns/%s.phased.bed' % (out_dir, family), 'a' if args.no_overwrite else 'w+') as statef:
-			if args.no_overwrite:
-				print('no overwrite')
-				if needs_header:
-					statef.write(header)
-			else:
-				print('overwriting', list(set(chroms) & already_phased_chroms))
-				statef.write(header)
-				for line in existing_phase_data:
-					if line.split('\t', maxsplit=1)[0][3:] not in chroms:
-						statef.write(line)
-				already_phased_chroms = already_phased_chroms - set(chroms)
+		with open('%s/inheritance_patterns/%s.phased.bed' % (out_dir, family), 'w+') as statef:
+			print('overwriting', list(set(chroms) & already_phased_chroms))
+			statef.write(header)
+			for line in existing_phase_data:
+				chrom_entry = line.split('\t', maxsplit=1)[0]
+				if chrom_entry.startswith('#'):
+					chrom = chrom_entry[4:]
+				else:
+					chrom = chrom_entry[3:]
+				if chrom not in chroms:
+					statef.write(line)
 
-			for chrom in [x for x in chroms if x not in already_phased_chroms]:
+			for chrom in chroms:
+				t0 = time.time()
 				print('chrom', chrom)
 
 				# pull genotype data for this family
@@ -253,9 +250,9 @@ for family in families:
 
 				# write to file
 				write_to_file(statef, chrom, family, final_states, family_snp_positions, cost)
-
+				statef.write('#chr%s completed in %0.2f sec\n' % (chrom, time.time()-t0))
 				statef.flush()
-			statef.write('# Completed in %0.2f sec' % (time.time()-t0))
+			
 	except Exception: 
 		traceback.print_exc()
 

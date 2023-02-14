@@ -430,6 +430,56 @@ def write_to_file(phasef, chrom, family, final_states, family_snp_positions, cos
 					'\t'.join(map(str, final_states[:, s_start]))))
 	print('Write to file complete')
 
+class PhasedSegment():
+	def __init__(self, chrom, start_pos, end_pos, deletions, phase, loss_region):
+		self.chrom = chrom
+		self.start_pos = start_pos
+		self.end_pos = end_pos
+		self.deletions = deletions
+		self.mat_phase = [phase[i] for i in range(0, len(phase), 2)]
+		self.pat_phase = [phase[i] for i in range(1, len(phase), 2)]
+		self.loss_region = loss_region
+
+	def is_mat_upd(self, index=None):
+		if index is None:
+			return [self.is_mat_upd(i) for i in range(len(self.mat_phase))]
+		else:
+			return self.mat_phase[index]==2 or self.mat_phase[index]==3
+
+	def is_pat_upd(self, index=None):
+		if index is None:
+			return [self.is_pat_upd(i) for i in range(len(self.pat_phase))]
+		else:
+			return self.pat_phase[index]==0 or self.pat_phase[index]==1
+
+	def is_hts(self):
+		if self.chrom == 'X':
+			return self.loss_region==1 or self.loss_region==3
+		else:
+			return self.loss_region==1
+
+	def length(self):
+		return self.end_pos-self.start_pos
+
+def parse_phase_file(phase_file, chroms=None):
+	with open(phase_file, 'r')  as f:
+		next(f) # skip description
+		family_members = next(f)[1:].strip().split(',')
+		header = next(f).strip().split('\t')
+		num_dels = len([x for x in header[3:] if x.endswith('_del')])
+		is_standard_family_structure = num_dels == 4
+
+		yield family_members, is_standard_family_structure
+
+		for line in f:
+			if chroms is None or line.split('\t', maxsplit=1)[0][3:] in chroms:
+				pieces = line.strip().split('\t')
+				chrom = pieces[0][3:]
+				start_pos = int(pieces[1])
+				end_pos = int(pieces[2])
+				state_space = [int(x) for x in pieces[3:]]
+				yield PhasedSegment(chrom, start_pos, end_pos, state_space[:num_dels], state_space[num_dels:-1], state_space[-1])
+
 
 def pull_states_from_file(phasef, chrom, family_snp_positions):
 	coords = []
