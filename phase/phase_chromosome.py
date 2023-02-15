@@ -5,7 +5,6 @@ import traceback
 import os
 import numpy as np
 import time
-from numpyencoder import NumpyEncoder
 
 from inheritance_states import InheritanceStates
 from input_output import write_to_file, pull_families, pull_families_missing_parent, pull_gen_data_for_individuals
@@ -240,6 +239,6 @@ for family in families:
 	finally:
 		print(fam_info)
 		with open(info_file, 'w+') as f:
-			json.dump(fam_info, f, indent=4, cls=NumpyEncoder)
+			json.dump(fam_info, f, indent=4)
 
 	
