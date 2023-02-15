@@ -471,8 +471,9 @@ def parse_phase_file(phase_file, chroms=None):
 
 		yield family_members, is_standard_family_structure
 
+		runtimes = {}
 		for line in f:
-			if chroms is None or line.split('\t', maxsplit=1)[0][3:] in chroms:
+			if chroms is None or line.split('\t', maxsplit=1)[0][4 if line.startswith('#') else 3:] in chroms:
 				pieces = line.strip().split('\t')
 				chrom = pieces[0][3:]
 				start_pos = int(pieces[1])

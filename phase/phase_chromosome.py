@@ -5,6 +5,7 @@ import traceback
 import os
 import numpy as np
 import time
+from numpyencoder import NumpyEncoder
 
 from inheritance_states import InheritanceStates
 from input_output import write_to_file, pull_families, pull_families_missing_parent, pull_gen_data_for_individuals
@@ -29,7 +30,7 @@ parser.add_argument('--family_size', type=int, default=None, help='Size of famil
 parser.add_argument('--family', type=str, default=None, help='Phase only this family.')
 parser.add_argument('--batch_size', type=int, default=None, help='Restrict number of families to batch_size.')
 parser.add_argument('--batch_num', type=int, default=0, help='To be used along with batch_size to restrict number of families. Will use families[(batch_num*batch_size):((batch_num+1)*batch_size)]')
-parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order, set this flag.')
+parser.add_argument('--retain_order', action='store_true', default=False, help='Default is to randomize order of offspring. If you want to retain order from .ped file, set this flag.')
 parser.add_argument('--missing_parent', action='store_true', default=False, help='Phase families that are missing a parent.')
 parser.add_argument('--no_restrictions_X', action='store_true', default=False, help='Remove restriction on paternal recombination in the non-PAR X.')
 parser.add_argument('--inherited_deletion_entry_exit_cost', type=float, default=-np.log10(2*100)+np.log10(genome_size), help='-log10(P[inherited_deletion_entry_exit])')
@@ -61,7 +62,7 @@ print('assembly', assembly)
 if args.phase_name is None:
 	out_dir = '%s/phase' % args.data_dir
 else:
-	out_dir = '%s/%s_phase' % (args.data_dir, args.phase_name)
+	out_dir = '%s/phase_%s' % (args.data_dir, args.phase_name)
 
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
@@ -70,7 +71,7 @@ if not os.path.exists('%s/inheritance_patterns' % out_dir):
     os.makedirs('%s/inheritance_patterns' % out_dir)
 
 with open('%s/info.json' % out_dir, 'w+') as f:
-	json.dump(vars(args), f)
+	json.dump(vars(args), f, indent=4)
 
 # ---------------- set up sequencing error parameters ---------------------
 
@@ -180,44 +181,23 @@ for family in families:
 		# create loss function for this family
 		loss = LazyLoss(inheritance_states, family, params, len(args.sequencing_error_rates))
 
-		# start by pulling header, or writing one if the file doesn't exist
-		existing_phase_data = []
-		needs_header = False
-		try:
-			with open('%s/inheritance_patterns/%s.phased.bed' % (out_dir, family), 'r') as f:
-				header = next(f) # skip description (mom, dad, children)
-				inds = next(f)
-				header += inds
-				individuals = inds.strip()[1:].split(',')
-				header += next(f)
-				family.set_individual_order(individuals)
-				existing_phase_data = [x for x in f] 
+		# start by pulling header in order to put family members in the right order
+		# or write a header if the file doesn't exist or the existing header is incomplete
+		phase_file = '%s/inheritance_patterns/%s.phased.bed' % (out_dir, family)
+		info_file = '%s/inheritance_patterns/%s.info.json' % (out_dir, family)
 
-		except (FileNotFoundError, StopIteration):
-			header = '#mom, dad, children\n' + \
-				'#' + (','.join(family.individuals)) + '\n' + \
-				'#' + ('\t'.join(['chrom', 'chrom_start', 'chrom_end'] + \
+		with open(phase_file, 'w+') as f:
+			#write header
+			header = '#' + ('\t'.join(['chrom', 'chrom_start', 'chrom_end'] + \
 				['m%d_del' % i for i in range(1, 2*len(family.mat_ancestors)+1)] + \
 				['p%d_del' % i for i in range(1, 2*len(family.pat_ancestors)+1)] + \
 				sum([['%s_mat' % x, '%s_pat' % x] for x in family.individuals], []) + \
 				['loss_region'])) + '\n'
-			needs_header = True
+			f.write(header)
 
-		# to avoid overwriting previous data, check which chromosomes have already been phased
-		already_phased_chroms = set([line.split('\t', maxsplit=1)[0][3:] for line in existing_phase_data])
-		print('already phased', sorted(already_phased_chroms))
-
-		with open('%s/inheritance_patterns/%s.phased.bed' % (out_dir, family), 'w+') as statef:
-			print('overwriting', list(set(chroms) & already_phased_chroms))
-			statef.write(header)
-			for line in existing_phase_data:
-				chrom_entry = line.split('\t', maxsplit=1)[0]
-				if chrom_entry.startswith('#'):
-					chrom = chrom_entry[4:]
-				else:
-					chrom = chrom_entry[3:]
-				if chrom not in chroms:
-					statef.write(line)
+			fam_info = {
+				'individuals': family.individuals
+			}
 
 			for chrom in chroms:
 				t0 = time.time()
@@ -225,6 +205,7 @@ for family in families:
 
 				# pull genotype data for this family
 				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, assembly, chrom, family.individuals)
+				print('famgen', family_genotypes.shape)
 
 				# update loss cache
 				loss.set_cache(family_genotypes)
@@ -246,14 +227,19 @@ for family in families:
 				#np.save('%s/%s.chr.%s.genomic_intervals' % (out_dir, family, chrom), family_snp_positions)
 				#np.save('%s/%s.chr.%s.ancestral_variants' % (out_dir, family, chrom), ancestral_variants)
 				#np.save('%s/%s.chr.%s.family_genotypes' % (out_dir, family, chrom), family_genotypes)
-				
 
 				# write to file
-				write_to_file(statef, chrom, family, final_states, family_snp_positions, cost)
-				statef.write('#chr%s completed in %0.2f sec\n' % (chrom, time.time()-t0))
-				statef.flush()
+				write_to_file(f, chrom, family, final_states, family_snp_positions, cost)
+				f.flush()
+
+				fam_info['chr%s_runtime_sec' % chrom] = time.time()-t0
 			
 	except Exception: 
+		fam_info['Error'] = 'Error phasing chr%s' % chrom
 		traceback.print_exc()
+	finally:
+		print(fam_info)
+		with open(info_file, 'w+') as f:
+			json.dump(fam_info, f, indent=4, cls=NumpyEncoder)
 
 	

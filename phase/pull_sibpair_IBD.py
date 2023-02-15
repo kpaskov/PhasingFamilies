@@ -171,8 +171,9 @@ for j, chrom in enumerate([str(x) for x in range(1, 23)] + ['X']):
 			sibpair['matxpat_unknown_fraction_chroms'][j] = both_unknown[i]/(both_match[i]+both_mismatch[i]+both_unknown[i])
 
 for sibpair in sibpairs:
-	sibpair['is_identical'] = (sibpair.get('maternal_ibd', 0) > 0.8) and (sibpair.get('paternal_ibd', 0) > 0.8)
-	sibpair['is_full_sibling'] = (sibpair.get('maternal_ibd', 0) > 0.2) and (sibpair.get('paternal_ibd', 0) > 0.2)
+	mat_ibd, pat_ibd = sibpair.get('maternal_ibd', None), sibpair.get('paternal_ibd', None)
+	sibpair['is_identical'] = None if (mat_ibd is None or pat_ibd is None) else (mat_ibd > 0.8) and (pat_ibd > 0.8)
+	sibpair['is_full_sibling'] = None if (mat_ibd is None or pat_ibd is None) else (mat_ibd > 0.2) and (pat_ibd > 0.2)
 
 with open('%s/phase/sibpairs.json' % args.data_dir, 'w+') as f:
 	json.dump(sibpairs, f, indent=4, cls=NumpyEncoder)
