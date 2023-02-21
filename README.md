@@ -108,7 +108,6 @@ This script produces `[data_dir]/phase/sibpairs.json` (or `[data_dir]/phase_[nam
 - `matxpat_unknown_fraction_chroms` a list of the fraction of each chromosome where IBD2 could not be determined in order from chr1-chr22, ending with chrX  
 - `is_identical` siblings are marked as identical if both maternal and paternal genome-wide autosomal IBD is greater than 0.8.
 - `is_ibd_outlier` siblings are marked as ibd outliers using gaussian kernel density outlier detection
-```
 
 The `qc/Visualize-Sibpair-IBD.ipynb` jupyter notebook can be used to visualize IBD in the dataset.
 
