@@ -8,127 +8,98 @@ import os
 import traceback
 from numpyencoder import NumpyEncoder
 import traceback
+from input_output import PhaseData
+from qc import OutlierDetector
 
 parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
-parser.add_argument('dataset_name', type=str, help='Name of dataset.')
-parser.add_argument('--hard_to_sequence', nargs='*', default=[1], type=int, help='Mark hard to sequence loss regions.')
-parser.add_argument('--chrom', help='Chrom to use.')
+parser.add_argument('data_dir', type=str, help='Directory of genotype data for the cohort in .npy format.')
+parser.add_argument('--phase_name', type=str, default=None, help='Name for the phase attempt.')
+parser.add_argument('--hts_loss_regions', type=str, nargs='+', default = [1], 
+	help='These loss regions represent hard to sequence regions of the genome so we assume that we cant detect crossovers.')
 
 args = parser.parse_args()
 
-if args.chrom is None:
-	chroms_of_interest = [str(x) for x in range(1, 23)] + ['X']
-else:
-	chroms_of_interest = ['X']
-
-
-#pulls phase data from a file
-def pull_phase(filename):
-	with open(filename, 'r') as f:
-		header = next(f).strip().split('\t')[1:-2] # skip header
-
-		if len([x for x in header if x.endswith('_del')]) != 4:
-			raise Exception('This is a complex family.')
-
-		individuals = [x[:-4] for x in header if x.endswith('_mat')]
-
-		if len(individuals) == 3:
-			raise Exception('This is a trio.')
-
-		states = []
-		chrs = []
-		starts = []
-		ends = []
-		for line in f:
-			pieces = line.strip().split('\t')
-			if len(pieces) != len(header)+3:
-				print('ERROR', pieces)
-			chrs.append(pieces[0][3:])
-			states.append(list(map(int, pieces[1:-2])))
-			starts.append(int(pieces[-2]))
-			ends.append(int(pieces[-1]))
-
-		mat_indices = [i for i, x in enumerate(header) if x.endswith('_mat')]
-		pat_indices = [i for i, x in enumerate(header) if x.endswith('_pat')]
-
-		states = np.array(states).T
-		starts = np.array(starts)
-		ends = np.array(ends)
-
-		if states.shape == (0,):
-			raise Exception('No data')
-
-		# if this is a hard to sequences region, we don't know the exact location of crossovers
-		for x in args.hard_to_sequence:
-			states[:-1, (states[-1, :]==x)] = -1
-
-		# if there's UPD, it's not a crossover
-		for mat_index, pat_index in zip(mat_indices[2:], pat_indices[2:]):
-			states[:, states[mat_index, :]==2] = -1
-			states[:, states[mat_index, :]==3] = -1
-			states[:, states[pat_index, :]==0] = -1
-			states[:, states[pat_index, :]==1] = -1
-
-	return states, chrs, starts, ends, individuals, mat_indices, pat_indices
-		
-
-# extracts deletions from within recombination interval
-def extract_deletions(states, starts, ends, is_mat):
-	#print(states)
-	if is_mat:
-		del_indices = [0, 1]
-	else:
-		del_indices = [2, 3]
-
-	return np.any(states[del_indices, :-1]==0)
-
+phase_data = PhaseData(args.data_dir, args.phase_name)
 
 # extracts all recombination points from phase
-Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'family_size', 'mom', 'dad', 
-	'is_left_match', 'is_right_match', 'is_other_parent_match', 'is_other_parent_mismatch', 'is_hts'])
-def pull_recombinations(family_id, states, chroms, starts, ends, individuals,  indices, other_indices, is_mat):
-    match_state = 0 if is_mat else 2
-    other_match_state = 2 if is_mat else 0
+Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_hts'])
 
-    def make_recombination(chrom, start_index, end_index, individual, index, other_index):
-    	return Recombination(family_id, chrom, int(ends[start_index])-1, int(starts[end_index]),
-                                    (individual, individuals[2]), is_mat, not is_mat, 
-                                    len(individuals), individuals[0], individuals[1],
-                                    states[index, start_index]==match_state, 
-                                    states[index, end_index]==match_state,
-                                    np.all(states[other_index, start_index:end_index+1]==other_match_state),
-                                    np.all(states[other_index, start_index:end_index+1]!=-1) and np.all(states[other_index, start_index:end_index+1]!=other_match_state),
-                                    np.any(states[-1, start_index:end_index+1]==1))
 
-    recombinations = []
-    for chrom in chroms_of_interest:
-        # block out 
-        is_chrom = np.array([x==chrom for x in chroms])
-        for individual, index, other_index in zip(individuals, indices, other_indices):
-            change_indices = np.where(is_chrom[:-1] & is_chrom[1:] & (states[index, :-1] != states[index, 1:]))[0]+1
+def pull_phase_data_into_arrays(family):
+	# pull phase data
+	mat_phases, pat_phases = [], []
+	loss_regions = []
+	is_mat_upds, is_pat_upds = [], []
+	chroms, starts, ends = [], [], []
+	for segment in phase_data.parse_phase_file(family):
+		chroms.append(segment.chrom)
+		mat_phases.append(segment.mat_phase)
+		pat_phases.append(segment.pat_phase)
+		starts.append(segment.start_pos)
+		ends.append(segment.end_pos)
+		loss_regions.append(segment.loss_region)
+		is_mat_upds.append(np.any(segment.is_mat_upd()))
+		is_pat_upds.append(np.any(segment.is_pat_upd()))
 
-            if change_indices.shape[0]>0:
-                current_index = change_indices[0]
-                for next_index in change_indices[1:]:
-                    assert states[index, current_index-1] != states[index, current_index]
-                    assert states[index, current_index] != states[index, next_index]
+	mat_phases = np.array(mat_phases).T
+	pat_phases = np.array(pat_phases).T
+	loss_regions = np.array(loss_regions)
+	is_mat_upds = np.array(np.any(is_mat_upds))
+	is_pat_upds = np.array(np.any(is_pat_upds))
+	starts = np.array(starts)
+	ends = np.array(ends)
 
-                    if states[index, current_index-1] != -1 and states[index, current_index] != -1:
-                        # we know exactly where the recombination happened
-                        recombinations.append(make_recombination(chrom, current_index-1, current_index, individual, index, other_index))
+	# if this is a hard to sequences region, we don't know the exact location of crossovers
+	is_htss = np.zeros(loss_regions.shape, dtype=bool)
+	for lr in args.hts_loss_regions:
+		mat_phases[:, (loss_regions==lr)] = -1
+		pat_phases[:, (loss_regions==lr)] = -1
+		is_htss[(loss_regions==lr)] = True
 
-                    elif states[index, current_index-1] != -1 and states[index, current_index] == -1 and states[index, current_index-1] != states[index, next_index]:
-                        # there's a region where the recombination must have occured
-                        recombinations.append(make_recombination(chrom, current_index-1, next_index, individual, index, other_index))
-                    current_index = next_index
-                
-                if states[index, current_index-1] != -1 and states[index, current_index] != -1:
-                    # we know exactly where the recombination happened
-                    recombinations.append(make_recombination(chrom, current_index-1, current_index, individual, index, other_index))
-    return recombinations
+	# if there's UPD, it's not a crossover
+	mat_phases[:, is_mat_upds] = -1
+	pat_phases[:, is_pat_upds] = -1
+	print(np.sum(mat_phases!=-1))
 
-Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'is_hts', 'recombinations', 'family_size', 'mom', 'dad'])
-GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'is_hts', 'recombinations', 'family_size', 'mom', 'dad'])
+	return chroms, starts, ends, mat_phases, pat_phases, is_htss
+
+def pull_recombinations(family_id, phases, is_htss, chroms, starts, ends, individuals, is_mat):
+	recombinations = []
+	for chrom in phase_data.chroms:
+		# block out 
+		is_chrom = np.array([x==chrom for x in chroms])
+		for index, individual in enumerate(individuals):
+			change_indices = np.where(is_chrom[:-1] & is_chrom[1:] & (phases[index, :-1] != phases[index, 1:]))[0]+1
+
+			if change_indices.shape[0]>0:
+				current_index = change_indices[0]
+				for next_index in change_indices[1:]:
+					if phases[index, current_index-1] != -1 and phases[index, current_index] != -1:
+						# we know exactly where the recombination happened
+						recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]), 
+							(individual, individuals[2]), 
+							is_mat, not is_mat,
+							is_htss[current_index]
+							))
+
+					elif phases[index, current_index-1] != -1 and phases[index, current_index] == -1 and phases[index, current_index-1] != phases[index, next_index]:
+						# there's a region where the recombination must have occured
+						recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[next_index]), 
+							(individual, individuals[2]), 
+							is_mat, not is_mat,
+							np.any(is_htss[current_index:next_index])))
+					current_index = next_index
+
+				if phases[index, current_index-1] != -1 and phases[index, current_index] != -1:
+					# we know exactly where the recombination happened
+					recombinations.append(Recombination(family_id, chrom, int(ends[current_index-1])-1, int(starts[current_index]), 
+						(individual, individuals[2]), 
+						is_mat, not is_mat,
+						is_htss[current_index]))
+	return recombinations
+
+Crossover = namedtuple('Crossover', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'is_hts', 'recombinations'])
+GeneConversion = namedtuple('GeneConversion', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_complex', 'is_hts', 'recombinations'])
 
 def match_recombinations(recombinations, chrom, family_id, child, is_mat):
     cutoff = 161332 if is_mat else 154265 # pulled from spark 0.01 quantile
@@ -149,86 +120,105 @@ def match_recombinations(recombinations, chrom, family_id, child, is_mat):
                                                        is_mat, not is_mat, 
                                                        len(r_group)>2, # is_complex
                                                        np.any([r.is_hts for r in r_group]), # is_hts
-                                                       [r._asdict() for r in r_group], r_group[0].family_size,
-                                                       r_group[0].mom, r_group[0].dad))
+                                                       [r._asdict() for r in r_group]))
             else:
                 crossovers.append(Crossover(family_id, chrom,
                                            r_group[0].start_pos, r_group[-1].end_pos, child,
                                            is_mat, not is_mat, 
                                            len(r_group)>1, # is_complex
                                            np.any([r.is_hts for r in r_group]), # is_hts
-                                           [r._asdict() for r in r_group], r_group[0].family_size,
-                                           r_group[0].mom, r_group[0].dad))
+                                           [r._asdict() for r in r_group]))
                     
     return gene_conversions, crossovers
-
-try:
-	with open('%s/sibpairs.json' % args.dataset_name, 'r') as f:
-		sibpairs = json.load(f)
-except:
-	try:
-		with open('%s/similarity.txt' % args.dataset_name, 'r') as f:
-			sibpairs = []
-			next(f) # skip header
-			for line in f:
-				sibpairs.append({'phase_dir': args.dataset_name, 'family': line.split('\t', maxsplit=1)[0]})
-	except:
-		sibpairs = []
-		for file in os.listdir(args.dataset_name):
-			if file.endswith('.phased.txt'):
-				sibpairs.append({'phase_dir': args.dataset_name, 'family': file.split('.')[0]})
 
 all_recombinations = []
 all_crossovers = []
 all_gene_conversions = []
+
+sibpairs = phase_data.get_sibpairs()
 for sibpair in sibpairs:
-	family_key = sibpair['family']
-	print(family_key)
-	states, chroms, starts, ends, individuals, mat_indices, pat_indices = pull_phase('%s/%s.phased.txt' % (sibpair['phase_dir'], family_key))
-	
-	missing_chroms = set(chroms_of_interest) - set(np.unique(chroms))
-	if len(missing_chroms)>0:
-		#raise Exception('missing %s' % str(missing_chroms), family_key)
-		print('missing %s' % str(missing_chroms), family_key)
+	family = sibpair['family']
+	print(family)
 
-	mult = ends-starts
-	num_children = len(individuals)-2
+	individuals = phase_data.get_phase_info(family)['individuals']
+	if phase_data.is_standard_family(family) and sibpair['is_fully_phased']:
+		chroms, starts, ends, mat_phases, pat_phases, is_htss = pull_phase_data_into_arrays(family)
 
-	# start by pulling all recombinations
-	mat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, mat_indices, pat_indices, True)
-	pat_recombinations = pull_recombinations(family_key, states, chroms, starts, ends, individuals, pat_indices, mat_indices, False)
-	recombinations = mat_recombinations + pat_recombinations
+		# pull recombinations
+		mat_recombinations = pull_recombinations(family, mat_phases, is_htss, chroms, starts, ends, individuals, True)
+		pat_recombinations = pull_recombinations(family, pat_phases, is_htss, chroms, starts, ends, individuals, False)
+		recombinations = mat_recombinations + pat_recombinations
 
-	# now identify crossovers and gene conversions
-	gene_conversions, crossovers = [], []
-	children = set([x.child for x in recombinations])
-	for chrom in chroms_of_interest:
-		for child in children:
-			gc, co = match_recombinations(recombinations, chrom, family_key, child, True)
-			gene_conversions.extend(gc)
-			crossovers.extend(co)
+		# identify crossovers and gene conversions
+		gene_conversions, crossovers = [], []
+		children = set([x.child for x in recombinations])
+		for chrom in phase_data.chroms:
+			for child in children:
+				gc, co = match_recombinations(recombinations, chrom, family, child, True)
+				gene_conversions.extend(gc)
+				crossovers.extend(co)
 
-			gc, co = match_recombinations(recombinations, chrom, family_key, child, False)
-			gene_conversions.extend(gc)
-			crossovers.extend(co)
+				gc, co = match_recombinations(recombinations, chrom, family, child, False)
+				gene_conversions.extend(gc)
+				crossovers.extend(co)
 
-	print('gc', len(gene_conversions), 'co', len(crossovers))
+		print('gc', len(gene_conversions), 'co', len(crossovers))
 
-	gc = len(gene_conversions)/num_children
-	cr = len(crossovers)/num_children
-	print('avg gene conversion', gc, 'avg crossover', cr)
+		num_children = len(individuals)-2
+		gc = len(gene_conversions)/num_children
+		cr = len(crossovers)/num_children
+		print('avg gene conversion', gc, 'avg crossover', cr)
 
-	all_recombinations.extend(recombinations)
-	all_crossovers.extend(crossovers)
-	all_gene_conversions.extend(gene_conversions)
+		all_recombinations.extend(recombinations)
+		all_crossovers.extend(crossovers)
+		all_gene_conversions.extend(gene_conversions)
 
-with open('%s/recombinations.json' % args.dataset_name, 'w+') as f:
-	json.dump([c._asdict() for c in all_recombinations], f, indent=4, cls=NumpyEncoder)	
 
-with open('%s/crossovers.json' % args.dataset_name, 'w+') as f:
+#with open('%s/recombinations.json' % phase_data.phase_dir, 'w+') as f:
+#	json.dump([c._asdict() for c in all_recombinations], f, indent=4, cls=NumpyEncoder)	
+
+with open('%s/crossovers.json' % phase_data.phase_dir, 'w+') as f:
 	json.dump([c._asdict() for c in all_crossovers], f, indent=4, cls=NumpyEncoder)
 
-with open('%s/gene_conversions.json' % args.dataset_name, 'w+') as f:
+with open('%s/gene_conversions.json' % phase_data.phase_dir, 'w+') as f:
 	json.dump([gc._asdict() for gc in all_gene_conversions], f, indent=4, cls=NumpyEncoder)
+
+# Now identify outliers
+sibpair_to_num_mat_crossovers = defaultdict(int)
+sibpair_to_num_pat_crossovers = defaultdict(int)
+
+sibpair_to_index = dict([((x['family'], x['sibling1'], x['sibling2']), i) for i, x in enumerate(sibpairs)])
+mat_crossovers, pat_crossovers = np.zeros((len(sibpairs),), dtype=int), np.zeros((len(sibpairs),), dtype=int)
+for co in all_crossovers:
+	key = (co.family, co.child[0], co.child[1])
+	if key not in sibpair_to_index:
+		key = (co.family, co.child[1], co.child[0])
+	if co.is_mat:
+		mat_crossovers[sibpair_to_index[key]] += 1
+	if co.is_pat:
+		pat_crossovers[sibpair_to_index[key]] += 1
+
+is_fully_phased = np.array([x['is_fully_phased'] for x in sibpairs])
+is_ibd_outlier = np.array([x['is_ibd_outlier'] if x['is_ibd_outlier'] is not None else False for x in sibpairs])
+
+is_way_out = (mat_crossovers > 3*np.median(mat_crossovers)) | (pat_crossovers > 3*np.median(pat_crossovers))
+detector = OutlierDetector(mat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], pat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], 
+	10 if np.median(mat_crossovers)>10 else 1)
+is_outlier = detector.predict_outliers(mat_crossovers, pat_crossovers)
+
+for i, sibpair in enumerate(sibpairs):
+	if sibpair['is_fully_phased']:
+		sibpair['maternal_crossovers'] = mat_crossovers[i]
+		sibpair['paternal_crossovers'] = pat_crossovers[i]
+		sibpair['is_crossover_outlier'] = is_outlier[i]
+	else:
+		sibpair['maternal_crossovers'] = None
+		sibpair['paternal_crossovers'] = None
+		sibpair['is_crossover_outlier'] = None
+
+print('outliers marked', np.sum(is_outlier))
+
+with open('%s/sibpairs.json' % phase_data.phase_dir, 'w+') as f:
+	json.dump(sibpairs, f, indent=4, cls=NumpyEncoder)
 
 

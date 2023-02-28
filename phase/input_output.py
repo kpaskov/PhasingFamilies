@@ -442,13 +442,13 @@ class PhasedSegment():
 
 	def is_mat_upd(self, index=None):
 		if index is None:
-			return [self.is_mat_upd(i) for i in range(len(self.mat_phase))]
+			return [None, None] + [self.is_mat_upd(i) for i in range(2, len(self.mat_phase))]
 		else:
 			return self.mat_phase[index]==2 or self.mat_phase[index]==3
 
 	def is_pat_upd(self, index=None):
 		if index is None:
-			return [self.is_pat_upd(i) for i in range(len(self.pat_phase))]
+			return [None, None] + [self.is_pat_upd(i) for i in range(2, len(self.pat_phase))]
 		else:
 			return self.pat_phase[index]==0 or self.pat_phase[index]==1
 
@@ -461,25 +461,83 @@ class PhasedSegment():
 	def length(self):
 		return self.end_pos-self.start_pos
 
-def parse_phase_file(phase_file, chroms=None):
-	with open(phase_file, 'r')  as f:
-		next(f) # skip description
-		family_members = next(f)[1:].strip().split(',')
-		header = next(f).strip().split('\t')
-		num_dels = len([x for x in header[3:] if x.endswith('_del')])
-		is_standard_family_structure = num_dels == 4
+class PhaseData():
+	def __init__(self, data_dir, phase_name=None):
+		if phase_name is None:
+			self.phase_dir = '%s/phase' % data_dir
+		else:
+			self.phase_dir = '%s/phase_%s' % (data_dir, phase_name)
 
-		yield family_members, is_standard_family_structure
+		with open('%s/info.json' % self.phase_dir, 'r') as f:
+			info = json.load(f)
+		if info['chrom'] is None:
+			self.chroms = [str(x) for x in range(1, 23)]
+		else:
+			self.chroms = [info['chrom']]
 
-		runtimes = {}
-		for line in f:
-			if chroms is None or line.split('\t', maxsplit=1)[0][4 if line.startswith('#') else 3:] in chroms:
-				pieces = line.strip().split('\t')
-				chrom = pieces[0][3:]
-				start_pos = int(pieces[1])
-				end_pos = int(pieces[2])
-				state_space = [int(x) for x in pieces[3:]]
-				yield PhasedSegment(chrom, start_pos, end_pos, state_space[:num_dels], state_space[num_dels:-1], state_space[-1])
+	def get_phased_families(self):
+		phase_files = [x[:-11] for x in listdir('%s/inheritance_patterns' % self.phase_dir) if x.endswith('.phased.bed')]
+		info_files = [x[:-10] for x in listdir('%s/inheritance_patterns' % self.phase_dir) if x.endswith('.info.json')]
+		return sorted(set(phase_files) & set(info_files))
+
+	def get_phase_info(self, family):
+		info_file = '%s/inheritance_patterns/%s.info.json' % (self.phase_dir, family)
+		with open(info_file, 'r') as f:
+			return json.load(f)
+
+	def is_standard_family(self, family):
+		with open('%s/inheritance_patterns/%s.phased.bed' % (self.phase_dir, family), 'r')  as f:
+			header = next(f).strip().split('\t')
+			num_dels = len([x for x in header[3:] if x.endswith('_del')])
+			return num_dels == 4
+
+	def parse_phase_file(self, family, chroms=None):
+		with open('%s/inheritance_patterns/%s.phased.bed' % (self.phase_dir, family), 'r')  as f:
+			header = next(f).strip().split('\t')
+			num_dels = len([x for x in header[3:] if x.endswith('_del')])
+			for line in f:
+				if chroms is None or line.split('\t', maxsplit=1)[0][3:] in chroms:
+					pieces = line.strip().split('\t')
+					chrom = pieces[0][3:]
+					start_pos = int(pieces[1])
+					end_pos = int(pieces[2])
+					state_space = [int(x) for x in pieces[3:]]
+					yield PhasedSegment(chrom, start_pos, end_pos, state_space[:num_dels], state_space[num_dels:-1], state_space[-1])
+
+	def get_sibpairs(self):
+		with open('%s/sibpairs.json' % self.phase_dir, 'r') as f:
+			return json.load(f)
+
+	def get_filtered_sibpairs(self):
+		sibpairs = self.get_sibpairs()
+		print('total sibpairs', len(sibpairs))
+		print('phase errors', len([x for x in sibpairs if not x['is_fully_phased']]))
+		print('IBD outliers', len([x for x in sibpairs if x['is_ibd_outlier']]))
+		print('crossover outliers', len([x for x in sibpairs if x['is_crossover_outlier'] and not x['is_ibd_outlier']]))
+
+		sibpairs = [x for x in sibpairs if x['is_fully_phased'] and (not x['is_ibd_outlier']) and (not x['is_crossover_outlier'])]
+		print('remaining sibpairs', len(sibpairs))
+		return sibpairs
+
+	def get_crossovers(self):
+		with open('%s/crossovers.json' % self.phase_dir, 'r') as f:
+			return json.load(f)
+
+	def get_filtered_crossovers(self, sibpair_keys=None):
+		crossovers = self.get_crossovers()
+		print('total crossovers', len(crossovers))
+
+		if sibpair_keys is None:
+			sibpairs = self.get_filtered_sibpairs()
+			sibpair_keys = set([(x['family'], x['sibling1'], x['sibling2']) for x in sibpairs])
+
+		crossovers = [x for x in crossovers if (x['family'], min(x['child']), max(x['child'])) in sibpair_keys]
+		print('remaining crossovers', len(crossovers))
+		return crossovers, sibpair_keys
+
+	def get_deletions(self):
+		with open('%s/deletions.json' % self.phase_dir, 'r') as f:
+			return json.load(f)
 
 
 def pull_states_from_file(phasef, chrom, family_snp_positions):
