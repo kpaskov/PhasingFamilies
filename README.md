@@ -129,48 +129,30 @@ The script produces `[data_dir]/phase/crossovers.json` and `[data_dir]/phase/gen
 - `start_pos` and `end_pos` the window where the event occured
 - `is_mat` and `is_pat` indicating whether the event occured during maternal or paternal meiosis
 - `is_complex` true if the event is a complex event (composed of multiple closely spaced events)
+- `is_hts` true if the event occurs in a region marked error-prone for this family
 
 The `qc/Visualize-Crossovers.ipynb` jupyter notebook can be used to visualize crossovers in the dataset.
 
+### 5. Pull inherited deletions.
+This script pulls inherited deletions for the cohort.
 
----------------------------------------------------------------------------------------------------------
+```
+python phase/pull_deletions.py [data_dir]
+```
 
-Memory
-WGS: families of size 3/4 need 8GB, families of size 5 need 16GB, families of size 6 need 64GB
-Exome: families of size 3/4/5/6/7 need 8GB
+The script has options
+- `--phase_name [name]` flag indicates that phase data from the directory `[data_dir]/phase_[name]/inheritance_patterns` will be analyzed.
 
-family batch:
+The script produces `[data_dir]/phase/deletions.json`. Each deletion has fields:
+- `family` the family ID where the deletion was detected
+- `chrom` the chrom where the deletion ocurred
+- `start_pos` and `end_pos` the window where the deletion occured
+- `is_mat` and `is_pat` indicating whether the deletion occured during maternal or paternal meiosis
+- `is_hts` true if the deletion occurs in a region marked error-prone for this family
+- `parent` the parent with the deletion
+- `trans` a list of children the deletion was transmitted to
+- `notrans` a list of children the deletion was not transmitted to
 
-for familysize in 3 4 5 6 7
-do
-   python phase/phase_chromosome.py 2 $familysize data/ancestry.ped split_gen_ancestry 37 phased_ancestry parameter_estimation/params/ancestry_params_ext.json FALSE
-done
+The `qc/Visualize-Deletions.ipynb` jupyter notebook can be used to visualize deletions in the dataset.
 
-1. phase
-
-python phase_chromosome.py
-
-2. pull sibpair similarity with jupyter notebook
-
-sibpair_similarity/Pull-Twins.ipynb
-
-3. pull recombination
-
-python phase/pull_crossovers.py phased_ssc.hg38_phase1-1_upd
-
-4. QC sibpairs with jupyter notebook
-
-phase/IBD.ipynb
-
-5. pull recombination
-
-python phase/pull_crossovers.py recomb_ssc.hg38_upd
-
-6. pull deletions
-
-python phase/proccess_deletions.py recomb_ssc.hg38_upd
-
-7. pull upd
-
-python phase/pull_upd.py recomb_ssc.hg38_upd
 
