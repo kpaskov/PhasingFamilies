@@ -7,7 +7,7 @@ with open(fam_file, 'r') as f:
 	lines = [line for line in f]
 
 with open(ped_file, 'r') as f:
-	ind_id_to_line = dict([(line.split()[1], ' '.join(line.split())) for line in f])
+	ind_id_to_line = dict([(line.split()[1], ' '.join(line.split())+'\n') for line in f])
 
 with open(fam_file, 'w+') as f:
 	for line in lines:
