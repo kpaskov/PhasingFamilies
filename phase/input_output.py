@@ -5,6 +5,7 @@ import random
 from collections import defaultdict
 from os import listdir
 import json
+from inheritance_states import State
 
 # From GRCh37.p13 https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37.p13
 chrom_lengths37 = {
@@ -468,8 +469,7 @@ class PhaseData():
 		else:
 			self.phase_dir = '%s/phase_%s' % (data_dir, phase_name)
 
-		with open('%s/info.json' % self.phase_dir, 'r') as f:
-			info = json.load(f)
+		info = self.get_phase_info()
 		if info['chrom'] is None:
 			self.chroms = [str(x) for x in range(1, 23)]
 		else:
@@ -480,10 +480,14 @@ class PhaseData():
 		info_files = [x[:-10] for x in listdir('%s/inheritance_patterns' % self.phase_dir) if x.endswith('.info.json')]
 		return sorted(set(phase_files) & set(info_files))
 
-	def get_phase_info(self, family):
-		info_file = '%s/inheritance_patterns/%s.info.json' % (self.phase_dir, family)
-		with open(info_file, 'r') as f:
-			return json.load(f)
+	def get_phase_info(self, family=None):
+		if family is None:
+			with open('%s/info.json' % self.phase_dir, 'r') as f:
+				return json.load(f)
+		else:
+			info_file = '%s/inheritance_patterns/%s.info.json' % (self.phase_dir, family)
+			with open(info_file, 'r') as f:
+				return json.load(f)
 
 	def is_standard_family(self, family):
 		with open('%s/inheritance_patterns/%s.phased.bed' % (self.phase_dir, family), 'r')  as f:
