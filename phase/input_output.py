@@ -489,6 +489,11 @@ class PhaseData():
 			with open(info_file, 'r') as f:
 				return json.load(f)
 
+	def get_data_info(self):
+		data_dir = self.get_phase_info()['data_dir']
+		with open('%s/genotypes/info.json' % data_dir, 'r') as f:
+			return json.load(f)
+
 	def is_standard_family(self, family):
 		with open('%s/inheritance_patterns/%s.phased.bed' % (self.phase_dir, family), 'r')  as f:
 			header = next(f).strip().split('\t')

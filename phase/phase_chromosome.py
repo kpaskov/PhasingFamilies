@@ -21,7 +21,7 @@ genome_size = 3000000000
 parser = argparse.ArgumentParser(description='Phase chromosome.')
 parser.add_argument('ped_file', type=str, help='Ped file of family structure.')
 parser.add_argument('data_dir', type=str, help='Directory of genotype data for the cohort in .npy format.')
-parser.add_argument('sequencing_error_rates', type=str, nargs='+', help='Sequencing error rates for model.')
+parser.add_argument('sequencing_error_rates', type=str, nargs='+', help='Sequencing error rates for model. Give [count_type] parameter used in FamilySeqError.')
 parser.add_argument('--detect_inherited_deletions', action='store_true', default=False, help='Detect inherited deletions while phasing.')
 parser.add_argument('--detect_upd', action='store_true', default=False, help='Detect uniparental disomy while phasing. We detect only heterodisomy because isodisomy is essentially indistinguishable from a denovo deletion.')
 parser.add_argument('--chrom', type=str, default=None, help='Phase a single chrom.')
@@ -77,10 +77,10 @@ with open('%s/info.json' % out_dir, 'w+') as f:
 params = dict()
 
 all_params = []
-for i, param_file in enumerate(args.sequencing_error_rates):
-	with open(param_file, 'r') as f:
+for i, count_type in enumerate(args.sequencing_error_rates):
+	with open('%s/sequencing_error_rates/%s_errors.json' % (args.data_dir, count_type), 'r') as f:
 		all_params.append(json.load(f))
-		params['loss_%d' % i] = param_file
+		params['loss_%d' % i] = '%s/sequencing_error_rates/%s_errors.json' % (args.data_dir, count_type)
 
 # first pull individuals that exist in all params
 individuals = set([k for k, v in all_params[0].items() if isinstance(v, dict)])
