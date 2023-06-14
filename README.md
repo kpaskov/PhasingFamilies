@@ -70,13 +70,13 @@ The script has options
 The example below phases all autosomal chromosomes for all families of size 4 in the ssc.hg38 dataset.
 
 ```
-python phase/phase_chromosome.py ../DATA/ssc.hg38/ssc.ped ../DATA/ssc.hg38 ../DATA/ssc.hg38/sequencing_error_rates/HCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/LCR_errors.json --detect_inherited_deletions --family_size 4 
+python phase/phase_chromosome.py ../DATA/ssc.hg38/ssc.ped HCR LCR --detect_inherited_deletions --family_size 4 
  ```
  
  You can use as many sequencing error profiles as you'd like. This comes in handy when phasing the X chromosome, since the PAR and non-PAR regions have different error profiles. This is an example of phasing the X chromosome using four different error profiles.
  
  ```
- python phase/phase_chromosome.py ../DATA/ssc.hg38/ssc.ped ../DATA/ssc.hg38 ../DATA/ssc.hg38/sequencing_error_rates/X_PAR_HCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/X_PAR_LCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/X_nonPAR_HCR_errors.json ../DATA/ssc.hg38/sequencing_error_rates/X_nonPAR_LCR_errors.json --chrom X --batch_size 3 --batch_num $SLURM_ARRAY_TASK_ID --detect_inherited_deletions --family_size 4 --phase_name X
+ python phase/phase_chromosome.py ../DATA/ssc.hg38/ssc.ped ../DATA/ssc.hg38 X_PAR_HCR X_PAR_LCR X_nonPAR_HCR X_nonPAR_LCR --chrom X --batch_size 3 --batch_num $SLURM_ARRAY_TASK_ID --detect_inherited_deletions --family_size 4 --phase_name X
  ```
 
 If no `--chrom` option is given, `phase_chromosome.py` will phase all autosomal chromosomes. The X chromosome must be phased explicitly using the `--chrom` option.
