@@ -31,14 +31,14 @@ def viterbi_forward_sweep(family_genotypes, mult_factor, states, transition_matr
 	print('Forward sweep complete', time.time()-prev_time, 'sec') 
 	return v_cost#, v_path
 
-def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, transition_matrixX, loss, assembly, allow_del_start=False):
+def viterbi_forward_sweep_X(family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, transition_matrixX, loss, assembly, allow_del_start=True):
 
 	if assembly=='37':
 		par_end, par_start = 2699520, 154931044
 	elif assembly=='38':
 		par_end, par_start = 2781479, 155701383
 
-	is_par_loss_region = np.array([x._loss_region==0 or x._loss_region==2 for x in states])
+	is_par_loss_region = np.array([x._loss_region==0 or x._loss_region==1 for x in states])
 		
 	# forward sweep
 	prev_time = time.time()
@@ -131,7 +131,7 @@ def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transi
 	num_forks = 0
 
 	if allow_del_end:
-		ok_end = np.array([states.is_ok_end(x) for x in states])
+		ok_end = np.array([True for x in states])
 	else:
 		ok_end = np.array([states.is_ok_end(x) for x in states])
 
@@ -168,7 +168,7 @@ def viterbi_backward_sweep(v_cost, family_genotypes, mult_factor, states, transi
 	
 	return final_states, cost, ancestral_variants
 
-def viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, transition_matrixX, loss, assembly, allow_del_end=False):
+def viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mult_factor, states, transition_matrix, transition_matrixX, loss, assembly, allow_del_end=True):
 
 	if assembly=='37':
 		par_end, par_start = 2699520, 154931044
@@ -189,7 +189,7 @@ def viterbi_backward_sweep_X(v_cost, family_genotypes, family_snp_positions, mul
 	num_forks = 0
 
 	if allow_del_end:
-		ok_end = np.array([states.is_ok_end(x) for x in states])
+		ok_end = np.array([True for x in states])
 	else:
 		ok_end = np.array([states.is_ok_end(x) for x in states])
 

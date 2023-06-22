@@ -349,6 +349,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 					#afs.append(np.digitize(-np.log10(np.clip(af[has_data], 10**-(af_boundaries[0]+1), None)), af_boundaries))
 					collapseds.append(collapsed)
 
+
 	if len(gens)== 0:
 		return np.zeros((m, 0)), np.zeros((0, 2)), np.zeros((0,))
 
