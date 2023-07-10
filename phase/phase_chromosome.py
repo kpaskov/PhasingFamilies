@@ -93,7 +93,7 @@ obss = ['0/0', '0/1', '1/1']#, './.']
 
 def get_error_apply_lower_bound(p, gen, obs):
 	key = '-log10(P[obs=%s|true_gen=%s])' % (obs, gen)
-	if 'lower_bound[%s]' % key in p:
+	if ('lower_bound[%s]' % key in p) and (p['lower_bound[%s]' % key] is not None) and ~np.isnan(p['lower_bound[%s]' % key]):
 		return min(p[key], p['lower_bound[%s]' % key])
 	else:
 		return p[key]
