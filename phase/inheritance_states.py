@@ -68,9 +68,12 @@ class State:
 
 	def has_inh_deletion(self, index=None):
 		if index is None:
-			return np.any([x==0 for x in self._inh_deletions])
+			return self.num_inh_deletion()>0
 		else:
 			return self._inh_deletions[index]==0
+
+	def num_inh_deletion(self):
+		return np.sum([x==0 for x in self._inh_deletions])
 
 	def has_inh_duplication(self, index=None):
 		if index is None:
@@ -227,6 +230,9 @@ class InheritanceStates:
 		self._states = [x for x in self._states if len([y for y in x._maternal_phase+x._paternal_phase if y is not None and y>1])<=1]
 
 		self._states = [x for x in self._states if not (x.has_inh_deletion() and x.has_inh_duplication())]
+
+		# allow only a single deletion
+		self._states = [x for x in self._states if x.num_inh_deletion()<= 1]
 
 		self.num_states = len(self._states)
 		print('inheritance states', self.num_states)

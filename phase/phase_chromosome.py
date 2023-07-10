@@ -89,21 +89,28 @@ for p in all_params[1:]:
 
 # for each individual, extrapolate deletion costs
 gens = ['0/0', '0/1', '1/1']
-obss = ['0/0', '0/1', '1/1', './.']
+obss = ['0/0', '0/1', '1/1']#, './.']
+
+def get_error_apply_lower_bound(p, gen, obs):
+	key = '-log10(P[obs=%s|true_gen=%s])' % (obs, gen)
+	if 'lower_bound[%s]' % key in p:
+		return min(p[key], p['lower_bound[%s]' % key])
+	else:
+		return p[key]
 
 for ind in individuals:
 	params[ind] = dict()
 	for i, p in enumerate(all_params):
 		for obs in obss:
 			for gen in gens:
-				params[ind]['-log10(P[obs=%s|true_gen=%s,loss=%d])' % (obs, gen, i)] = min(p[ind]['-log10(P[obs=%s|true_gen=%s])' % (obs, gen)], p[ind]['lower_bound[-log10(P[obs=%s|true_gen=%s])]' % (obs, gen)])
-			params[ind]['-log10(P[obs=%s|true_gen=-/0,loss=%d])' % (obs, i)] = min(p[ind]['-log10(P[obs=%s|true_gen=0/0])' % obs], p[ind]['lower_bound[-log10(P[obs=%s|true_gen=0/0])]' % obs])
-			params[ind]['-log10(P[obs=%s|true_gen=-/1,loss=%d])' % (obs, i)] = min(p[ind]['-log10(P[obs=%s|true_gen=1/1])' % obs], p[ind]['lower_bound[-log10(P[obs=%s|true_gen=1/1])]' % obs])
+				params[ind]['-log10(P[obs=%s|true_gen=%s,loss=%d])' % (obs, gen, i)] = get_error_apply_lower_bound(p[ind], gen, obs)
+			params[ind]['-log10(P[obs=%s|true_gen=-/0,loss=%d])' % (obs, i)] = get_error_apply_lower_bound(p[ind], '0/0', obs)
+			params[ind]['-log10(P[obs=%s|true_gen=-/1,loss=%d])' % (obs, i)] = get_error_apply_lower_bound(p[ind], '1/1', obs)
 		
-		params[ind]['-log10(P[obs=0/0|true_gen=-/-,loss=%d])' % i] = min(p[ind]['-log10(P[obs=0/1|true_gen=1/1])'], p[ind]['lower_bound[-log10(P[obs=0/1|true_gen=1/1])]'])
-		params[ind]['-log10(P[obs=0/1|true_gen=-/-,loss=%d])' % i] = min((p[ind]['-log10(P[obs=0/0|true_gen=1/1])'] + p[ind]['-log10(P[obs=1/1|true_gen=0/0])'])/2, (p[ind]['lower_bound[-log10(P[obs=0/0|true_gen=1/1])]'] + p[ind]['lower_bound[-log10(P[obs=1/1|true_gen=0/0])]'])/2)
-		params[ind]['-log10(P[obs=1/1|true_gen=-/-,loss=%d])' % i] = min(p[ind]['-log10(P[obs=0/1|true_gen=0/0])'], p[ind]['lower_bound[-log10(P[obs=0/1|true_gen=0/0])]'])
-		params[ind]['-log10(P[obs=./.|true_gen=-/-,loss=%d])' % i] = -np.log10(1 - sum([10.0**-params[ind]['-log10(P[obs=%s|true_gen=-/-,loss=%d])' % (obs, i)]  for obs in ['0/0', '0/1', '1/1']]))
+		#params[ind]['-log10(P[obs=0/0|true_gen=-/-,loss=%d])' % i] = min(p[ind]['-log10(P[obs=0/1|true_gen=1/1])'], p[ind]['lower_bound[-log10(P[obs=0/1|true_gen=1/1])]'])
+		#params[ind]['-log10(P[obs=0/1|true_gen=-/-,loss=%d])' % i] = min((p[ind]['-log10(P[obs=0/0|true_gen=1/1])'] + p[ind]['-log10(P[obs=1/1|true_gen=0/0])'])/2, (p[ind]['lower_bound[-log10(P[obs=0/0|true_gen=1/1])]'] + p[ind]['lower_bound[-log10(P[obs=1/1|true_gen=0/0])]'])/2)
+		#params[ind]['-log10(P[obs=1/1|true_gen=-/-,loss=%d])' % i] = min(p[ind]['-log10(P[obs=0/1|true_gen=0/0])'], p[ind]['lower_bound[-log10(P[obs=0/1|true_gen=0/0])]'])
+		#params[ind]['-log10(P[obs=./.|true_gen=-/-,loss=%d])' % i] = -np.log10(1 - sum([10.0**-params[ind]['-log10(P[obs=%s|true_gen=-/-,loss=%d])' % (obs, i)]  for obs in ['0/0', '0/1', '1/1']]))
 
 
 # --------------- pull families of interest ---------------
