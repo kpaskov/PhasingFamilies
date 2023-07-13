@@ -15,7 +15,7 @@ from functools import reduce
 class LazyLoss:
 	def __init__(self, states, family, params, num_loss_regions):
 
-		obss = ['0/0', '0/1', '1/1']#, './.']
+		obss = ['0/0', '0/1', '1/1', './.']
 		preds = ['0/0', '0/1', '1/1', '-/0', '-/1']#, '-/-']#, '01/0', '01/1', '01/01']
 
 		# loss region, individual, pred, obs
@@ -37,13 +37,13 @@ class LazyLoss:
 		print('no data', [family.individuals[i] for i in np.where(self.no_data)[0]])
 		total_prob = np.sum(np.power(10, -self.emission_params[:, :, :, :-1]), axis=3)
 
-		assert np.all(np.isnan(total_prob[:, ~self.no_data, :]) | np.isclose(total_prob[:, ~self.no_data, :], 1, atol=0.001))
 
 		for j, ind in enumerate(family.individuals):
 			print(ind + '\n\t' + ('\t'.join(map(str, obss))))
 			for pred_index, pred in enumerate(preds):
 				print(str(pred) + '\t' + '\t'.join(['-'.join(['%0.4f' % self.emission_params[(k, j, pred_index, obs_index)] for k in range(num_loss_regions)]) for obs_index in range(len(obss))]))
 
+		assert np.all(np.isnan(total_prob[:, ~self.no_data, :]) | np.isclose(total_prob[:, ~self.no_data, :], 1, atol=0.001))
 		assert np.all(np.isnan(self.emission_params[:, ~self.no_data, :, :]) | (self.emission_params[:, ~self.no_data, :, :]>=0))
 
 		self.num_loss_regions = num_loss_regions

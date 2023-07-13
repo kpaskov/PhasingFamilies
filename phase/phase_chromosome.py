@@ -89,7 +89,7 @@ for p in all_params[1:]:
 
 # for each individual, extrapolate deletion costs
 gens = ['0/0', '0/1', '1/1']
-obss = ['0/0', '0/1', '1/1']#, './.']
+obss = ['0/0', '0/1', '1/1', './.']
 
 def get_error_apply_lower_bound(p, gen, obs):
 	key = '-log10(P[obs=%s|true_gen=%s])' % (obs, gen)

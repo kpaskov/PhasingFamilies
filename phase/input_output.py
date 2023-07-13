@@ -496,10 +496,13 @@ class PhaseData():
 			return json.load(f)
 
 	def is_standard_family(self, family):
-		with open('%s/inheritance_patterns/%s.phased.bed' % (self.phase_dir, family), 'r')  as f:
-			header = next(f).strip().split('\t')
-			num_dels = len([x for x in header[3:] if x.endswith('_del')])
-			return num_dels == 4
+		try:
+			with open('%s/inheritance_patterns/%s.phased.bed' % (self.phase_dir, family), 'r')  as f:
+				header = next(f).strip().split('\t')
+				num_dels = len([x for x in header[3:] if x.endswith('_del')])
+				return num_dels == 4
+		except:
+			return False
 
 	def parse_phase_file(self, family, chroms=None):
 		with open('%s/inheritance_patterns/%s.phased.bed' % (self.phase_dir, family), 'r')  as f:

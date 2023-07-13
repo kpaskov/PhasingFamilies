@@ -198,13 +198,16 @@ for co in all_crossovers:
 	if co.is_pat:
 		pat_crossovers[sibpair_to_index[key]] += 1
 
-is_fully_phased = np.array([x['is_fully_phased'] for x in sibpairs])
-is_ibd_outlier = np.array([x['is_ibd_outlier'] if x['is_ibd_outlier'] is not None else False for x in sibpairs])
+is_fully_phased = np.array([x['is_fully_phased'] for x in sibpairs], dtype=bool)
+is_ibd_outlier = np.array([x['is_ibd_outlier'] if x['is_ibd_outlier'] is not None else False for x in sibpairs], dtype=bool)
 
-is_way_out = (mat_crossovers > 3*np.median(mat_crossovers)) | (pat_crossovers > 3*np.median(pat_crossovers))
-detector = OutlierDetector(mat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], pat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], 
-	10 if np.median(mat_crossovers)>10 else 1)
-is_outlier = detector.predict_outliers(mat_crossovers, pat_crossovers)
+if len(phase_data.chroms)==22:
+	is_way_out = (mat_crossovers > 3*np.median(mat_crossovers)) | (pat_crossovers > 3*np.median(pat_crossovers))
+	detector = OutlierDetector(mat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], pat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], 
+		10 if np.median(mat_crossovers)>10 else 1)
+	is_outlier = detector.predict_outliers(mat_crossovers, pat_crossovers)
+else:
+	is_outlier = np.zeros((len(sibpairs),), dtype=bool)
 
 for i, sibpair in enumerate(sibpairs):
 	if sibpair['is_fully_phased']:

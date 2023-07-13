@@ -163,10 +163,13 @@ is_identical = np.array([x['is_identical'] if x['is_identical'] is not None else
 mat_ibd = np.array([x['maternal_ibd'] for x in sibpairs])
 pat_ibd = np.array([x['paternal_ibd'] for x in sibpairs])
 
-detector = OutlierDetector(mat_ibd[has_all_chroms & ~is_identical], pat_ibd[has_all_chroms & ~is_identical],
-	0.1)
-is_outlier = detector.predict_outliers(mat_ibd[has_all_chroms], pat_ibd[has_all_chroms])
+if len(phase_data.chroms)==22:
 
+	detector = OutlierDetector(mat_ibd[has_all_chroms & ~is_identical], pat_ibd[has_all_chroms & ~is_identical],
+		0.1)
+	is_outlier = detector.predict_outliers(mat_ibd[has_all_chroms], pat_ibd[has_all_chroms])
+else:
+	is_outlier = np.zeros((len(sibpairs),))
 for i, sibpair in enumerate([x for x, hi in zip(sibpairs, has_all_chroms) if hi]):
 	sibpair['is_ibd_outlier'] = is_outlier[i]
 print('outliers marked', np.sum(is_outlier))
