@@ -43,7 +43,7 @@ father_indices = np.array([sample_id_to_index[child_to_father[x]] for x in child
 mother_indices = np.array([sample_id_to_index[child_to_mother[x]] for x in children], dtype=int)
 
 with open('possible_denovo_ssc.txt', 'w+') as f:
-    f.write('\t'.join(['chrom', 'pos', 'child', 'AF', 'VCF']) + '\n')
+    f.write('\t'.join(['child', 'VCF']) + '\n')
     for chrom in chroms:
         gen_files = sorted([f for f in listdir('%s/genotypes' % data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
         coord_files = sorted([f for f in listdir('%s/genotypes' % data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
