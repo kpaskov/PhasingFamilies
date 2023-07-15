@@ -1,15 +1,19 @@
 from collections import namedtuple, defaultdict, Counter
 import json
 import numpy as np
-import matplotlib.pyplot as plt
 import gzip
 from os import listdir
 from scipy import sparse
 
 data_dir = '../DATA/ssc.hg38'
 ped_file = '../DATA/ssc.hg38/ssc.ped'
-chroms = ['10']
-#chroms = [str(x) for x in range(1, 23)]
+out_file = 'possible_denovo_ssc.txt'
+
+#chroms = ['10']
+#data_dir = '../DATA/ihart.ms2'
+#ped_file = '../DATA/ihart.ms2/ihart.ped'
+#out_file = 'possible_denovo_ihart.txt'
+chroms = [str(x) for x in range(1, 23)]
 
 sample_file = '%s/genotypes/samples.json' % data_dir
 # pull samples
@@ -42,7 +46,7 @@ child_indices = [sample_id_to_index[x] for x in children]
 father_indices = np.array([sample_id_to_index[child_to_father[x]] for x in children], dtype=int)
 mother_indices = np.array([sample_id_to_index[child_to_mother[x]] for x in children], dtype=int)
 
-with open('possible_denovo_ssc.txt', 'w+') as f:
+with open(out_file, 'w+') as f:
     f.write('\t'.join(['child', 'VCF']) + '\n')
     for chrom in chroms:
         gen_files = sorted([f for f in listdir('%s/genotypes' % data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
@@ -61,28 +65,29 @@ with open('possible_denovo_ssc.txt', 'w+') as f:
 
             coords = np.load('%s/genotypes/%s' % (data_dir, coord_file))
             gen = sparse.load_npz('%s/genotypes/%s' % (data_dir, gen_file))
-
-            poss = coords[:, 1]
-            is_snp = coords[:, 2]==1
-
-            #remove indels
-            is_ok = is_snp
-
-            # remove multiallelic sites
-            multi_indices = np.where(coords[1:, 1]==coords[:-1, 1])[0]
-            is_ok[multi_indices] = False
-            is_ok[multi_indices+1] = False
-
-            # remove AF > 0.01
-            is_ok[af>0.01] = False        
-
-            possible_denovo_children, possible_denovo_positions = (gen[child_indices, :]==1).nonzero()
             
-            indices = ((gen[mother_indices[possible_denovo_children], possible_denovo_positions]==0) & \
+            if coords.shape[0]>0:
+                poss = coords[:, 1]
+                is_snp = coords[:, 2]==1
+
+                #remove indels
+                is_ok = is_snp
+
+                # remove multiallelic sites
+                multi_indices = np.where(coords[1:, 1]==coords[:-1, 1])[0]
+                is_ok[multi_indices] = False
+                is_ok[multi_indices+1] = False
+
+                # remove AF > 0.01
+                is_ok[af>0.01] = False        
+
+                possible_denovo_children, possible_denovo_positions = (gen[child_indices, :]==1).nonzero()
+            
+                indices = ((gen[mother_indices[possible_denovo_children], possible_denovo_positions]==0) & \
                       (gen[father_indices[possible_denovo_children], possible_denovo_positions]==0) & \
                       is_ok[possible_denovo_positions]).A.flatten()
-            print('de novos', np.sum(indices))
+                print('de novos', np.sum(indices))
 
-            for child_index, index in zip(possible_denovo_children[indices], possible_denovo_positions[indices]):
-                f.write('%s\t%s' % (children[child_index], annotations[index]))
+                for child_index, index in zip(possible_denovo_children[indices], possible_denovo_positions[indices]):
+                    f.write('%s\t%s' % (children[child_index], annotations[index]))
 
