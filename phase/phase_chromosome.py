@@ -93,10 +93,10 @@ obss = ['0/0', '0/1', '1/1', './.']
 
 def get_error_apply_lower_bound(p, gen, obs):
 	key = '-log10(P[obs=%s|true_gen=%s])' % (obs, gen)
-	if ('lower_bound[%s]' % key in p) and (p['lower_bound[%s]' % key] is not None) and ~np.isnan(p['lower_bound[%s]' % key]):
-		return min(p[key], p['lower_bound[%s]' % key])
-	else:
-		return p[key]
+	#if ('lower_bound[%s]' % key in p) and (p['lower_bound[%s]' % key] is not None) and ~np.isnan(p['lower_bound[%s]' % key]):
+	#	return min(p[key], p['lower_bound[%s]' % key])
+	#else:
+	return p[key]
 
 for ind in individuals:
 	params[ind] = dict()
@@ -164,6 +164,7 @@ print('Families of interest, limited to batch', len(families))
 for family in families:
 	try:
 		print('family', family.id)
+		fam_info = {'individuals': family.individuals}
 
 		# create inheritance states
 		inheritance_states = InheritanceStates(family, args.detect_inherited_deletions, args.detect_inherited_deletions, args.detect_upd, len(args.sequencing_error_rates))
@@ -201,10 +202,6 @@ for family in families:
 				['loss_region'])) + '\n'
 			f.write(header)
 
-			fam_info = {
-				'individuals': family.individuals
-			}
-
 			for chrom in chroms:
 				t0 = time.time()
 				print('chrom', chrom)
@@ -241,7 +238,7 @@ for family in families:
 				fam_info['chr%s_runtime_sec' % chrom] = time.time()-t0
 			
 	except Exception: 
-		fam_info['Error'] = 'Error phasing chr%s' % chrom
+		fam_info['Error'] = 'Error phasing family %s.' % family
 		traceback.print_exc()
 	finally:
 		print(fam_info)

@@ -19,7 +19,7 @@ class LazyLoss:
 		preds = ['0/0', '0/1', '1/1', '-/0', '-/1']#, '-/-']#, '01/0', '01/1', '01/01']
 
 		# loss region, individual, pred, obs
-		self.emission_params = np.zeros((num_loss_regions, len(family), len(preds), len(obss)+1))
+		self.emission_params = np.zeros((num_loss_regions, len(family), len(preds), len(obss)))
 		self.no_data = np.zeros((len(family),), dtype=bool)
 		for k in range(num_loss_regions):
 			for pred, obs in product(preds, obss):
@@ -35,7 +35,8 @@ class LazyLoss:
 						self.no_data[j] = True
 		
 		print('no data', [family.individuals[i] for i in np.where(self.no_data)[0]])
-		total_prob = np.sum(np.power(10, -self.emission_params[:, :, :, :-1]), axis=3)
+		total_prob = np.sum(np.power(10, -self.emission_params[:, :, :, :]), axis=3)
+		print(total_prob)
 
 
 		for j, ind in enumerate(family.individuals):
