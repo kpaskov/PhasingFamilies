@@ -83,7 +83,7 @@ class TransitionMatrix:
 		#assert np.all(self.costs>0)
 
 		
-		print('transitions', self.transitions.shape)
+		print('transitions', self.transitions.shape, self.costs.shape)
 
 class TransitionMatrixX:
 	# This class represents a transition matrix from every state to every other.

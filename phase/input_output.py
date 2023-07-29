@@ -521,6 +521,14 @@ class PhaseData():
 		with open('%s/sibpairs.json' % self.phase_dir, 'r') as f:
 			return json.load(f)
 
+	def get_children(self):
+		with open('%s/children.json' % self.phase_dir, 'r') as f:
+			return json.load(f)
+
+	def get_families(self):
+		with open('%s/families.json' % self.phase_dir, 'r') as f:
+			return json.load(f)
+
 	def get_filtered_sibpairs(self):
 		sibpairs = self.get_sibpairs()
 		print('total sibpairs', len(sibpairs))

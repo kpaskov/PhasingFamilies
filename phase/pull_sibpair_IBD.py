@@ -21,6 +21,7 @@ phase_data = PhaseData(args.data_dir, args.phase_name)
 # pull sibpairs from phase files
 families = []
 sibpairs = []
+children = []
 indices = []
 
 for family in phase_data.get_phased_families():
@@ -29,15 +30,37 @@ for family in phase_data.get_phased_families():
 
 	# we don't handle nonstandard families in this script
 	if is_standard:
+
+		sibpair_chroms = set([segment.chrom for segment in phase_data.parse_phase_file(family, phase_data.chroms)])
+		has_all_chroms = len(phase_data.chroms) == len(sibpair_chroms)
+
 		for child1, child2 in combinations(inds[2:], 2):
 			families.append(family)
 			indices.append((inds.index(min(child1, child2)), inds.index(max(child1, child2))))
 			sibpairs.append({
 							'family': family,
 							'sibling1': min(child1, child2),
-							'sibling2': max(child1, child2)
+							'sibling2': max(child1, child2),
+							'is_fully_phased': has_all_chroms
 							})
+		for child in inds[2:]:
+			children.append({
+					'family': family,
+					'child': child,
+					'is_fully_phased': has_all_chroms
+				})
+
+		families.append({
+			'family': family,
+			'is_fully_phased': has_all_chroms,
+			'individuals': inds
+			})
+
+		if not has_all_chroms:
+			print(family, 'missing phased chroms %s' % str(chroms))
                     
+print('families found', len(families))
+print('children found', len(children))
 print('sibpairs found', len(sibpairs))
 
 
@@ -55,7 +78,7 @@ def load_phase_data(chroms, sibpairs):
 	both_mismatch = np.zeros((len(sibpairs),), dtype=int)
 	both_unknown = np.zeros((len(sibpairs),), dtype=int)
 
-	has_all_chroms = np.zeros((len(sibpairs),), dtype=bool)
+	has_all_chroms = np.zeros((len(sibpairs),), dtype=int)
 
 	for i, (family, sibpair, (child1_index, child2_index)) in enumerate(zip(families, sibpairs, indices)):
 		if i%100==0:
@@ -98,13 +121,9 @@ def load_phase_data(chroms, sibpairs):
 			elif mat1==mat2 and pat1==pat2:
 				both_match[i] += length
 			else:
-				both_mismatch[i] += length           
+				both_mismatch[i] += length  
 
-		has_all_chroms[i] = len(chroms) == len(sibpair_chroms)
-
-	print('\n%d sibpairs missing phased chroms %s' % (np.sum(~has_all_chroms), str(chroms)))
-	if np.sum(~has_all_chroms) != len(has_all_chroms):
-		print([sibpairs[i]['family'] for i in np.where(~has_all_chroms)[0]])
+			has_all_chroms[i] = len(chroms) == len(sibpair_chroms)      
     
     #mat_scores = mat_match/(mat_match+mat_mismatch)
     #pat_scores = pat_match/(pat_match+pat_mismatch)
@@ -126,8 +145,6 @@ pat_match, pat_mismatch, pat_unknown, \
 both_match, both_mismatch, both_unknown = load_phase_data(phase_data.chroms, sibpairs)
 
 for i, sibpair in enumerate(sibpairs):
-	sibpair['is_fully_phased'] = has_all_chroms[i]
-
 	if sibpair['is_fully_phased']:
 		sibpair['maternal_ibd'] = mat_match[i]/(mat_match[i]+mat_mismatch[i])
 		sibpair['maternal_unknown_fraction'] = mat_unknown[i]/(mat_match[i]+mat_mismatch[i]+mat_unknown[i])
@@ -163,8 +180,7 @@ is_identical = np.array([x['is_identical'] if x['is_identical'] is not None else
 mat_ibd = np.array([x['maternal_ibd'] for x in sibpairs])
 pat_ibd = np.array([x['paternal_ibd'] for x in sibpairs])
 
-if len(phase_data.chroms)==22:
-
+if len(phase_data.chroms)==22 and len(families)>5:
 	detector = OutlierDetector(mat_ibd[has_all_chroms & ~is_identical], pat_ibd[has_all_chroms & ~is_identical],
 		0.1)
 	is_outlier = detector.predict_outliers(mat_ibd[has_all_chroms], pat_ibd[has_all_chroms])
@@ -196,3 +212,8 @@ for j, chrom in enumerate([str(x) for x in range(1, 23)] + ['X']):
 with open('%s/sibpairs.json' % phase_data.phase_dir, 'w+') as f:
 	json.dump(sibpairs, f, indent=4, cls=NumpyEncoder)
 
+with open('%s/children.json' % phase_data.phase_dir, 'w+') as f:
+	json.dump(children, f, indent=4, cls=NumpyEncoder)
+
+with open('%s/families.json' % phase_data.phase_dir, 'w+') as f:
+	json.dump(families, f, indent=4, cls=NumpyEncoder)

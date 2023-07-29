@@ -14,8 +14,6 @@ from qc import OutlierDetector
 parser = argparse.ArgumentParser(description='Pull crossovers from phasing output.')
 parser.add_argument('data_dir', type=str, help='Directory of genotype data for the cohort in .npy format.')
 parser.add_argument('--phase_name', type=str, default=None, help='Name for the phase attempt.')
-parser.add_argument('--hts_loss_regions', type=str, nargs='+', default = [1], 
-	help='These loss regions represent hard to sequence regions of the genome so we assume that we cant detect crossovers.')
 
 args = parser.parse_args()
 
@@ -31,6 +29,7 @@ def pull_phase_data_into_arrays(family):
 	loss_regions = []
 	is_mat_upds, is_pat_upds = [], []
 	chroms, starts, ends = [], [], []
+	is_htss = []
 	for segment in phase_data.parse_phase_file(family):
 		chroms.append(segment.chrom)
 		mat_phases.append(segment.mat_phase)
@@ -40,6 +39,7 @@ def pull_phase_data_into_arrays(family):
 		loss_regions.append(segment.loss_region)
 		is_mat_upds.append(np.any(segment.is_mat_upd()))
 		is_pat_upds.append(np.any(segment.is_pat_upd()))
+		is_htss.append(segment.is_hts())
 
 	mat_phases = np.array(mat_phases).T
 	pat_phases = np.array(pat_phases).T
@@ -48,18 +48,15 @@ def pull_phase_data_into_arrays(family):
 	is_pat_upds = np.array(np.any(is_pat_upds))
 	starts = np.array(starts)
 	ends = np.array(ends)
+	is_htss = np.array(is_htss)
 
 	# if this is a hard to sequences region, we don't know the exact location of crossovers
-	is_htss = np.zeros(loss_regions.shape, dtype=bool)
-	for lr in args.hts_loss_regions:
-		mat_phases[:, (loss_regions==lr)] = -1
-		pat_phases[:, (loss_regions==lr)] = -1
-		is_htss[(loss_regions==lr)] = True
+	mat_phases[:, is_htss] = -1
+	pat_phases[:, is_htss] = -1
 
 	# if there's UPD, it's not a crossover
 	mat_phases[:, is_mat_upds] = -1
 	pat_phases[:, is_pat_upds] = -1
-	print(np.sum(mat_phases!=-1))
 
 	return chroms, starts, ends, mat_phases, pat_phases, is_htss
 
@@ -201,7 +198,7 @@ for co in all_crossovers:
 is_fully_phased = np.array([x['is_fully_phased'] for x in sibpairs], dtype=bool)
 is_ibd_outlier = np.array([x['is_ibd_outlier'] if x['is_ibd_outlier'] is not None else False for x in sibpairs], dtype=bool)
 
-if len(phase_data.chroms)==22:
+if len(phase_data.chroms)==22 and len(sibpairs)>5:
 	is_way_out = (mat_crossovers > 3*np.median(mat_crossovers)) | (pat_crossovers > 3*np.median(pat_crossovers))
 	detector = OutlierDetector(mat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], pat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], 
 		10 if np.median(mat_crossovers)>10 else 1)

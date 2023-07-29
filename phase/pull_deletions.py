@@ -81,14 +81,13 @@ def pull_deletion_indices(data):
 
 all_deletions = []
 
-sibpairs = phase_data.get_sibpairs()
-for sibpair in sibpairs:
-	family = sibpair['family']
+families = phase_data.get_families()
+for family in families:
 	print(family)
 
-	individuals = phase_data.get_phase_info(family)['individuals']
-	if phase_data.is_standard_family(family) and sibpair['is_fully_phased']:
-		chroms, starts, ends, deletions, mat_phases, pat_phases, is_hts = pull_phase_data_into_arrays(family)
+	individuals = family['individuals']
+	if phase_data.is_standard_family(family['family']) and family['is_fully_phased']:
+		chroms, starts, ends, deletions, mat_phases, pat_phases, is_hts = pull_phase_data_into_arrays(family['family'])
 
 		for chrom in set(chroms):
 			is_chrom = np.array([x==chrom for x in chroms])
@@ -124,7 +123,7 @@ for sibpair in sibpairs:
 					assert end_pos <= opt_end_pos
 					assert length > 0
 
-					all_deletions.append(Deletion(sibpair['family'], chrom,
+					all_deletions.append(Deletion(family['family'], chrom,
 								start_pos, end_pos, length,
 								opt_start_pos, opt_end_pos, tuple(trans), tuple(notrans),
 								is_mat, is_pat, is_del_hts,
