@@ -37,6 +37,7 @@ parser.add_argument('--maternal_crossover_cost', type=float, default=-np.log10(4
 parser.add_argument('--paternal_crossover_cost', type=float, default=-np.log10(28)+np.log10(genome_size), help='-log10(P[paternal_crossover])')
 parser.add_argument('--loss_transition_cost', type=float, default=-np.log10(2*1000)+np.log10(genome_size), help='-log10(P[loss_transition])')
 parser.add_argument('--phase_name', type=str, default=None, help='Name for this phase attempt.')
+parser.add_argument('--subdir', type=str, default=None, help='Data subdirectory.')
 
 
 args = parser.parse_args()
@@ -52,7 +53,12 @@ if args.detect_inherited_deletions:
 if args.detect_upd:
 	print('Detecting UPD while phasing...')
 
-with open('%s/genotypes/info.json' % args.data_dir, 'r') as f:
+if args.subdir is None:
+	gen_dir = '%s/genotypes' % args.data_dir
+else:
+	gen_dir = '%s/genotypes/%s' % (args.data_dir,args.subdir)
+
+with open('%s/info.json' % gen_dir, 'r') as f:
 	assembly = json.load(f)['assembly']
 
 print('assembly', assembly)
@@ -122,7 +128,7 @@ else:
 print(families[0], families[0].individuals)
 
 # make sure at least one individual has genetic data
-sample_file = '%s/genotypes/samples.json' % args.data_dir
+sample_file = '%s/samples.json' % gen_dir
 with open(sample_file, 'r') as f:
 	sample_ids = set(json.load(f))
 
@@ -207,7 +213,7 @@ for family in families:
 				print('chrom', chrom)
 
 				# pull genotype data for this family
-				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(args.data_dir, assembly, chrom, family.individuals)
+				family_genotypes, family_snp_positions, mult_factor = pull_gen_data_for_individuals(gen_dir, assembly, chrom, family.individuals)
 				print('famgen', family_genotypes.shape)
 
 				# update loss cache

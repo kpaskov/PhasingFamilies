@@ -266,9 +266,9 @@ def pull_phenotype(ped_file):
 				sample_id_to_aff[child_id] = aff
 	return sample_id_to_aff
 
-def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True):
+def pull_gen_data_for_individuals(gen_dir, assembly, chrom, individuals, start_pos=None, end_pos=None, use_pass=True):
 	
-	sample_file = '%s/genotypes/samples.json' % data_dir
+	sample_file = '%s/samples.json' % gen_dir
 	# pull samples
 	with open(sample_file, 'r') as f:
 		sample_ids = json.load(f)
@@ -287,8 +287,8 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 		return np.zeros((m, 0)), np.zeros((0, 2)), np.zeros((0,)) 
 
 
-	gen_files = sorted([f for f in listdir('%s/genotypes' % data_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
-	coord_files = sorted([f for f in listdir('%s/genotypes' % data_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
+	gen_files = sorted([f for f in listdir(gen_dir) if ('chr.%s.' % chrom) in f and 'gen.npz' in f], key=lambda x: int(x.split('.')[2]))
+	coord_files = sorted([f for f in listdir(gen_dir) if ('chr.%s.' % chrom) in f and 'gen.coordinates.npy' in f], key=lambda x: int(x.split('.')[2]))
 	#af_files = sorted([f for f in listdir(data_dir) if ('chr.%s.' % chrom) in f and 'gen.af.npy' in f], key=lambda x: int(x.split('.')[2]))
 
 	#print(len(gen_files), len(coord_files))
@@ -302,7 +302,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 	gens, snp_positions, collapseds = [], [], []
 	total_pos = 0
 	for gen_file, coord_file in zip(gen_files, coord_files):
-		coords = np.load('%s/genotypes/%s' % (data_dir, coord_file))
+		coords = np.load('%s/%s' % (gen_dir, coord_file))
 
 		if coords.shape[0]>0:
 			poss = coords[:, 1]
@@ -323,7 +323,7 @@ def pull_gen_data_for_individuals(data_dir, assembly, chrom, individuals, start_
 				in_interval = np.ones((is_snp.shape[0],), dtype=bool)
 
 			if np.sum(is_snp & is_pass & in_interval)>0:
-				gen = sparse.load_npz('%s/genotypes/%s' % (data_dir, gen_file))[ind_indices, :]
+				gen = sparse.load_npz('%s/%s' % (gen_dir, gen_file))[ind_indices, :]
 				total_pos += np.sum(is_snp & is_pass)
 				family_has_variant = ((gen>0).sum(axis=0)>0).A.flatten()
 
