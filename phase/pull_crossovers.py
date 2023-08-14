@@ -23,43 +23,6 @@ phase_data = PhaseData(args.data_dir, args.phase_name)
 Recombination = namedtuple('Recombination', ['family', 'chrom', 'start_pos', 'end_pos', 'child', 'is_mat', 'is_pat', 'is_hts'])
 
 
-def pull_phase_data_into_arrays(family):
-	# pull phase data
-	mat_phases, pat_phases = [], []
-	loss_regions = []
-	is_mat_upds, is_pat_upds = [], []
-	chroms, starts, ends = [], [], []
-	is_htss = []
-	for segment in phase_data.parse_phase_file(family):
-		chroms.append(segment.chrom)
-		mat_phases.append(segment.mat_phase)
-		pat_phases.append(segment.pat_phase)
-		starts.append(segment.start_pos)
-		ends.append(segment.end_pos)
-		loss_regions.append(segment.loss_region)
-		is_mat_upds.append(np.any(segment.is_mat_upd()))
-		is_pat_upds.append(np.any(segment.is_pat_upd()))
-		is_htss.append(segment.is_hts())
-
-	mat_phases = np.array(mat_phases).T
-	pat_phases = np.array(pat_phases).T
-	loss_regions = np.array(loss_regions)
-	is_mat_upds = np.array(np.any(is_mat_upds))
-	is_pat_upds = np.array(np.any(is_pat_upds))
-	starts = np.array(starts)
-	ends = np.array(ends)
-	is_htss = np.array(is_htss)
-
-	# if this is a hard to sequences region, we don't know the exact location of crossovers
-	mat_phases[:, is_htss] = -1
-	pat_phases[:, is_htss] = -1
-
-	# if there's UPD, it's not a crossover
-	mat_phases[:, is_mat_upds] = -1
-	pat_phases[:, is_pat_upds] = -1
-
-	return chroms, starts, ends, mat_phases, pat_phases, is_htss
-
 def pull_recombinations(family_id, phases, is_htss, chroms, starts, ends, individuals, is_mat):
 	recombinations = []
 	for chrom in phase_data.chroms:
@@ -139,7 +102,7 @@ for sibpair in sibpairs:
 
 	individuals = phase_data.get_phase_info(family)['individuals']
 	if phase_data.is_standard_family(family) and sibpair['is_fully_phased']:
-		chroms, starts, ends, mat_phases, pat_phases, is_htss = pull_phase_data_into_arrays(family)
+		chroms, starts, ends, mat_phases, pat_phases, is_htss = phase_data.parse_phase_file_into_arrays(family)
 
 		# pull recombinations
 		mat_recombinations = pull_recombinations(family, mat_phases, is_htss, chroms, starts, ends, individuals, True)
@@ -199,7 +162,7 @@ is_fully_phased = np.array([x['is_fully_phased'] for x in sibpairs], dtype=bool)
 is_ibd_outlier = np.array([x['is_ibd_outlier'] if x['is_ibd_outlier'] is not None else False for x in sibpairs], dtype=bool)
 
 if len(phase_data.chroms)==22 and len(sibpairs)>5:
-	is_way_out = (mat_crossovers > 3*np.median(mat_crossovers)) | (pat_crossovers > 3*np.median(pat_crossovers))
+	is_way_out = (mat_crossovers > 3*np.median(mat_crossovers)) | (pat_crossovers > 3*np.median(pat_crossovers)) | (mat_crossovers < 5) | (pat_crossovers < 5)
 	detector = OutlierDetector(mat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], pat_crossovers[is_fully_phased & ~is_ibd_outlier & ~is_way_out], 
 		10 if np.median(mat_crossovers)>10 else 1)
 	is_outlier = detector.predict_outliers(mat_crossovers, pat_crossovers)

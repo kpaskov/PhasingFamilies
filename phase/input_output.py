@@ -517,6 +517,43 @@ class PhaseData():
 					state_space = [int(x) for x in pieces[3:]]
 					yield PhasedSegment(chrom, start_pos, end_pos, state_space[:num_dels], state_space[num_dels:-1], state_space[-1])
 
+	def parse_phase_file_into_arrays(self, family):
+		# pull phase data
+		mat_phases, pat_phases = [], []
+		loss_regions = []
+		is_mat_upds, is_pat_upds = [], []
+		chroms, starts, ends = [], [], []
+		is_htss = []
+		for segment in self.parse_phase_file(family):
+			chroms.append(segment.chrom)
+			mat_phases.append(segment.mat_phase)
+			pat_phases.append(segment.pat_phase)
+			starts.append(segment.start_pos)
+			ends.append(segment.end_pos)
+			loss_regions.append(segment.loss_region)
+			is_mat_upds.append(np.any(segment.is_mat_upd()))
+			is_pat_upds.append(np.any(segment.is_pat_upd()))
+			is_htss.append(segment.is_hts())
+
+		mat_phases = np.array(mat_phases).T
+		pat_phases = np.array(pat_phases).T
+		loss_regions = np.array(loss_regions)
+		is_mat_upds = np.array(np.any(is_mat_upds))
+		is_pat_upds = np.array(np.any(is_pat_upds))
+		starts = np.array(starts)
+		ends = np.array(ends)
+		is_htss = np.array(is_htss)
+
+		# if this is a hard to sequences region, we don't know the exact location of crossovers
+		mat_phases[:, is_htss] = -1
+		pat_phases[:, is_htss] = -1
+
+		# if there's UPD, it's not a crossover
+		mat_phases[:, is_mat_upds] = -1
+		pat_phases[:, is_pat_upds] = -1
+
+		return chroms, starts, ends, mat_phases, pat_phases, is_htss
+
 	def get_sibpairs(self):
 		with open('%s/sibpairs.json' % self.phase_dir, 'r') as f:
 			return json.load(f)
@@ -542,6 +579,10 @@ class PhaseData():
 
 	def get_crossovers(self):
 		with open('%s/crossovers.json' % self.phase_dir, 'r') as f:
+			return json.load(f)
+
+	def get_gene_conversions(self):
+		with open('%s/gene_conversions.json' % self.phase_dir, 'r') as f:
 			return json.load(f)
 
 	def get_filtered_crossovers(self, sibpair_keys=None):

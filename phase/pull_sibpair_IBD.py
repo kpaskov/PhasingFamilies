@@ -24,6 +24,8 @@ sibpairs = []
 children = []
 indices = []
 
+all_families = []
+
 for family in phase_data.get_phased_families():
 	inds = phase_data.get_phase_info(family)['individuals']
 	is_standard = phase_data.is_standard_family(family)
@@ -50,7 +52,7 @@ for family in phase_data.get_phased_families():
 					'is_fully_phased': has_all_chroms
 				})
 
-		families.append({
+		all_families.append({
 			'family': family,
 			'is_fully_phased': has_all_chroms,
 			'individuals': inds
@@ -59,7 +61,7 @@ for family in phase_data.get_phased_families():
 		if not has_all_chroms:
 			print(family, 'missing phased chroms %s' % str(chroms))
                     
-print('families found', len(families))
+print('families found', len(all_families))
 print('children found', len(children))
 print('sibpairs found', len(sibpairs))
 
@@ -216,4 +218,4 @@ with open('%s/children.json' % phase_data.phase_dir, 'w+') as f:
 	json.dump(children, f, indent=4, cls=NumpyEncoder)
 
 with open('%s/families.json' % phase_data.phase_dir, 'w+') as f:
-	json.dump(families, f, indent=4, cls=NumpyEncoder)
+	json.dump(all_families, f, indent=4, cls=NumpyEncoder)
