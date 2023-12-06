@@ -3,6 +3,8 @@
 ## Purpose
 This project contains code for simultaneously detecting family inheritance patterns, identity-by-descent, crossovers, and inherited deletions in nuclear families, as published in
 
+Paskov K, Chrisman B, Stockham N, Washington PY, Dunlap K, Jung JY, Wall DP. Identifying crossovers and shared genetic material in whole genome sequencing data from families. Genome Research. 2023 Oct 1;33(10):1747-56.
+
 ## Input and output
 This code starts with VCF files (with accompanying .tbi files), split by chromosome. It produces 
 - family inheritance patterns across the genome (.BED)
